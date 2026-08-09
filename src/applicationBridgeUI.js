@@ -1,7 +1,7 @@
 // ============================================================
 // AI TRADE PRO
 // Application UI Bridge
-// STEP 2H — REAL PIPELINE + TRADE DECISION
+// STEP 2H / STEP 2J — REAL PIPELINE + TRADE DECISION
 // ============================================================
 
 import {
@@ -9,19 +9,23 @@ import {
 } from './services/applicationAnalysis.js';
 
 
-function setText(selector, value) {
-  const element =
-    document.querySelector(selector);
+// ============================================================
+// RENDER APPLICATION RESULT
+// ============================================================
+// Exported so STEP 2J can validate the SAME renderer used by the
+// production UI without clicking the button and making a second
+// live market-data request.
+// ============================================================
 
-  if (element) {
-    element.textContent = String(value);
+export function renderApplicationResult(result) {
+  if (!result || typeof result !== 'object') {
+    throw new Error(
+      'A valid application result is required for UI rendering.'
+    );
   }
-}
 
-
-function renderResult(result) {
-  const pipeline = result.pipeline;
-  const decision = result.tradeDecision;
+  const pipeline = result.pipeline || {};
+  const decision = result.tradeDecision || {};
 
   const recommendation =
     pipeline.recommendation?.recommendation ||
@@ -96,8 +100,23 @@ function renderResult(result) {
   console.groupEnd();
 
   attachAnalysisButton();
+
+  return {
+    rendered: Boolean(panel),
+    decision: decisionText,
+    action,
+    recommendation,
+    opportunityScore: score,
+    riskQualityScore: riskQuality,
+    riskRewardRatio: riskReward,
+    riskGatesPassed: gatesPassed
+  };
 }
 
+
+// ============================================================
+// LIVE ANALYSIS BUTTON
+// ============================================================
 
 async function runAnalysis() {
   const button =
@@ -120,7 +139,7 @@ async function runAnalysis() {
         }
       );
 
-    renderResult(result);
+    renderApplicationResult(result);
 
   } catch (error) {
     console.error(
@@ -136,6 +155,10 @@ async function runAnalysis() {
 }
 
 
+// ============================================================
+// BUTTON BINDING
+// ============================================================
+
 function attachAnalysisButton() {
   const original =
     document.querySelector('#run-analysis-btn');
@@ -144,7 +167,8 @@ function attachAnalysisButton() {
     return;
   }
 
-  // Remove the original main.js listener by replacing the node.
+  // Replace the existing node so the application has exactly one
+  // active analysis handler.
   const replacement =
     original.cloneNode(true);
 
