@@ -46,8 +46,6 @@ assert('First strategy registers', a.added === true);
 assert('Second strategy registers', b.added === true);
 assert('Duplicate strategy does not increase count', dup.duplicate === true && portfolio.strategies.length === 2);
 
-// Deliberately sized so two safe positions fit inside the 50% portfolio
-// utilization limit, while the third candidate is rejected by exposure.
 const signals = [
   { symbol: 'infy:nse', decision: 'BUY', opportunityScore: 82, priority: 70, strategyId: 'TREND-A', quantity: 100, entry: 1000, stopLoss: 990, target: 1020, capitalUsed: 25000 },
   { symbol: 'TCS:NSE', decision: 'SELL', opportunityScore: 91, priority: 60, strategyId: 'MOMENTUM-B', quantity: 20, entry: 2000, stopLoss: 2020, target: 1960, capitalUsed: 20000 },
@@ -71,14 +69,12 @@ assert('Open position count is two', portfolio.positions.length === 2);
 const duplicateRisk = validatePortfolioRisk(portfolio, { symbol: 'TCS:NSE', capitalUsed: 1000 });
 assert('Already-open symbol is blocked', duplicateRisk.allowed === false && duplicateRisk.reason === 'SYMBOL_ALREADY_OPEN');
 
-const second = stagePaperOrder(portfolio, {
+const third = stagePaperOrder(portfolio, {
   symbol: 'RELIANCE:NSE', decision: 'BUY', strategyId: 'TREND-A', quantity: 10,
   entry: 2500, stopLoss: 2475, target: 2550, capitalUsed: 5000
 });
-assert('Portfolio limit blocks third open position', second.authorized === false && second.reason === 'MAX_OPEN_POSITIONS');
+assert('Portfolio limit blocks third open position', third.authorized === false && third.reason === 'MAX_OPEN_POSITIONS');
 
-// Close one of the two positions to free a slot, then verify that a new
-// position can be staged without violating exposure limits.
 const closed = closePaperPosition(portfolio, { symbol: 'INFY:NSE', exitPrice: 1020, reason: 'TARGET' });
 assert('Paper position closes successfully', closed.closed === true);
 assert('Closed paper position records positive P&L', closed.pnl === 2000);
@@ -92,14 +88,12 @@ const reopened = stagePaperOrder(portfolio, {
 assert('Freed position slot permits safe staging', reopened.authorized === true);
 assert('Reopened position is paper-only', reopened.authorized === true && reopened.realOrderPlaced === false);
 
-// Cooldown must prevent immediate re-entry of the same symbol.
 const cooldown = stagePaperOrder(portfolio, {
   symbol: 'RELIANCE:NSE', decision: 'BUY', quantity: 10, entry: 2500,
   stopLoss: 2475, target: 2550, capitalUsed: 5000
 });
 assert('Cooldown prevents immediate re-entry', cooldown.authorized === false && cooldown.reason === 'COOLDOWN_ACTIVE');
 
-// Capture a safe snapshot before deliberately creating a controlled loss.
 const snapshot = getStrategyPortfolioSnapshot(portfolio);
 console.log('\n===== STEP 2AK–2AP PORTFOLIO SUMMARY =====');
 console.table(snapshot);
@@ -108,9 +102,10 @@ assert('Snapshot remains paper-only', snapshot.paperOnly === true);
 assert('Snapshot reports no real order', snapshot.realOrderPlaced === false);
 assert('Snapshot is marked safe', snapshot.safe === true);
 
-// Controlled paper loss: 100 INFY shares at 1000 -> 900 = -10000.
-const lossClose = closePaperPosition(portfolio, { symbol: 'TCS:NSE', exitPrice: 1900, reason: 'STOP_LOSS' });
-assert('Paper losing trade closes safely', lossClose.closed === true && lossClose.pnl < 0);
+// Controlled paper loss: 20 TCS shares at 2000 -> 1500 = -10000.
+// Existing +2000 profit leaves -8000 daily P&L, beyond the -2% limit (-2000).
+const lossClose = closePaperPosition(portfolio, { symbol: 'TCS:NSE', exitPrice: 1500, reason: 'STOP_LOSS' });
+assert('Paper losing trade closes safely', lossClose.closed === true && lossClose.pnl === -10000);
 const dailyLimit = validatePortfolioRisk(portfolio, { symbol: 'ITC:NSE', capitalUsed: 1000 });
 assert('Daily loss protection blocks unsafe continuation', dailyLimit.allowed === false && dailyLimit.reason === 'DAILY_LOSS_LIMIT');
 
