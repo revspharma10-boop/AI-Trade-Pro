@@ -66,7 +66,21 @@ assert('Two safe signals are staged', batch.acceptedCount === 2);
 assert('Oversized candidate is blocked by capital limit', batch.blockedCount === 1);
 assert('Open position count is two', portfolio.positions.length === 2);
 
-const duplicateRisk = validatePortfolioRisk(portfolio, { symbol: 'TCS:NSE', capitalUsed: 1000 });
+// Duplicate-symbol protection must be tested while the portfolio is not
+// already at the position limit; otherwise MAX_OPEN_POSITIONS correctly
+// takes precedence over the duplicate-symbol check.
+const duplicatePortfolio = createStrategyPortfolio({
+  capital: 100000,
+  maxOpenPositions: 2,
+  maxCapitalUtilizationPercent: 50,
+  maxDailyLossPercent: 2,
+  cooldownBars: 1
+});
+stagePaperOrder(duplicatePortfolio, {
+  symbol: 'TCS:NSE', decision: 'SELL', quantity: 1, entry: 2000,
+  stopLoss: 2020, target: 1960, capitalUsed: 1000
+});
+const duplicateRisk = validatePortfolioRisk(duplicatePortfolio, { symbol: 'TCS:NSE', capitalUsed: 1000 });
 assert('Already-open symbol is blocked', duplicateRisk.allowed === false && duplicateRisk.reason === 'SYMBOL_ALREADY_OPEN');
 
 const third = stagePaperOrder(portfolio, {
@@ -88,9 +102,11 @@ const reopened = stagePaperOrder(portfolio, {
 assert('Freed position slot permits safe staging', reopened.authorized === true);
 assert('Reopened position is paper-only', reopened.authorized === true && reopened.realOrderPlaced === false);
 
+// Cooldown must be tested against a recently CLOSED symbol, not an already
+// OPEN symbol. An open symbol is correctly rejected as SYMBOL_ALREADY_OPEN.
 const cooldown = stagePaperOrder(portfolio, {
-  symbol: 'RELIANCE:NSE', decision: 'BUY', quantity: 10, entry: 2500,
-  stopLoss: 2475, target: 2550, capitalUsed: 5000
+  symbol: 'INFY:NSE', decision: 'BUY', quantity: 100, entry: 1000,
+  stopLoss: 990, target: 1020, capitalUsed: 25000
 });
 assert('Cooldown prevents immediate re-entry', cooldown.authorized === false && cooldown.reason === 'COOLDOWN_ACTIVE');
 
