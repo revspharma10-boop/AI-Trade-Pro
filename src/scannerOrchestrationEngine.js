@@ -72,6 +72,7 @@ export function buildScannerCycle(candidates = [], portfolio = {}, config = {}) 
     executable: result.ranked.length,
     rejected: result.rejected.length,
     candidates: result.ranked,
+    rejectedCandidates: result.rejected,
     paperExecutionQueue: result.ranked.map(x => ({ ...x, orderStatus: 'PAPER_READY', realOrderPlaced: false })),
     paperOnly: true,
     realOrderPlaced: false
