@@ -10,19 +10,10 @@
 // - No broker API. No real order path.
 // ============================================================
 
-import {
-  calculatePortfolioRisk,
-  authorizePaperTrade
-} from './services/portfolioRiskEngine.js';
-
-import {
-  buildPaperTradingDashboard,
-  buildPaperTradingDashboardSummary,
-  getPaperTradingDashboardPosition
-} from './services/paperTradingDashboardEngine.js';
+import { calculatePortfolioRisk, authorizePaperTrade } from './services/portfolioRiskEngine.js';
+import { buildPaperTradingDashboard, buildPaperTradingDashboardSummary, getPaperTradingDashboardPosition } from './services/paperTradingDashboardEngine.js';
 
 const results = [];
-
 function assert(name, condition, details = '') {
   const passed = Boolean(condition);
   results.push({ name, passed, details });
@@ -40,39 +31,11 @@ function makePortfolio(overrides = {}) {
     realizedPnL: 500,
     unrealizedPnL: 250,
     positions: [
-      {
-        symbol: 'INFY:NSE',
-        action: 'LONG',
-        side: 'BUY',
-        quantity: 100,
-        entryPrice: 1000,
-        currentPrice: 1005,
-        stopLoss: 990,
-        targetPrice: 1020,
-        positionValue: 100000,
-        unrealizedPnL: 500,
-        status: 'OPEN'
-      },
-      {
-        symbol: 'TCS:NSE',
-        action: 'SHORT',
-        side: 'SELL',
-        quantity: 20,
-        entryPrice: 2000,
-        currentPrice: 1987.5,
-        stopLoss: 2020,
-        targetPrice: 1960,
-        positionValue: 40000,
-        unrealizedPnL: 250,
-        status: 'OPEN'
-      }
+      { symbol: 'INFY:NSE', action: 'LONG', side: 'BUY', quantity: 100, entryPrice: 1000, currentPrice: 1005, stopLoss: 990, targetPrice: 1020, positionValue: 100000, unrealizedPnL: 500, status: 'OPEN' },
+      { symbol: 'TCS:NSE', action: 'SHORT', side: 'SELL', quantity: 20, entryPrice: 2000, currentPrice: 1987.5, stopLoss: 2020, targetPrice: 1960, positionValue: 40000, unrealizedPnL: 250, status: 'OPEN' }
     ],
-    closedPositions: [
-      { symbol: 'RELIANCE:NSE', pnl: 500, status: 'CLOSED', paperOnly: true }
-    ],
-    orders: [
-      { symbol: 'RELIANCE:NSE', status: 'PAPER_ORDER_CREATED', paperOnly: true }
-    ],
+    closedPositions: [{ symbol: 'RELIANCE:NSE', pnl: 500, status: 'CLOSED', paperOnly: true }],
+    orders: [{ symbol: 'RELIANCE:NSE', status: 'PAPER_ORDER_CREATED', paperOnly: true }],
     ...overrides
   };
 }
@@ -82,17 +45,9 @@ console.log('AI TRADE PRO — STEP 2AQ–2AZ BULK TEST RUNNER');
 console.log('PORTFOLIO RISK + PAPER DASHBOARD CONTRACT');
 console.log('='.repeat(60));
 
-// ------------------------------------------------------------
-// 2AQ–2AT — PORTFOLIO RISK CALCULATION
-// ------------------------------------------------------------
-
+// 2AQ–2AT — PORTFOLIO RISK
 const portfolio = makePortfolio();
-const risk = calculatePortfolioRisk(portfolio, {
-  maxDrawdownPercent: 10,
-  maxOpenPositions: 5,
-  maxCapitalPerTradePercent: 20
-});
-
+const risk = calculatePortfolioRisk(portfolio, { maxDrawdownPercent: 10, maxOpenPositions: 5, maxCapitalPerTradePercent: 20 });
 assert('Portfolio risk result is valid', risk.valid === true);
 assert('Portfolio risk remains paper-only', risk.paperOnly === true);
 assert('Portfolio risk reports no real order', risk.realOrderPlaced === false);
@@ -107,55 +62,30 @@ assert('Drawdown gate passes', risk.gates.drawdownAcceptable === true);
 assert('Position count gate passes', risk.gates.positionCountAcceptable === true);
 assert('Exposure gate is evaluated independently', risk.gates.exposureAcceptable === false);
 
-// Invalid / boundary portfolio scenarios.
-const invalidCapital = calculatePortfolioRisk(
-  makePortfolio({ initialCapital: 0, equity: 0, cash: 0 }),
-  {}
-);
+const invalidCapital = calculatePortfolioRisk(makePortfolio({ initialCapital: 0, equity: 0, cash: 0 }), {});
 assert('Zero-capital portfolio is rejected as invalid', invalidCapital.valid === false);
 assert('Zero-capital portfolio remains paper-only', invalidCapital.paperOnly === true);
 assert('Zero-capital portfolio places no real order', invalidCapital.realOrderPlaced === false);
 
-const drawdownPortfolio = makePortfolio({ equity: 89000 });
-const drawdownRisk = calculatePortfolioRisk(drawdownPortfolio, {
-  maxDrawdownPercent: 10
-});
+const drawdownRisk = calculatePortfolioRisk(makePortfolio({ equity: 89000 }), { maxDrawdownPercent: 10 });
 assert('Drawdown is calculated at 11%', drawdownRisk.drawdownPercent === 11);
 assert('Drawdown gate blocks beyond configured limit', drawdownRisk.gates.drawdownAcceptable === false);
 
-const maxPositionsPortfolio = makePortfolio({ positions: [
+const maxPositionsRisk = calculatePortfolioRisk(makePortfolio({ positions: [
   { symbol: 'A:NSE', positionValue: 1000 },
   { symbol: 'B:NSE', positionValue: 1000 },
   { symbol: 'C:NSE', positionValue: 1000 }
-] });
-const maxPositionsRisk = calculatePortfolioRisk(maxPositionsPortfolio, {
-  maxOpenPositions: 3
-});
+] }), { maxOpenPositions: 3 });
 assert('Maximum position count is detected', maxPositionsRisk.gates.positionCountAcceptable === false);
 
-// ------------------------------------------------------------
-// 2AU–2AW — PAPER TRADE AUTHORIZATION
-// ------------------------------------------------------------
-
+// 2AU–2AW — PAPER AUTHORIZATION
 const safeOrder = authorizePaperTrade({
-  portfolio: makePortfolio({
-    positions: [],
-    equity: 100000
-  }),
-  order: {
-    symbol: 'INFY:NSE',
-    quantity: 100,
-    entryPrice: 1000,
-    paperOnly: true
-  },
-  config: {
-    maxCapitalPerTradePercent: 20,
-    maxOpenPositions: 5
-  }
+  portfolio: makePortfolio({ positions: [], equity: 100000 }),
+  order: { symbol: 'INFY:NSE', quantity: 10, entryPrice: 1000, paperOnly: true },
+  config: { maxCapitalPerTradePercent: 20, maxOpenPositions: 5 }
 });
-
 assert('Safe paper order is authorized', safeOrder.authorized === true);
-assert('Safe order position value is 100000', safeOrder.positionValue === 100000);
+assert('Safe order position value is 10000', safeOrder.positionValue === 10000);
 assert('Safe order max trade value is 20000', safeOrder.maxTradeValue === 20000);
 assert('Safe order remains paper-only', safeOrder.paperOnly === true);
 assert('Safe order places no real order', safeOrder.realOrderPlaced === false);
@@ -163,17 +93,9 @@ assert('Safe order records no rejection reasons', safeOrder.rejectionReasons.len
 
 const oversizedOrder = authorizePaperTrade({
   portfolio: makePortfolio({ positions: [] }),
-  order: {
-    symbol: 'INFY:NSE',
-    quantity: 25,
-    entryPrice: 1000,
-    paperOnly: true
-  },
-  config: {
-    maxCapitalPerTradePercent: 20
-  }
+  order: { symbol: 'INFY:NSE', quantity: 25, entryPrice: 1000, paperOnly: true },
+  config: { maxCapitalPerTradePercent: 20 }
 });
-
 assert('Oversized paper order is blocked', oversizedOrder.authorized === false);
 assert('Oversized order fails trade-size gate', oversizedOrder.gates.tradeSizeAcceptable === false);
 assert('Oversized order remains paper-only', oversizedOrder.paperOnly === true);
@@ -182,12 +104,7 @@ assert('Oversized rejection reason is recorded', oversizedOrder.rejectionReasons
 
 const invalidOrder = authorizePaperTrade({
   portfolio: makePortfolio({ positions: [] }),
-  order: {
-    symbol: '',
-    quantity: 0,
-    entryPrice: 0,
-    paperOnly: true
-  }
+  order: { symbol: '', quantity: 0, entryPrice: 0, paperOnly: true }
 });
 assert('Invalid paper order is blocked', invalidOrder.authorized === false);
 assert('Invalid order gate fails', invalidOrder.gates.orderValid === false);
@@ -196,26 +113,15 @@ assert('Invalid order places no real order', invalidOrder.realOrderPlaced === fa
 
 const nonPaperOrder = authorizePaperTrade({
   portfolio: makePortfolio({ positions: [] }),
-  order: {
-    symbol: 'INFY:NSE',
-    quantity: 1,
-    entryPrice: 1000,
-    paperOnly: false
-  }
+  order: { symbol: 'INFY:NSE', quantity: 1, entryPrice: 1000, paperOnly: false }
 });
 assert('Non-paper order is blocked', nonPaperOrder.authorized === false);
 assert('Non-paper gate fails explicitly', nonPaperOrder.gates.paperOnly === false);
 assert('Non-paper request still reports no real order', nonPaperOrder.realOrderPlaced === false);
 
-// ------------------------------------------------------------
-// 2AX–2AZ — PAPER DASHBOARD AGGREGATION
-// ------------------------------------------------------------
-
+// 2AX–2AZ — DASHBOARD
 const dashboardPortfolio = makePortfolio();
-const dashboard = buildPaperTradingDashboard(dashboardPortfolio, {
-  maxRiskPercent: 1
-});
-
+const dashboard = buildPaperTradingDashboard(dashboardPortfolio, { maxRiskPercent: 1 });
 assert('Paper dashboard is valid', dashboard.valid === true);
 assert('Dashboard is paper-only', dashboard.paperOnly === true);
 assert('Dashboard reports no real order', dashboard.realOrderPlaced === false);
@@ -230,9 +136,7 @@ assert('Dashboard journal reports one closed trade', dashboard.journal.totalTrad
 assert('Dashboard risk status is exposed', typeof dashboard.risk.status === 'string');
 assert('Dashboard risk metrics are numeric', Number.isFinite(dashboard.risk.openRisk));
 
-const summary = buildPaperTradingDashboardSummary(dashboardPortfolio, {
-  maxRiskPercent: 1
-});
+const summary = buildPaperTradingDashboardSummary(dashboardPortfolio, { maxRiskPercent: 1 });
 assert('Dashboard summary is valid', summary.valid === true);
 assert('Dashboard summary remains paper-only', summary.paperOnly === true);
 assert('Dashboard summary reports no real order', summary.realOrderPlaced === false);
@@ -254,35 +158,14 @@ assert('Missing position is not falsely found', missingPositionView.position.fou
 assert('Missing position remains paper-only', missingPositionView.paperOnly === true);
 
 const failed = results.filter(r => !r.passed);
-
 console.log('\n===== STEP 2AQ–2AZ DASHBOARD SUMMARY =====');
-console.table({
-  RiskValid: risk.valid,
-  RiskExposure: risk.exposure,
-  RiskExposurePercent: risk.exposurePercent,
-  SafeOrderAuthorized: safeOrder.authorized,
-  OversizedOrderAuthorized: oversizedOrder.authorized,
-  DashboardValid: dashboard.valid,
-  DashboardEquity: dashboard.account?.equity,
-  DashboardTotalPnL: dashboard.account?.totalPnL,
-  DashboardOpenPositions: dashboard.activity?.openPositions,
-  PaperOnly: dashboard.paperOnly,
-  RealOrderPlaced: dashboard.realOrderPlaced
-});
-
+console.table({ RiskValid: risk.valid, RiskExposure: risk.exposure, RiskExposurePercent: risk.exposurePercent, SafeOrderAuthorized: safeOrder.authorized, OversizedOrderAuthorized: oversizedOrder.authorized, DashboardValid: dashboard.valid, DashboardEquity: dashboard.account?.equity, DashboardTotalPnL: dashboard.account?.totalPnL, DashboardOpenPositions: dashboard.activity?.openPositions, PaperOnly: dashboard.paperOnly, RealOrderPlaced: dashboard.realOrderPlaced });
 console.log('\n============================================================');
 console.log('STEP 2AQ–2AZ TEST RESULT');
 console.log('============================================================');
-console.table({
-  Passed: results.length - failed.length,
-  Failed: failed.length,
-  AllAssertionsPassed: failed.length === 0,
-  SuiteStatus: failed.length === 0 ? 'PASSED' : 'FAILED'
-});
+console.table({ Passed: results.length - failed.length, Failed: failed.length, AllAssertionsPassed: failed.length === 0, SuiteStatus: failed.length === 0 ? 'PASSED' : 'FAILED' });
 if (failed.length) console.table(failed);
-console.log(failed.length === 0
-  ? '✅ STEP 2AQ–2AZ BULK TEST SUITE PASSED'
-  : '❌ STEP 2AQ–2AZ BULK TEST SUITE FAILED');
+console.log(failed.length === 0 ? '✅ STEP 2AQ–2AZ BULK TEST SUITE PASSED' : '❌ STEP 2AQ–2AZ BULK TEST SUITE FAILED');
 console.log('============================================================');
 
 const allAssertionsPassed = failed.length === 0;
