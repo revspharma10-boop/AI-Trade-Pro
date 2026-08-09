@@ -16,9 +16,16 @@ console.log('AI TRADE PRO — STEP 2S TEST RUNNER');
 console.log('PAPER BACKTEST ENGINE');
 console.log('============================================================');
 
+// Expected P&L:
+// T1 LONG  : +100
+// T2 SHORT : +100
+// T3 LONG  : -50
+// T4 LONG  :   0
+// ----------------
+// Net P&L  : +150
 const trades = [
   { id: 'T1', symbol: 'INFY:NSE', action: 'LONG', entryPrice: 100, exitPrice: 110, quantity: 10 },
-  { id: 'T2', symbol: 'TCS:NSE', action: 'SHORT', entryPrice: 200, exitPrice: 195, quantity: 10 },
+  { id: 'T2', symbol: 'TCS:NSE', action: 'SHORT', entryPrice: 200, exitPrice: 190, quantity: 10 },
   { id: 'T3', symbol: 'RELIANCE:NSE', action: 'LONG', entryPrice: 300, exitPrice: 295, quantity: 10 },
   { id: 'T4', symbol: 'HDFCBANK:NSE', action: 'LONG', entryPrice: 400, exitPrice: 400, quantity: 10 }
 ];
