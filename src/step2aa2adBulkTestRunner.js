@@ -3,22 +3,9 @@
 // Portfolio Risk → Paper Session → Journal → Safety Contract
 // ============================================================
 
-import {
-  calculatePortfolioRisk,
-  authorizePaperTrade
-} from './services/portfolioRiskEngine.js';
-import {
-  createPaperTradingSession,
-  submitPaperTrade,
-  updatePaperTrade,
-  closePaperTrade,
-  getPaperSessionSnapshot
-} from './services/paperTradingSessionEngine.js';
-import {
-  createTradeJournal,
-  recordTradeJournal,
-  summarizeTradeJournal
-} from './services/tradeJournalEngine.js';
+import { calculatePortfolioRisk, authorizePaperTrade } from './services/portfolioRiskEngine.js';
+import { createPaperTradingSession, submitPaperTrade, updatePaperTrade, closePaperTrade, getPaperSessionSnapshot } from './services/paperTradingSessionEngine.js';
+import { createTradeJournal, recordTradeJournal, summarizeTradeJournal } from './services/tradeJournalEngine.js';
 
 const results = [];
 function assert(name, condition) {
@@ -33,11 +20,7 @@ console.log('='.repeat(60));
 
 const session = createPaperTradingSession({
   initialCapital: 100000,
-  riskConfig: {
-    maxDrawdownPercent: 10,
-    maxOpenPositions: 3,
-    maxCapitalPerTradePercent: 20
-  }
+  riskConfig: { maxDrawdownPercent: 10, maxOpenPositions: 3, maxCapitalPerTradePercent: 20 }
 });
 
 assert('Session is valid', session.valid === true);
@@ -49,22 +32,14 @@ assert('Initial capital risk state is valid', initialRisk.valid === true);
 assert('Initial drawdown is zero', initialRisk.drawdownPercent === 0);
 assert('Initial exposure is zero', initialRisk.exposure === 0);
 
+// IMPORTANT: 20 shares × ₹1,000 = ₹20,000 = exactly 20% of ₹100,000.
+// This deliberately stays inside the configured maxCapitalPerTradePercent gate.
 const safeOrder = {
-  symbol: 'INFY:NSE',
-  side: 'BUY',
-  action: 'LONG',
-  quantity: 50,
-  entryPrice: 1000,
-  stopLoss: 970,
-  targetPrice: 1060,
-  paperOnly: true
+  symbol: 'INFY:NSE', side: 'BUY', action: 'LONG', quantity: 20,
+  entryPrice: 1000, stopLoss: 970, targetPrice: 1060, paperOnly: true
 };
 
-const authorization = authorizePaperTrade({
-  portfolio: session.portfolio,
-  order: safeOrder,
-  config: session.riskConfig
-});
+const authorization = authorizePaperTrade({ portfolio: session.portfolio, order: safeOrder, config: session.riskConfig });
 assert('Safe order is authorized', authorization.authorized === true);
 assert('Safe order remains paper-only', authorization.realOrderPlaced === false);
 
@@ -85,11 +60,7 @@ assert('No open positions remain', session.portfolio.positions.length === 0);
 
 const oversized = authorizePaperTrade({
   portfolio: session.portfolio,
-  order: {
-    ...safeOrder,
-    symbol: 'TCS:NSE',
-    quantity: 1000
-  },
+  order: { ...safeOrder, symbol: 'TCS:NSE', quantity: 1000 },
   config: session.riskConfig
 });
 assert('Oversized trade is rejected', oversized.authorized === false);
@@ -97,20 +68,10 @@ assert('Oversized trade remains paper-only', oversized.realOrderPlaced === false
 
 const journal = createTradeJournal();
 recordTradeJournal(journal, {
-  symbol: 'INFY:NSE',
-  decision: 'BUY',
-  action: 'LONG',
-  entryPrice: 1000,
-  exitPrice: 1060,
-  quantity: 50,
-  realizedPnL: closed.realizedPnL
+  symbol: 'INFY:NSE', decision: 'BUY', action: 'LONG', entryPrice: 1000,
+  exitPrice: 1060, quantity: 20, realizedPnL: closed.realizedPnL
 });
-recordTradeJournal(journal, {
-  symbol: 'BAD:NSE',
-  decision: 'NO TRADE',
-  action: 'NONE',
-  realizedPnL: 0
-});
+recordTradeJournal(journal, { symbol: 'BAD:NSE', decision: 'NO TRADE', action: 'NONE', realizedPnL: 0 });
 
 const journalSummary = summarizeTradeJournal(journal);
 assert('Journal summary is valid', journalSummary.valid === true);
