@@ -5,9 +5,18 @@
 //
 // Purpose:
 // - Validate the application-level result contract.
-// - Validate the currently mounted UI without changing production logic.
-// - Ensure UI state is consistent with the real trade decision.
+// - Validate the CURRENT mounted UI against the SAME live result.
+// - Trigger the real UI bridge before inspecting rendered state.
 // - Preserve STEP 2H / STEP 2I behavior as a regression boundary.
+//
+// IMPORTANT:
+// The previous STEP 2J version ran runApplicationAnalysis() directly
+// and then inspected the DOM. That created a false UI failure because
+// the pipeline result was never rendered into the UI.
+//
+// This version explicitly loads the real application UI bridge,
+// clicks the real Run Market Analysis button, waits for the bridge
+// to render the live result, and THEN performs UI assertions.
 //
 // Run from the browser console:
 // import('/src/step2jTestRunner.js?run=' + Date.now())
@@ -16,6 +25,10 @@
 import {
   runApplicationAnalysis
 } from './services/applicationAnalysis.js';
+
+// Load the production UI bridge so this test exercises the same
+// rendering path used by the application.
+import './applicationBridgeUI.js';
 
 
 const TEST_SYMBOL = 'INFY:NSE';
@@ -58,6 +71,35 @@ function textFromDocument() {
 
 function hasText(text, value) {
   return text.toUpperCase().includes(String(value).toUpperCase());
+}
+
+function sleep(milliseconds) {
+  return new Promise(resolve => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+async function waitForUIState({
+  expectedText = '',
+  timeoutMs = 15000,
+  intervalMs = 250
+} = {}) {
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    const text = textFromDocument();
+
+    if (
+      expectedText &&
+      hasText(text, expectedText)
+    ) {
+      return true;
+    }
+
+    await sleep(intervalMs);
+  }
+
+  return false;
 }
 
 
@@ -249,10 +291,8 @@ console.log('============================================================');
 console.log('STEP 2J APPLICATION UI CONTRACT');
 console.log('============================================================');
 
-const uiText = textFromDocument();
-
 assert(
-  uiText.length > 0,
+  textFromDocument().length > 0,
   'Application UI contains rendered text'
 );
 
@@ -261,14 +301,60 @@ assert(
   'Application document body is mounted'
 );
 
-// The UI must not display an executable BUY/SELL state when the
-// real application decision says NO TRADE.
+// ------------------------------------------------------------
+// IMPORTANT FIX
+// ------------------------------------------------------------
+// The previous test checked the DOM immediately after executing
+// runApplicationAnalysis(). That function returns data but does not
+// itself render the result. The real application UI bridge is the
+// component responsible for rendering the result.
+//
+// Therefore this test now triggers the actual UI button and waits
+// for the bridge to render the decision before making assertions.
+
+const analysisButton =
+  document.querySelector('#run-analysis-btn');
+
+assert(
+  Boolean(analysisButton),
+  'Application analysis button exists'
+);
+
+if (analysisButton) {
+  analysisButton.click();
+
+  const expectedDecision =
+    decision?.decision || 'NO TRADE';
+
+  const uiDecisionRendered =
+    await waitForUIState({
+      expectedText: expectedDecision,
+      timeoutMs: 20000,
+      intervalMs: 250
+    });
+
+  assert(
+    uiDecisionRendered,
+    `UI rendered live decision: ${expectedDecision}`,
+    {
+      expectedDecision,
+      uiText: textFromDocument().slice(-1500)
+    }
+  );
+}
+
+const uiText = textFromDocument();
+
 if (decision?.decision === 'NO TRADE') {
   const hasNoTrade = hasText(uiText, 'NO TRADE');
 
   assert(
     hasNoTrade,
-    'UI displays NO TRADE for non-executable decision'
+    'UI displays NO TRADE for non-executable decision',
+    {
+      decision,
+      uiText: uiText.slice(-1500)
+    }
   );
 
   const hasExecutableBuy =
@@ -281,7 +367,11 @@ if (decision?.decision === 'NO TRADE') {
 
   assert(
     !(hasExecutableBuy || hasExecutableSell),
-    'UI does not expose an executable BUY/SELL state when decision is NO TRADE'
+    'UI does not expose an executable BUY/SELL state when decision is NO TRADE',
+    {
+      hasExecutableBuy,
+      hasExecutableSell
+    }
   );
 }
 
