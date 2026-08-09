@@ -66,9 +66,8 @@ assert('Two safe signals are staged', batch.acceptedCount === 2);
 assert('Oversized candidate is blocked by capital limit', batch.blockedCount === 1);
 assert('Open position count is two', portfolio.positions.length === 2);
 
-// Duplicate-symbol protection must be tested while the portfolio is not
-// already at the position limit; otherwise MAX_OPEN_POSITIONS correctly
-// takes precedence over the duplicate-symbol check.
+// Duplicate-symbol protection is tested in a dedicated portfolio so that
+// position-limit state cannot mask the duplicate-symbol rule.
 const duplicatePortfolio = createStrategyPortfolio({
   capital: 100000,
   maxOpenPositions: 2,
@@ -102,13 +101,29 @@ const reopened = stagePaperOrder(portfolio, {
 assert('Freed position slot permits safe staging', reopened.authorized === true);
 assert('Reopened position is paper-only', reopened.authorized === true && reopened.realOrderPlaced === false);
 
-// Cooldown must be tested against a recently CLOSED symbol, not an already
-// OPEN symbol. An open symbol is correctly rejected as SYMBOL_ALREADY_OPEN.
-const cooldown = stagePaperOrder(portfolio, {
+// Cooldown is tested in an isolated portfolio. The symbol is closed first,
+// then immediately re-entered on the same bar, so COOLDOWN_ACTIVE is the
+// intended and observable rejection reason.
+const cooldownPortfolio = createStrategyPortfolio({
+  capital: 100000,
+  maxOpenPositions: 2,
+  maxCapitalUtilizationPercent: 50,
+  maxDailyLossPercent: 2,
+  cooldownBars: 1
+});
+advancePortfolioBar(cooldownPortfolio);
+const cooldownEntry = stagePaperOrder(cooldownPortfolio, {
   symbol: 'INFY:NSE', decision: 'BUY', quantity: 100, entry: 1000,
   stopLoss: 990, target: 1020, capitalUsed: 25000
 });
-assert('Cooldown prevents immediate re-entry', cooldown.authorized === false && cooldown.reason === 'COOLDOWN_ACTIVE');
+const cooldownClose = closePaperPosition(cooldownPortfolio, {
+  symbol: 'INFY:NSE', exitPrice: 1005, reason: 'TEST_COOLDOWN'
+});
+const cooldown = stagePaperOrder(cooldownPortfolio, {
+  symbol: 'INFY:NSE', decision: 'BUY', quantity: 100, entry: 1000,
+  stopLoss: 990, target: 1020, capitalUsed: 25000
+});
+assert('Cooldown prevents immediate re-entry', cooldownEntry.authorized === true && cooldownClose.closed === true && cooldown.authorized === false && cooldown.reason === 'COOLDOWN_ACTIVE');
 
 const snapshot = getStrategyPortfolioSnapshot(portfolio);
 console.log('\n===== STEP 2AK–2AP PORTFOLIO SUMMARY =====');
@@ -118,17 +133,31 @@ assert('Snapshot remains paper-only', snapshot.paperOnly === true);
 assert('Snapshot reports no real order', snapshot.realOrderPlaced === false);
 assert('Snapshot is marked safe', snapshot.safe === true);
 
-// Controlled paper loss: 20 TCS shares at 2000 -> 1500 = -10000.
-// Existing +2000 profit leaves -8000 daily P&L, beyond the -2% limit (-2000).
-const lossClose = closePaperPosition(portfolio, { symbol: 'TCS:NSE', exitPrice: 1500, reason: 'STOP_LOSS' });
-assert('Paper losing trade closes safely', lossClose.closed === true && lossClose.pnl === -10000);
-const dailyLimit = validatePortfolioRisk(portfolio, { symbol: 'ITC:NSE', capitalUsed: 1000 });
+// Controlled paper loss is tested in an isolated portfolio so earlier
+// profitable trades or open-position limits cannot interfere with the loss
+// calculation. TCS: 20 shares at 2000 -> 1500 = -10000.
+const lossPortfolio = createStrategyPortfolio({
+  capital: 100000,
+  maxOpenPositions: 2,
+  maxCapitalUtilizationPercent: 50,
+  maxDailyLossPercent: 2,
+  cooldownBars: 1
+});
+advancePortfolioBar(lossPortfolio);
+const lossEntry = stagePaperOrder(lossPortfolio, {
+  symbol: 'TCS:NSE', decision: 'SELL', quantity: 20, entry: 2000,
+  stopLoss: 2020, target: 1960, capitalUsed: 20000
+});
+const lossClose = closePaperPosition(lossPortfolio, { symbol: 'TCS:NSE', exitPrice: 2500, reason: 'STOP_LOSS' });
+assert('Paper losing trade closes safely', lossEntry.authorized === true && lossClose.closed === true && lossClose.pnl === -10000 && lossClose.paperOnly === true && lossClose.realOrderPlaced === false);
+
+const dailyLimit = validatePortfolioRisk(lossPortfolio, { symbol: 'ITC:NSE', capitalUsed: 1000 });
 assert('Daily loss protection blocks unsafe continuation', dailyLimit.allowed === false && dailyLimit.reason === 'DAILY_LOSS_LIMIT');
 
-const beforeReset = portfolio.dailyRealizedPnL;
-const reset = resetDailyRisk(portfolio);
+const beforeReset = lossPortfolio.dailyRealizedPnL;
+const reset = resetDailyRisk(lossPortfolio);
 assert('Daily risk reset succeeds', reset.valid === true);
-assert('Daily P&L reset clears realized daily risk', portfolio.dailyRealizedPnL === 0 && beforeReset !== 0);
+assert('Daily P&L reset clears realized daily risk', lossPortfolio.dailyRealizedPnL === 0 && beforeReset !== 0);
 assert('Reset remains paper-only', reset.paperOnly === true && reset.realOrderPlaced === false);
 
 const failed = results.filter(r => !r.passed);
