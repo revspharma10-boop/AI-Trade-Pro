@@ -47,8 +47,16 @@ const blocked = allocateScannerCandidates([{...safe, riskGatesPassed:false}], {}
  test('Paper queue is executable-ready only', cycle.paperExecutionQueue.every(x => x.orderStatus === 'PAPER_READY'));
  test('Paper safety assertion passes', assertPaperSafeCycle(cycle));
 
-// Capital protection: use a realistic portfolio already above the configured limit.
-const capitalBlocked = buildScannerCycle([safe], { capitalUtilizationPercent: 100 });
+// Capital protection: explicitly pass portfolio state and the configured 70% ceiling.
+const capitalPortfolio = { capitalUtilizationPercent: 100 };
+const capitalConfig = { maxCapitalUtilizationPercent: 70 };
+const capitalBlocked = buildScannerCycle([safe], capitalPortfolio, capitalConfig);
+console.table({
+  CapitalUtilizationInput: capitalPortfolio.capitalUtilizationPercent,
+  CapitalLimit: capitalConfig.maxCapitalUtilizationPercent,
+  CapitalRejectedReasons: capitalBlocked.rejected[0]?.rejectionReasons,
+  CapitalQueueLength: capitalBlocked.paperExecutionQueue.length
+});
 test('Capital utilization limit blocks candidate', capitalBlocked.rejected[0]?.rejectionReasons.includes('CAPITAL_UTILIZATION_LIMIT'));
 test('Capital-blocked candidate cannot enter paper queue', capitalBlocked.paperExecutionQueue.length === 0);
 
