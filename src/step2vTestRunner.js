@@ -1,0 +1,8 @@
+import { scanCandidate, rankCandidates, getExecutableCandidates } from './signalScannerEngine.js';
+const results=[]; function assert(name,c){const p=Boolean(c);results.push(p);console[p?'log':'error'](`${p?'✅':'❌'} ${name}`);}
+console.log('='.repeat(60));console.log('AI TRADE PRO — STEP 2V TEST RUNNER');console.log('SIGNAL SCANNER ENGINE');console.log('='.repeat(60));
+const safe=scanCandidate({symbol:'INFY:NSE',technicalScore:82,fundamentalScore:78,marketRegimeScore:80,riskQualityScore:90,opportunityScore:82,riskRewardRatio:2,riskGatesPassed:true,recommendation:'BUY'});
+const blocked=scanCandidate({symbol:'BAD:NSE',opportunityScore:40,riskQualityScore:20,riskRewardRatio:1,riskGatesPassed:false,recommendation:'NO TRADE'});
+assert('Safe candidate is valid',safe.valid===true);assert('Safe candidate remains paper-only',safe.paperOnly===true);assert('Safe candidate has no real order',safe.realOrderPlaced===false);assert('Safe BUY is executable',safe.executable===true);assert('Blocked candidate is non-executable',blocked.executable===false);assert('Blocked candidate records rejection',blocked.rejectionReasons.length>0);
+const ranked=rankCandidates([blocked,safe]);assert('Candidates are ranked',ranked[0]?.symbol==='INFY:NSE'&&ranked[0]?.rank===1);assert('Executable filter returns only safe candidate',getExecutableCandidates(ranked).length===1&&getExecutableCandidates(ranked)[0].symbol==='INFY:NSE');
+const passed=results.filter(Boolean).length,failed=results.length-passed;console.table({Passed:passed,Failed:failed,AllAssertionsPassed:failed===0,SuiteStatus:failed===0?'PASSED':'FAILED'});export const allAssertionsPassed=failed===0;
