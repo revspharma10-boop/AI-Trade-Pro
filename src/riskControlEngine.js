@@ -15,6 +15,12 @@ function n(v) {
 
 export function evaluateRiskControls(snapshot = {}, config = {}) {
   const cfg = { ...DEFAULTS, ...config };
+  const rawCapital = Number(snapshot.accountCapital);
+  const rawCash = Number(snapshot.cash);
+  const capitalValid = Number.isFinite(rawCapital) && rawCapital >= 0;
+  const cashValid = Number.isFinite(rawCash) && rawCash >= 0;
+  const valid = capitalValid && cashValid;
+
   const capital = Math.max(0, n(snapshot.accountCapital));
   const cash = Math.max(0, n(snapshot.cash));
   const exposure = Math.max(0, n(snapshot.grossExposure));
@@ -26,14 +32,16 @@ export function evaluateRiskControls(snapshot = {}, config = {}) {
   const dailyLossPercent = capital > 0 && dailyPnL < 0 ? Math.abs(dailyPnL) / capital * 100 : 0;
   const rejectionReasons = [];
 
+  if (!capitalValid) rejectionReasons.push('INVALID_ACCOUNT_CAPITAL');
+  if (!cashValid) rejectionReasons.push('INVALID_CASH');
   if (exposurePercent > cfg.maxExposurePercent) rejectionReasons.push('MAX_EXPOSURE_EXCEEDED');
   if (dailyLossPercent > cfg.maxDailyLossPercent) rejectionReasons.push('DAILY_LOSS_LIMIT_EXCEEDED');
   if (openPositions > cfg.maxOpenPositions) rejectionReasons.push('MAX_OPEN_POSITIONS_EXCEEDED');
   if (capital > 0 && cashPercent < cfg.minCashPercent) rejectionReasons.push('MIN_CASH_BUFFER_BREACHED');
 
-  const safe = rejectionReasons.length === 0;
+  const safe = valid && rejectionReasons.length === 0;
   return {
-    valid: capital >= 0 && cash >= 0,
+    valid,
     safe,
     executable: safe,
     paperOnly: true,
