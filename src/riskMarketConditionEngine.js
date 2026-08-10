@@ -1,0 +1,3 @@
+// AI TRADE PRO — RISK BEHAVIOR UNDER MARKET CONDITIONS
+export function evaluateRiskConditions(input={}){const exposure=Number(input.exposurePct)||0,loss=Number(input.dailyLossPct)||0,vol=Number(input.volatilityPct)||0;const reasons=[];if(exposure>Number(input.maxExposurePct??70))reasons.push('EXPOSURE_LIMIT');if(loss>Number(input.maxDailyLossPct??2))reasons.push('DAILY_LOSS_LIMIT');if(vol>Number(input.maxVolatilityPct??8))reasons.push('VOLATILITY_LIMIT');if(input.marketDataSafe===false)reasons.push('MARKET_DATA_UNSAFE');return Object.freeze({allowed:reasons.length===0,reasons, paperOnly:true,realOrderPlaced:false,productionRealTradingEnabled:false});}
+console.log('AI TRADE PRO — risk market condition engine loaded');
