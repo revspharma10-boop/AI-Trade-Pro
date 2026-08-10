@@ -16,8 +16,10 @@ const registry = Object.freeze({
     'performance', 'application-bridge', 'control-center'
   ]),
   releaseGate: Object.freeze({
-    developmentComplete: false,
-    integrationComplete: false,
+    // Core development and application wiring are now complete.
+    // Final component testing is intentionally kept separate and remains required.
+    developmentComplete: true,
+    integrationComplete: true,
     finalComponentTestingComplete: false,
     productionRealTradingEnabled: false
   })
