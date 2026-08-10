@@ -1,26 +1,29 @@
 /* AI TRADE PRO — FINAL 21-COMPONENT VALIDATION CAMPAIGN */
 import { getFinalValidationPlan, assertReadyForFinalValidation } from './finalValidationPlan.js';
 
+// IMPORTANT: production engines are split between src/ and src/services/.
+// The previous validator probed several stale root-level paths, producing 404s
+// even though the application itself loaded those engines successfully.
 const MODULE_PROBES = Object.freeze({
-  'market-data': './marketData.js',
-  'technical-analysis': './technicalAnalysis.js',
-  'fundamental-analysis': './fundamentalAnalysis.js',
-  'market-regime': './marketRegimeEngine.js',
-  'liquidity': './liquidityEngine.js',
-  'technical-confirmation': './technicalConfirmationEngine.js',
-  'recommendation': './recommendationEngine.js',
-  'trade-decision': './tradeDecisionEngine.js',
-  'position-sizing': './positionSizingEngine.js',
+  'market-data': './services/marketData.js',
+  'technical-analysis': './services/technicalAnalysis.js',
+  'fundamental-analysis': './services/fundamentalAnalysis.js',
+  'market-regime': './services/marketRegimeEngine.js',
+  'liquidity': './services/liquidityEngine.js',
+  'technical-confirmation': './services/technicalConfirmationEngine.js',
+  'recommendation': './services/recommendationEngine.js',
+  'trade-decision': './services/tradeDecisionEngine.js',
+  'position-sizing': './services/positionSizingEngine.js',
   'risk-control': './riskControlEngine.js',
-  'strategy-definition': './strategyDefinitionEngine.js',
-  'scanner-orchestration': './multiSymbolScannerEngine.js',
+  'strategy-definition': './services/strategyDefinitionEngine.js',
+  'scanner-orchestration': './scannerOrchestrationEngine.js',
   'watchlist': './watchlistEngine.js',
-  'paper-order-queue': './paperExecutionEngine.js',
-  'paper-position-lifecycle': './paperPortfolioEngine.js',
-  'paper-portfolio': './paperPortfolioEngine.js',
-  'paper-backtest': './paperBacktestEngine.js',
+  'paper-order-queue': './services/paperExecutionEngine.js',
+  'paper-position-lifecycle': './services/paperPositionLifecycleEngine.js',
+  'paper-portfolio': './services/paperPortfolioEngine.js',
+  'paper-backtest': './services/paperBacktestEngine.js',
   'journal': './tradeJournalEngine.js',
-  'performance': './performanceEngine.js',
+  'performance': './services/paperPerformanceEngine.js',
   'application-bridge': './applicationBridgeUI.js',
   'control-center': './applicationControlCenter.js'
 });
@@ -43,7 +46,7 @@ export async function runFinalComponentValidation() {
     }
     try {
       const loaded = await probeModule(path);
-      results.push({ domain, passed: loaded, details: loaded ? 'Module loaded.' : 'Module returned no namespace.' });
+      results.push({ domain, passed: loaded, details: loaded ? `Module loaded: ${path}` : 'Module returned no namespace.' });
     } catch (error) {
       results.push({ domain, passed: false, details: error?.message || String(error) });
     }
