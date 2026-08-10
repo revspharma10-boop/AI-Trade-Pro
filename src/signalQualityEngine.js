@@ -18,7 +18,7 @@ export function createSignalQualityEngine() {
     if (ids.has(id) || signal.duplicate) { state.duplicates++; state.rejected++; state.byStrategy[strategy].rejected++; return { accepted:false, reason:'DUPLICATE_SIGNAL' }; }
     ids.add(id);
     const score = n(signal.score); if (Number.isFinite(score)) state.scores.push(score);
-    if (signal.riskPassed === false) { state.riskBlocked++; state.rejected++; state.byStrategy[strategy].rejected++; return { accepted:false, reason:'RISK_BLOCKED' }; }
+    if (signal.riskPassed === false) { state.riskBlocked++; state.rejected++; state.byStrategy[strategy].rejected++; state.byStrategy[strategy].riskBlocked++; return { accepted:false, reason:'RISK_BLOCKED' }; }
     if (signal.accepted === false) { state.rejected++; state.byStrategy[strategy].rejected++; return { accepted:false, reason:'REJECTED' }; }
     state.accepted++; state.byStrategy[strategy].accepted++; return { accepted:true, reason:'ACCEPTED' };
   }
