@@ -1,0 +1,3 @@
+// AI TRADE PRO — LONG-DURATION STABILITY OBSERVATION
+export function createStabilityObservation(){const s={ticks:0,errors:0,cycles:0,maxLatencyMs:0,startedAt:null,paperOnly:true};return Object.freeze({start(){s.startedAt=new Date().toISOString()},record(m={}){s.ticks++;s.cycles+=Number(m.cycles)||0;s.errors+=Number(m.errors)||0;s.maxLatencyMs=Math.max(s.maxLatencyMs,Number(m.latencyMs)||0)},snapshot(){return Object.freeze({...s,errorRate:s.ticks?s.errors/s.ticks*100:0,realOrderPlaced:false,productionRealTradingEnabled:false})}})}
+console.log('AI TRADE PRO — stability observation engine loaded');
