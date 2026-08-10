@@ -1,9 +1,9 @@
 /* AI TRADE PRO — FINAL 21-COMPONENT VALIDATION CAMPAIGN */
 import { getFinalValidationPlan, assertReadyForFinalValidation } from './finalValidationPlan.js';
 
-// IMPORTANT: production engines are split between src/ and src/services/.
-// The previous validator probed several stale root-level paths, producing 404s
-// even though the application itself loaded those engines successfully.
+// Probe the actual production modules used by the runtime. The paper position
+// lifecycle lives at src/paperPositionLifecycleEngine.js and is imported by
+// paperTradingRuntimeEngine.js; do not validate an unused duplicate module.
 const MODULE_PROBES = Object.freeze({
   'market-data': './services/marketData.js',
   'technical-analysis': './services/technicalAnalysis.js',
@@ -19,7 +19,7 @@ const MODULE_PROBES = Object.freeze({
   'scanner-orchestration': './scannerOrchestrationEngine.js',
   'watchlist': './watchlistEngine.js',
   'paper-order-queue': './services/paperExecutionEngine.js',
-  'paper-position-lifecycle': './services/paperPositionLifecycleEngine.js',
+  'paper-position-lifecycle': './paperPositionLifecycleEngine.js',
   'paper-portfolio': './services/paperPortfolioEngine.js',
   'paper-backtest': './services/paperBacktestEngine.js',
   'journal': './tradeJournalEngine.js',
