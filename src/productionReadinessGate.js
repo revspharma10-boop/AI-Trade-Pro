@@ -1,0 +1,3 @@
+// AI TRADE PRO — PRODUCTION READINESS REVIEW GATE
+export function evaluateProductionReadiness(input={}){const blockers=[];if(input.validationPassed!==true)blockers.push('VALIDATION_NOT_PASSED');if(input.paperOnly!==true)blockers.push('PAPER_ONLY_REQUIRED');if(input.realOrderPlaced===true)blockers.push('REAL_ORDER_DETECTED');if(input.dataQualitySafe!==true)blockers.push('DATA_QUALITY_NOT_SAFE');if(input.riskControlsPassed!==true)blockers.push('RISK_CONTROLS_NOT_PASSED');return Object.freeze({readyForProduction:false,reviewStatus:blockers.length?'BLOCKED':'PAPER_READY',blockers,paperOnly:true,realOrderPlaced:false,productionRealTradingEnabled:false});}
+console.log('AI TRADE PRO — production readiness gate loaded');
