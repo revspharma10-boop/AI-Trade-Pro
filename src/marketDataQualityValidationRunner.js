@@ -17,7 +17,8 @@ export function runMarketDataQualityValidation() {
   check('Stale data is rejected', !r.accepted && r.reasons.includes('STALE_DATA'));
   r = q.evaluate({ symbol: 'RELIANCE', price: 0, timestamp: now + 100000 }, now);
   check('Invalid/future data is rejected', !r.accepted && r.reasons.includes('INVALID_PRICE') && r.reasons.includes('FUTURE_TIMESTAMP'));
-  r = q.evaluate({ symbol: 'RELIANCE', price: 2501, timestamp: now }, now);
+  // A duplicate tick must match both the timestamp and the price of the last known-good tick.
+  r = q.evaluate({ symbol: 'RELIANCE', price: 2500, timestamp: now }, now);
   check('Duplicate timestamp/price is rejected', !r.accepted && r.reasons.includes('DUPLICATE_TICK'));
   r = q.evaluate({ symbol: 'RELIANCE', price: 2499, timestamp: now - 1 }, now);
   check('Out-of-order data is rejected', !r.accepted && r.reasons.includes('OUT_OF_ORDER'));
