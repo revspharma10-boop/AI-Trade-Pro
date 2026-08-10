@@ -1,10 +1,11 @@
 // AI TRADE PRO — BULK PAPER OPERATIONS ORCHESTRATOR
-// Connects observation, signals, session, performance and existing paper application state.
+// Connects observation, signals, session, performance, health and existing paper application state.
 // No broker/live-order execution is exposed.
 
 import { createPaperTradingSessionManager, assertPaperTradingSessionSafe } from './paperTradingSessionManager.js';
 import { createPaperSignalMonitor, assertPaperSignalMonitorSafe } from './paperSignalMonitor.js';
 import { buildPaperSessionPerformance, assertPaperPerformanceSafe } from './paperSessionPerformanceEngine.js';
+import { buildPaperOperationsHealth, assertPaperOperationsHealthSafe } from './paperOperationsHealthEngine.js';
 import { initializePaperTradingApplication, getPaperTradingApplicationState, stagePaperCandidate, fillPaperOrder, closePaperSymbol, markPaperSymbol, resetPaperDailyRisk } from './paperTradingApplicationBridge.js';
 
 export function createPaperOperationsOrchestrator(options = {}) {
@@ -12,16 +13,9 @@ export function createPaperOperationsOrchestrator(options = {}) {
   const sessionManager = createPaperTradingSessionManager();
   const signalMonitor = createPaperSignalMonitor({ maxHistory: options.maxSignalHistory || 250 });
   let initialized = false;
-
-  function ensureInitialized() {
-    if (!initialized) {
-      initializePaperTradingApplication({ initialCapital, maxOpenPositions: 5, maxCapitalUtilizationPercent: 70, maxDailyLossPercent: 2, minCashBufferPercent: 20 });
-      initialized = true;
-    }
-  }
-
+  function ensureInitialized() { if (!initialized) { initializePaperTradingApplication({ initialCapital, maxOpenPositions: 5, maxCapitalUtilizationPercent: 70, maxDailyLossPercent: 2, minCashBufferPercent: 20 }); initialized = true; } }
   function startSession(config = {}) { ensureInitialized(); return sessionManager.start({ initialCapital: config.initialCapital ?? initialCapital, sessionId: config.sessionId }); }
-  function observeSignal(signal = {}) { ensureInitialized(); const event = signalMonitor.record(signal); sessionManager.recordSignal(event); return event; }
+  function observeSignal(signal = {}) { ensureInitialized(); const event = signalMonitor.record(signal); if (sessionManager.snapshot().status === 'OPEN') sessionManager.recordSignal(event); return event; }
   function stage(candidate) { ensureInitialized(); return stagePaperCandidate(candidate); }
   function fill(orderId, price) { ensureInitialized(); return fillPaperOrder(orderId, price); }
   function mark(symbol, price) { ensureInitialized(); return markPaperSymbol(symbol, price); }
@@ -33,19 +27,14 @@ export function createPaperOperationsOrchestrator(options = {}) {
   function performance() { return buildPaperSessionPerformance(sessionManager.snapshot()); }
   function snapshot() {
     ensureInitialized();
-    const session = sessionManager.snapshot();
-    const signals = signalMonitor.snapshot();
-    const app = getPaperTradingApplicationState();
-    const report = buildPaperSessionPerformance(session);
-    return { mode: 'PAPER_ONLY', application: app, session, signals, performance: report, paperOnly: true, realOrderPlaced: false, productionRealTradingEnabled: false, safe: assertPaperTradingSessionSafe(session) && assertPaperSignalMonitorSafe(signals) && assertPaperPerformanceSafe(report) };
+    const session = sessionManager.snapshot(); const signals = signalMonitor.snapshot(); const app = getPaperTradingApplicationState(); const report = buildPaperSessionPerformance(session);
+    const base = { mode: 'PAPER_ONLY', application: app, session, signals, performance: report, paperOnly: true, realOrderPlaced: false, productionRealTradingEnabled: false };
+    const health = buildPaperOperationsHealth(base);
+    return { ...base, health, safe: assertPaperTradingSessionSafe(session) && assertPaperSignalMonitorSafe(signals) && assertPaperPerformanceSafe(report) && assertPaperOperationsHealthSafe(health) };
   }
   function closeSession() { const closed = sessionManager.close(); return { ...snapshot(), session: closed, performance: buildPaperSessionPerformance(closed) }; }
-
   return Object.freeze({ startSession, observeSignal, stage, fill, mark, close, recordTrade, riskEvent, updateUnrealizedPnL, resetRisk, performance, snapshot, closeSession });
 }
 
-export function assertPaperOperationsSafe(snapshot) {
-  return Boolean(snapshot && snapshot.mode === 'PAPER_ONLY' && snapshot.paperOnly === true && snapshot.realOrderPlaced === false && snapshot.productionRealTradingEnabled === false && snapshot.safe === true);
-}
-
+export function assertPaperOperationsSafe(snapshot) { return Boolean(snapshot && snapshot.mode === 'PAPER_ONLY' && snapshot.paperOnly === true && snapshot.realOrderPlaced === false && snapshot.productionRealTradingEnabled === false && snapshot.safe === true); }
 console.log('AI TRADE PRO — bulk paper operations orchestrator loaded');
