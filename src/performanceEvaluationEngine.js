@@ -1,0 +1,3 @@
+// AI TRADE PRO — PERFORMANCE EVALUATION
+export function createPerformanceEvaluation(){const s={trades:0,wins:0,losses:0,flat:0,pnl:0,grossProfit:0,grossLoss:0};return Object.freeze({record(t={}){const p=Number(t.pnl)||0;s.trades++;s.pnl+=p;if(p>0){s.wins++;s.grossProfit+=p}else if(p<0){s.losses++;s.grossLoss+=Math.abs(p)}else s.flat++;},snapshot(){return Object.freeze({...s,winRate:(s.wins+s.losses)?s.wins/(s.wins+s.losses)*100:0,profitFactor:s.grossLoss?s.grossProfit/s.grossLoss:0,paperOnly:true,realOrderPlaced:false,productionRealTradingEnabled:false});}})}
+console.log('AI TRADE PRO — performance evaluation engine loaded');
