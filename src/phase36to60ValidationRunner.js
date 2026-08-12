@@ -29,9 +29,25 @@ export function runPhase36to60Validation() {
   check('Strategy registration works', engine.registerStrategy({ id: 'TREND-1', name: 'Trend', weight: 1 }).id === 'TREND-1');
   check('Strategy ensemble produces a decision', engine.ensemble([{ action: 'BUY', score: 90 }, { action: 'BUY', score: 80 }, { action: 'SELL', score: 70 }]).action === 'BUY');
 
-  const risk = engine.portfolioRisk([{ notional: 10000 }, { notional: 5000 }]);
-  check('Portfolio exposure aggregation works', risk.grossExposure === 15000);
-  check('Concentration control is evaluated', risk.withinLimits === true);
+  // Validate both sides of concentration control: a compliant portfolio must pass,
+  // while a concentrated portfolio must be blocked. The previous assertion used
+  // 10k/15k = 66.7% concentration and incorrectly expected it to be within the 35% limit.
+  const compliantRisk = engine.portfolioRisk([
+    { notional: 10000 },
+    { notional: 10000 },
+    { notional: 10000 }
+  ]);
+  const concentratedRisk = engine.portfolioRisk([
+    { notional: 10000 },
+    { notional: 5000 }
+  ]);
+  check('Portfolio exposure aggregation works', concentratedRisk.grossExposure === 15000);
+  check('Concentration control is evaluated',
+    compliantRisk.concentration <= 0.35 &&
+    compliantRisk.withinLimits === true &&
+    concentratedRisk.concentration > 0.35 &&
+    concentratedRisk.withinLimits === false
+  );
   check('Paper rebalance plan is generated', engine.planRebalance([], { NIFTY: 0.5 }).orders.length === 1);
 
   const fill = engine.simulateFill({ symbol: 'NIFTY', action: 'BUY', quantity: 10, price: 25000 });
