@@ -48,19 +48,40 @@ export function runPhase19to26Validation() {
 
   const snapshot = session.snapshot();
   check('Audit trail is populated', snapshot.auditCount >= 10);
-  check('Final snapshot remains paper-only', snapshot.safety.paperOnly === true && snapshot.safety.realOrderPlaced === false && snapshot.safety.productionRealTradingEnabled === false);
+
+  // Canonical final safety fields come from the integration engine snapshot.
+  // The engine intentionally exposes uppercase safety constants; the roadmap
+  // helper uses camelCase fields for its configuration-level safety summary.
+  const finalSafety = snapshot.safety || {};
+  check(
+    'Final snapshot remains paper-only',
+    finalSafety.PAPER_ONLY === true &&
+    finalSafety.REAL_ORDER_PLACED === false &&
+    finalSafety.PRODUCTION_REAL_TRADING_ENABLED === false
+  );
 
   const passed = results.filter(r => r.passed).length;
   const failed = results.length - passed;
-  const result = { passed, failed, allAssertionsPassed: failed === 0, suiteStatus: failed === 0 ? 'PASSED' : 'FAILED', paperOnly: true, realOrderPlaced: false, productionRealTradingEnabled: false, results, snapshot };
+  const result = {
+    passed,
+    failed,
+    allAssertionsPassed: failed === 0,
+    suiteStatus: failed === 0 ? 'PASSED' : 'FAILED',
+    paperOnly: finalSafety.PAPER_ONLY === true,
+    realOrderPlaced: finalSafety.REAL_ORDER_PLACED === true,
+    productionRealTradingEnabled: finalSafety.PRODUCTION_REAL_TRADING_ENABLED === true,
+    results,
+    snapshot
+  };
   console.table(results);
+  console.log('FINAL SAFETY SNAPSHOT:', finalSafety);
   console.log('============================================================');
   console.log(`Passed: ${passed}`);
   console.log(`Failed: ${failed}`);
   console.log(`AllAssertionsPassed: ${result.allAssertionsPassed}`);
-  console.log('PaperOnly: true');
-  console.log('RealOrderPlaced: false');
-  console.log('ProductionRealTradingEnabled: false');
+  console.log(`PaperOnly: ${result.paperOnly}`);
+  console.log(`RealOrderPlaced: ${result.realOrderPlaced}`);
+  console.log(`ProductionRealTradingEnabled: ${result.productionRealTradingEnabled}`);
   console.log('============================================================');
   console.log(`PHASES 19–26 VALIDATION: ${result.suiteStatus}`);
   return result;
