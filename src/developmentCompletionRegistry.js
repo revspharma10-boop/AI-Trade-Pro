@@ -6,6 +6,8 @@ const registry = Object.freeze({
   executionMode: 'PAPER_ONLY',
   realOrderPlaced: false,
   finalTestingRequired: true,
+  completedPhaseRange: '1-35',
+  pendingDevelopmentPhaseRange: '36-60',
   components: Object.freeze([
     'market-data', 'technical-analysis', 'fundamental-analysis',
     'market-regime', 'liquidity', 'technical-confirmation',
@@ -13,11 +15,18 @@ const registry = Object.freeze({
     'risk-control', 'strategy-definition', 'scanner-orchestration',
     'watchlist', 'paper-order-queue', 'paper-position-lifecycle',
     'paper-portfolio', 'paper-backtest', 'journal',
-    'performance', 'application-bridge', 'control-center'
+    'performance', 'application-bridge', 'control-center',
+    'advanced-portfolio-intelligence', 'correlation-controls',
+    'concentration-controls', 'paper-rebalancing', 'portfolio-risk-aggregation',
+    'advanced-signal-ranking', 'strategy-ensemble', 'regime-strategy-selection',
+    'adaptive-entry-exit', 'signal-conflict-resolution', 'event-driven-backtest',
+    'walk-forward-optimization', 'out-of-sample-robustness', 'transaction-cost-model',
+    'scenario-analysis', 'fault-injection', 'state-reconciliation',
+    'checkpoint-recovery', 'rollback-control', 'operational-audit',
+    'paper-production-simulation', 'health-alerting', 'qualification-evidence',
+    'final-safety-audit', 'paper-production-certification'
   ]),
   releaseGate: Object.freeze({
-    // Core development and application wiring are now complete.
-    // Final component testing is intentionally kept separate and remains required.
     developmentComplete: true,
     integrationComplete: true,
     finalComponentTestingComplete: false,
