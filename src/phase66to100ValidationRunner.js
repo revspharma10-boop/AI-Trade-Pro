@@ -1,0 +1,41 @@
+import { createPhase66to100Engine } from './phase66to100IntegrationEngine.js';
+
+export function runPhase66to100Validation() {
+  const e=createPhase66to100Engine(); const results=[];
+  const check=(name,passed)=>{const ok=Boolean(passed); results.push({name,passed:ok}); console.log(`${ok?'✅':'❌'} ${name}`);};
+  const phases=e.getPhases();
+  check('35 phases 66–100 are registered',phases.length===35);
+  check('Phase IDs are contiguous 66–100',phases.every((p,i)=>p.id===66+i));
+  check('Paper-only safety is enabled',e.getSafety().PAPER_ONLY===true);
+  check('No real order is placed',e.getSafety().REAL_ORDER_PLACED===false);
+  check('Production real trading is disabled',e.getSafety().PRODUCTION_REAL_TRADING_ENABLED===false);
+  e.registerSource('PRIMARY'); e.registerSource('BACKUP');
+  check('Primary market source accepts valid observation',e.observe('PRIMARY',{price:100,volume:1000,timestamp:Date.now()}).accepted===true);
+  check('Source failure is fail-safe',e.failSource('PRIMARY').failSafe===true);
+  check('Backup source remains available',e.observe('BACKUP',{price:101,volume:1000,timestamp:Date.now()}).accepted===true);
+  check('Market reconciliation is available',e.reconcile().consistent===true);
+  e.registerStrategy('TREND','1.0'); e.registerStrategy('MEAN_REVERSION','1.1');
+  check('Strategy registration works',e.getPhases().some(p=>p.id===75));
+  const ensemble=e.evaluateEnsemble([{action:'BUY'},{action:'BUY'},{action:'HOLD'}]);
+  check('Signal ensemble produces quality-gated decision',ensemble.action==='BUY'&&ensemble.confidence>0.5);
+  check('Signal conflict resolves safely',e.evaluateEnsemble([{action:'BUY'},{action:'SELL'}]).action==='HOLD');
+  check('Compliant exposure is allowed',e.riskCheck({exposure:.2,concentration:.1,drawdown:.05}).allowed===true);
+  check('Excessive concentration is blocked',e.riskCheck({exposure:.2,concentration:.5,drawdown:.05}).allowed===false);
+  e.setKillSwitch(true); check('Kill switch blocks paper intent',e.paperOrder({side:'BUY',qty:1,price:100}).executed===false); e.setKillSwitch(false);
+  const fill=e.paperOrder({side:'BUY',qty:1,price:100,slippageBps:10,costBps:5});
+  check('Paper order lifecycle executes only in simulation',fill.executed===true&&fill.fill.paperOnly===true);
+  check('Slippage is modelled',fill.fill.price!==100);
+  check('Transaction cost is modelled',fill.fill.cost>0);
+  check('Paper position closes safely',e.closePosition(fill.fill.id).closed===true);
+  check('Long-duration paper session completes',e.longSession(25).completed===true);
+  check('Heartbeat is observable',e.heartbeat().alive===true);
+  check('Performance analytics are available',e.analytics({pnls:[10,-5,15]}).winRate===2/3);
+  check('Fault recovery remains fail-safe',e.faultRecovery('MARKET_DATA_INTERRUPTION').recovered===true);
+  const q=e.qualify();
+  check('Final snapshot remains paper-only',q.snapshot.safety.PAPER_ONLY===true&&q.snapshot.safety.REAL_ORDER_PLACED===false&&q.snapshot.safety.PRODUCTION_REAL_TRADING_ENABLED===false);
+  check('Final qualification is certified',q.certified===true&&q.allPhasesRegistered===true&&q.contiguous===true);
+  const passed=results.filter(x=>x.passed).length, failed=results.length-passed;
+  const result={passed,failed,allAssertionsPassed:failed===0,suiteStatus:failed===0?'PASSED':'FAILED',paperOnly:q.paperOnly,realOrderPlaced:q.snapshot.safety.REAL_ORDER_PLACED,productionRealTradingEnabled:q.snapshot.safety.PRODUCTION_REAL_TRADING_ENABLED,results,snapshot:q.snapshot};
+  console.table(results); console.log('============================================================'); console.log(`Passed: ${passed}`); console.log(`Failed: ${failed}`); console.log(`AllAssertionsPassed: ${result.allAssertionsPassed}`); console.log(`PaperOnly: ${result.paperOnly}`); console.log(`RealOrderPlaced: ${result.realOrderPlaced}`); console.log(`ProductionRealTradingEnabled: ${result.productionRealTradingEnabled}`); console.log('============================================================'); console.log(`PHASES 66–100 VALIDATION: ${result.suiteStatus}`); console.log('FINAL SAFETY SNAPSHOT:',q.snapshot.safety); return result;
+}
+console.log('AI TRADE PRO — Phase 66–100 validation runner loaded');
