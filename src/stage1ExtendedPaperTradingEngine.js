@@ -68,10 +68,14 @@ export function createStage1ExtendedPaperTradingEngine(options = {}) {
     const volume = Number(tick.volume ?? 0);
     const now = Date.now();
     let rejection = null;
+
+    // Classification order is intentional: an old tick is STALE even if it is
+    // also earlier than the last accepted timestamp. This gives operators and
+    // quality metrics the primary reason the observation is unsafe.
     if (!tick.symbol || !Number.isFinite(price) || price <= 0 || !Number.isFinite(timestamp) || timestamp > now + 1000 || !Number.isFinite(volume) || volume < 0) rejection = 'INVALID_TICK';
+    else if (now - timestamp > s.config.staleAfterMs) rejection = 'STALE';
     else if (s.lastAcceptedTimestamp !== null && timestamp < s.lastAcceptedTimestamp) rejection = 'OUT_OF_ORDER';
     else if (s.lastAcceptedTimestamp === timestamp && s.lastAcceptedPrice === price) rejection = 'DUPLICATE';
-    else if (now - timestamp > s.config.staleAfterMs) rejection = 'STALE';
 
     s.tickCount++;
     if (rejection) {
@@ -83,6 +87,7 @@ export function createStage1ExtendedPaperTradingEngine(options = {}) {
       journal.push({ type: 'TICK_REJECTED', reason: rejection, symbol: tick.symbol, timestamp, at: now });
       return { accepted: false, reason: rejection };
     }
+
     const observed = qualification.recordObservation(sessionId, { ...tick, timestamp });
     if (!observed.accepted) { s.rejectedTicks++; quality.rejected++; return observed; }
     s.acceptedTicks++; quality.accepted++;
