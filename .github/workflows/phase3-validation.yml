@@ -1,0 +1,17 @@
+name: Phase 3 Validation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  phase3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run Phase 3 consolidated validation
+        run: node -e "import('./src/phase3ProductionQualificationValidationRunner.js').then(async m => { const r = await m.runPhase3ProductionQualificationValidation(); process.exit(r.allAssertionsPassed ? 0 : 1); })"
