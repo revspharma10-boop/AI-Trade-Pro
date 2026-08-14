@@ -16,5 +16,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: node -e "import('./src/phase3ProductionQualificationValidationRunner.js').then(async m => process.exit((await m.runPhase3ProductionQualificationValidation()).allAssertionsPassed ? 0 : 1))"
       - run: npm run test:production-qualification
       - run: npm run build
