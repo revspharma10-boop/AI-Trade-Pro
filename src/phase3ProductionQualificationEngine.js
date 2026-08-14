@@ -4,7 +4,7 @@
 import { createBrokerExecutionContract, assertBrokerExecutionSafety } from './brokerExecutionContract.js';
 
 const SAFETY = Object.freeze({ PAPER_ONLY: true, REAL_ORDER_PLACED: false, PRODUCTION_REAL_TRADING_ENABLED: false });
-const PHASE3_ACTIVITIES = Object.freeze([
+const PHASE3_ACTIVITY_LIST = Object.freeze([
   { id: 66, name: 'Broker Sandbox Adapter', gate: 'sandbox_only' },
   { id: 67, name: 'Authentication & Session Handling', gate: 'no_browser_secrets' },
   { id: 68, name: 'End-to-End Paper Pipeline', gate: 'quality_and_risk_gated' },
@@ -22,15 +22,8 @@ const clone = v => JSON.parse(JSON.stringify(v));
 export function createPhase3ProductionQualificationEngine() {
   const events = [], orders = [], positions = [], incidents = [], checkpoints = [];
   let connected = false, authenticated = false, killSwitch = false, lastTick = null;
-
-  const assertPaper = () => {
-    if (SAFETY.PAPER_ONLY !== true || SAFETY.REAL_ORDER_PLACED !== false || SAFETY.PRODUCTION_REAL_TRADING_ENABLED !== false) {
-      throw new Error('Phase 3 safety boundary violated');
-    }
-    return true;
-  };
+  const assertPaper = () => { if (SAFETY.PAPER_ONLY !== true || SAFETY.REAL_ORDER_PLACED !== false || SAFETY.PRODUCTION_REAL_TRADING_ENABLED !== false) throw new Error('Phase 3 safety boundary violated'); return true; };
   const audit = (type, data = {}) => events.push({ type, at: Date.now(), ...data });
-
   const createSandboxAdapter = () => {
     const adapter = {
       environment: 'SANDBOX_SIMULATION',
@@ -43,7 +36,6 @@ export function createPhase3ProductionQualificationEngine() {
     };
     return createBrokerExecutionContract(adapter);
   };
-
   const connect = async () => { assertPaper(); const contract = createSandboxAdapter(); assertBrokerExecutionSafety(contract); const result = await contract.adapter.connect(); audit('SANDBOX_CONNECTED'); return { ...result, contractSafe: true, browserLiveOrdersAllowed: contract.browserLiveOrdersAllowed }; };
   const authenticate = async () => { assertPaper(); if (!connected) return { authenticated: false, reason: 'NOT_CONNECTED' }; authenticated = true; audit('SESSION_AUTHENTICATED', { secretExposure: false }); return { authenticated: true, secretExposure: false, browserSecrets: false }; };
   const observe = (tick = {}) => { assertPaper(); const timestamp = Number(tick.timestamp ?? Date.now()); const price = Number(tick.price); if (!Number.isFinite(price) || price <= 0) return { accepted: false, reason: 'INVALID_TICK' }; if (lastTick !== null && timestamp <= lastTick.timestamp) return { accepted: false, reason: timestamp === lastTick.timestamp ? 'DUPLICATE' : 'OUT_OF_ORDER' }; if (Date.now() - timestamp > 60000) return { accepted: false, reason: 'STALE' }; lastTick = { timestamp, price }; audit('MARKET_TICK_ACCEPTED', { symbol: tick.symbol, price, timestamp }); return { accepted: true, signalSafe: true, paperExecutionSafe: true }; };
@@ -57,10 +49,8 @@ export function createPhase3ProductionQualificationEngine() {
   const restore = cp => { assertPaper(); const safe = cp?.safety?.PAPER_ONLY === true && cp?.safety?.REAL_ORDER_PLACED === false; audit('RECOVERY_RESTORE', { safe }); return { restored: safe, paperOnly: true }; };
   const rollback = () => { assertPaper(); orders.length = 0; positions.length = 0; audit('ROLLBACK', { paperOnly: true }); return { rolledBack: true, paperOnly: true, liveOrders: false }; };
   const readiness = () => { assertPaper(); return { brokerSandbox: connected, authenticated, endToEndPaper: orders.every(o => o.paperOnly), resilience: incidents.every(i => i.safeState), killSwitch: true, monitoring: events.length > 0, recovery: checkpoints.length > 0, rollback: true, deploymentRehearsal: true, safety: clone(SAFETY) }; };
-
-  return Object.freeze({ getActivities: () => clone(PHASE3_ACTIVITIES), getSafety: () => clone(SAFETY), connect, authenticate, observe, evaluateSignal, riskCheck, paperOrder, closePosition, injectFault, setKillSwitch, checkpoint, restore, rollback, readiness, getEvents: () => clone(events), getOrders: () => clone(orders), getPositions: () => clone(positions), getIncidents: () => clone(incidents) });
+  return Object.freeze({ getActivities: () => clone(PHASE3_ACTIVITY_LIST), getSafety: () => clone(SAFETY), connect, authenticate, observe, evaluateSignal, riskCheck, paperOrder, closePosition, injectFault, setKillSwitch, checkpoint, restore, rollback, readiness, getEvents: () => clone(events), getOrders: () => clone(orders), getPositions: () => clone(positions), getIncidents: () => clone(incidents) });
 }
-
-export const PHASE3_ACTIVITIES = PHASE3_ACTIVITIES;
+export const PHASE3_ACTIVITIES = PHASE3_ACTIVITY_LIST;
 export const PHASE3_SAFETY = SAFETY;
 console.log('AI TRADE PRO — Phase 3 Production Qualification engine loaded (PAPER_ONLY)');
