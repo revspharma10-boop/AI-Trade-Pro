@@ -27,7 +27,7 @@ export function createStage1ExtendedPaperTradingEngine(options = {}) {
   const signals = { total: 0, accepted: 0, rejected: 0, BUY: 0, SELL: 0, HOLD: 0 };
   const trades = [];
   const positions = new Map();
-  const source = { connected: false, lastTickAt: null, lastTimestamp: null, symbol: null, status: 'DISCONNECTED' };
+  const source = { connected: false, lastTickAt: null, lastTimestamp: null, lastPrice: null, symbol: null, status: 'DISCONNECTED' };
 
   const assertSafety = () => {
     if (SAFETY.PAPER_ONLY !== true || SAFETY.REAL_ORDER_PLACED !== false || SAFETY.PRODUCTION_REAL_TRADING_ENABLED !== false) {
@@ -54,7 +54,7 @@ export function createStage1ExtendedPaperTradingEngine(options = {}) {
     assertSafety();
     if (sessions.has(id)) return { started: false, reason: 'SESSION_EXISTS' };
     const session = qualification.startPaperSession(id);
-    const record = { ...session, config: { staleAfterMs: config.staleAfterMs ?? 30000, maxTicks: config.maxTicks ?? Infinity }, source: 'REAL_MARKET_OBSERVATION', mode: 'PAPER_ONLY', tickCount: 0, acceptedTicks: 0, rejectedTicks: 0, signalCount: 0, paperFills: 0, realizedPnl: 0 };
+    const record = { ...session, config: { staleAfterMs: config.staleAfterMs ?? 30000, maxTicks: config.maxTicks ?? Infinity }, source: 'REAL_MARKET_OBSERVATION', mode: 'PAPER_ONLY', tickCount: 0, acceptedTicks: 0, rejectedTicks: 0, signalCount: 0, paperFills: 0, realizedPnl: 0, lastAcceptedTimestamp: null, lastAcceptedPrice: null };
     sessions.set(id, record);
     return clone(record);
   };
@@ -69,12 +69,11 @@ export function createStage1ExtendedPaperTradingEngine(options = {}) {
     const now = Date.now();
     let rejection = null;
     if (!tick.symbol || !Number.isFinite(price) || price <= 0 || !Number.isFinite(timestamp) || timestamp > now + 1000 || !Number.isFinite(volume) || volume < 0) rejection = 'INVALID_TICK';
-    else if (s.lastTimestamp !== null && timestamp < s.lastTimestamp) rejection = 'OUT_OF_ORDER';
-    else if (s.lastTimestamp === timestamp && source.lastTickAt !== null && price === source.lastPrice) rejection = 'DUPLICATE';
+    else if (s.lastAcceptedTimestamp !== null && timestamp < s.lastAcceptedTimestamp) rejection = 'OUT_OF_ORDER';
+    else if (s.lastAcceptedTimestamp === timestamp && s.lastAcceptedPrice === price) rejection = 'DUPLICATE';
     else if (now - timestamp > s.config.staleAfterMs) rejection = 'STALE';
 
     s.tickCount++;
-    source.lastTickAt = now; source.lastTimestamp = timestamp; source.lastPrice = price;
     if (rejection) {
       s.rejectedTicks++; quality.rejected++;
       if (rejection === 'STALE') quality.stale++;
@@ -86,7 +85,10 @@ export function createStage1ExtendedPaperTradingEngine(options = {}) {
     }
     const observed = qualification.recordObservation(sessionId, { ...tick, timestamp });
     if (!observed.accepted) { s.rejectedTicks++; quality.rejected++; return observed; }
-    s.acceptedTicks++; quality.accepted++; source.status = 'HEALTHY'; source.symbol = tick.symbol; source.lastTimestamp = timestamp; source.lastPrice = price;
+    s.acceptedTicks++; quality.accepted++;
+    s.lastAcceptedTimestamp = timestamp;
+    s.lastAcceptedPrice = price;
+    source.status = 'HEALTHY'; source.symbol = tick.symbol; source.lastTickAt = now; source.lastTimestamp = timestamp; source.lastPrice = price;
     journal.push({ type: 'TICK_ACCEPTED', symbol: tick.symbol, price, timestamp, at: now, paperOnly: true });
     return { accepted: true, symbol: tick.symbol, price, timestamp, mode: 'PAPER_ONLY' };
   };
