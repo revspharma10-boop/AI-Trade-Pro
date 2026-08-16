@@ -1,0 +1,25 @@
+name: Stage 3 Extended Real-Time Paper Observation
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  stage3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run Stage 3 validation
+        run: |
+          node --input-type=module <<'NODE'
+          import { runStage3ExtendedRealTimePaperObservationValidation } from './src/stage3ExtendedRealTimePaperObservationValidationRunner.js';
+          const result = runStage3ExtendedRealTimePaperObservationValidation();
+          console.log('STAGE3_RESULT_JSON=' + JSON.stringify(result));
+          if (!result.allAssertionsPassed) process.exit(1);
+          NODE
+      - run: npm run build
