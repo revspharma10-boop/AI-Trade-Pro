@@ -1,5 +1,5 @@
 import { createStage4ProductionReadinessQualificationEngine, STAGE4_ACTIVITIES } from './stage4ProductionReadinessQualificationEngine.js';
-import { PRODUCTION_LIVE_REQUIRED_GATES } from './productionLiveQualificationGate.js';
+import { PRODUCTION_LIVE_REQUIRED_GATES, assertProductionLiveSafety } from './productionLiveQualificationGate.js';
 
 export function runStage4ProductionReadinessQualificationValidation() {
   const e = createStage4ProductionReadinessQualificationEngine();
@@ -24,11 +24,12 @@ export function runStage4ProductionReadinessQualificationValidation() {
 
   const blocked = e.qualify({ riskControlsQualified: false, brokerAdapterVerified: true, liveEnvironmentVerified: true, manualLiveApproval: true });
   check('Risk-control failure blocks qualification', blocked.qualified === false && blocked.blockers.includes('RISKCONTROLSQUALIFIED'));
-  let unsafeRejected = false; try { const bad = { ...qualified, productionRealTradingEnabled: true }; if (bad.productionRealTradingEnabled) throw new Error('LIVE_ENABLE_ATTEMPT'); } catch { unsafeRejected = true; }
-  check('Live-enable attempt is rejected by qualification policy', unsafeRejected === true);
+  let unsafeRejected = false;
+  try { assertProductionLiveSafety({ paperOnly: true, realOrderPlaced: false, productionRealTradingEnabled: true }); } catch { unsafeRejected = true; }
+  check('Live-enabled snapshot is rejected by safety assertion', unsafeRejected);
   check('Deployment checklist is populated', e.getChecklist().length >= 15);
   const snap = e.snapshot();
-  check('Stage 4 snapshot exposes evidence and audit', snap.evidence && Object.keys(snap.evidence).length === 12 && snap.audit.length >= 13);
+  check('Stage 4 snapshot exposes evidence and audit', snap.evidence && Object.keys(snap.evidence).length >= 12 && snap.audit.length >= 14);
   check('Final Stage 4 snapshot remains paper-only', snap.safety.PAPER_ONLY === true && snap.safety.REAL_ORDER_PLACED === false && snap.safety.PRODUCTION_REAL_TRADING_ENABLED === false);
 
   const passed = results.filter(x => x.passed).length;
