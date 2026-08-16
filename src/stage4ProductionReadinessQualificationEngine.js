@@ -15,7 +15,7 @@ const SAFETY = Object.freeze({ PAPER_ONLY: true, REAL_ORDER_PLACED: false, PRODU
 export function createStage4ProductionReadinessQualificationEngine() {
   const evidence = {};
   const audit = [];
-  const assertSafety = () => { assertProductionLiveSafety(SAFETY); return true; };
+  const assertSafety = () => { assertProductionLiveSafety({ paperOnly: SAFETY.PAPER_ONLY, realOrderPlaced: SAFETY.REAL_ORDER_PLACED, productionRealTradingEnabled: SAFETY.PRODUCTION_REAL_TRADING_ENABLED }); return true; };
   const recordEvidence = (name, value) => { assertSafety(); evidence[name] = value === true; audit.push({ type: 'EVIDENCE', name, value: value === true, at: Date.now() }); return evidence[name]; };
   const qualify = (input = {}) => {
     assertSafety();
