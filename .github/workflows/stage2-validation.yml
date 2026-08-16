@@ -1,0 +1,27 @@
+name: Stage 2 Real-Time Paper Qualification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  stage2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run Stage 2 validation
+        run: |
+          node --input-type=module <<'NODE'
+          import { runStage2RealTimePaperQualificationValidation } from './src/stage2RealTimePaperQualificationValidationRunner.js';
+          const result = runStage2RealTimePaperQualificationValidation();
+          console.log('STAGE2_RESULT_JSON=' + JSON.stringify(result));
+          if (!result.allAssertionsPassed) process.exit(1);
+          NODE
+      - run: npm run build
