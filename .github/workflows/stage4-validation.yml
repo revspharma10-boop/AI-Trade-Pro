@@ -1,0 +1,27 @@
+name: Stage 4 Production Readiness Qualification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  stage4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run Stage 4 validation
+        run: |
+          node --input-type=module <<'NODE'
+          import { runStage4ProductionReadinessQualificationValidation } from './src/stage4ProductionReadinessQualificationValidationRunner.js';
+          const result = runStage4ProductionReadinessQualificationValidation();
+          console.log('STAGE4_RESULT_JSON=' + JSON.stringify(result));
+          if (!result.allAssertionsPassed) process.exit(1);
+          NODE
+      - run: npm run build
