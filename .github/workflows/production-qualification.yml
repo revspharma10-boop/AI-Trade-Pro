@@ -10,12 +10,22 @@ jobs:
   qualification:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: node -e "import('./src/phase3ProductionQualificationValidationRunner.js').then(async m => process.exit((await m.runPhase3ProductionQualificationValidation()).allAssertionsPassed ? 0 : 1))"
-      - run: npm run test:production-qualification
-      - run: npm run build
+      - name: Install dependencies
+        run: npm ci
+      - name: Run Phase 3 consolidated qualification
+        run: |
+          node --input-type=module <<'NODE'
+          import { runPhase3ProductionQualificationValidation } from './src/phase3ProductionQualificationValidationRunner.js';
+          const result = await runPhase3ProductionQualificationValidation();
+          console.log('PHASE3_RESULT_JSON=' + JSON.stringify(result));
+          if (!result.allAssertionsPassed) process.exit(1);
+          NODE
+      - name: Run production-live qualification gate
+        run: npm run test:production-qualification
+      - name: Build application
+        run: npm run build
