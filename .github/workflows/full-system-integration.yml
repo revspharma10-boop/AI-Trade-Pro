@@ -10,12 +10,13 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
       - name: Run full-system integration
         run: |
           node --input-type=module <<'NODE'
@@ -24,4 +25,5 @@ jobs:
           console.log('FULL_SYSTEM_RESULT_JSON=' + JSON.stringify(result));
           if (!result.allAssertionsPassed) process.exit(1);
           NODE
-      - run: npm run build
+      - name: Build application
+        run: npm run build
