@@ -1,0 +1,25 @@
+name: Stage 5 Broker Sandbox Qualification
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  stage5:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run Stage 5 validation
+        run: |
+          node --input-type=module <<'NODE'
+          import { runStage5BrokerSandboxQualificationValidation } from './src/stage5BrokerSandboxQualificationValidationRunner.js';
+          const result = runStage5BrokerSandboxQualificationValidation();
+          console.log('STAGE5_RESULT_JSON=' + JSON.stringify(result));
+          if (!result.allAssertionsPassed) process.exit(1);
+          NODE
+      - run: npm run build
