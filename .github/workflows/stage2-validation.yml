@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: [main]
 
+# CI uses Node 22 and v5 GitHub Actions to avoid the deprecated Node 20 action runtime.
+# Keep this workflow paper-only; validation failure must stop the job.
 jobs:
   stage2:
     runs-on: ubuntu-latest
@@ -15,7 +17,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
       - name: Run Stage 2 validation
         run: |
           node --input-type=module <<'NODE'
@@ -24,4 +27,5 @@ jobs:
           console.log('STAGE2_RESULT_JSON=' + JSON.stringify(result));
           if (!result.allAssertionsPassed) process.exit(1);
           NODE
-      - run: npm run build
+      - name: Production build
+        run: npm run build
