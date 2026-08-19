@@ -108,7 +108,7 @@ export function createStage1ExtendedPaperTradingEngine(options = {}) {
     if (result.accepted) signals.accepted++; else signals.rejected++;
     s.signalCount++;
     journal.push({ type: 'SIGNAL', action, accepted: result.accepted === true, at: Date.now(), paperOnly: true });
-    return { ...result, action, mode: 'PAPER_ONLY' };
+    return { accepted: result.accepted === true, action, mode: 'PAPER_ONLY' };
   };
 
   const simulatePaperEntry = (sessionId, { id = `P-${Date.now()}`, symbol, side, quantity, price } = {}) => {
@@ -138,12 +138,10 @@ export function createStage1ExtendedPaperTradingEngine(options = {}) {
     assertSafety();
     const pnls = trades.map(t => t.pnl); const wins = pnls.filter(x => x > 0).length;
     const grossWin = pnls.filter(x => x > 0).reduce((a,b)=>a+b,0); const grossLoss = Math.abs(pnls.filter(x => x < 0).reduce((a,b)=>a+b,0));
-    return clone({ stage: STAGE, safety: SAFETY, source, quality, signals, trades: trades.length, openPositions: positions.size,
-      realizedPnl: pnls.reduce((a,b)=>a+b,0), winRate: pnls.length ? wins / pnls.length : 0,
-      profitFactor: grossLoss ? grossWin / grossLoss : (grossWin > 0 ? Infinity : 0), sessions: [...sessions.values()], journalCount: journal.length });
+    return clone({ stage: STAGE, safety: SAFETY, source, paper: { quality, signals, trades: trades.length, openPositions: positions.size, realizedPnl: pnls.reduce((a,b)=>a+b,0), journalCount: journal.length, winRate: pnls.length ? wins / pnls.length : 0, profitFactor: grossLoss ? grossWin / grossLoss : (grossWin > 0 ? Infinity : 0) }, sessions: [...sessions.values()] });
   };
 
-  const closeSession = (id) => { assertSafety(); const result = qualification.closePaperSession(id); const s = sessions.get(id); if (s && result.closed) { s.status='COMPLETED'; s.endedAt=Date.now(); } return result; };
+  const closeSession = (id) => { assertSafety(); const result = qualification.closePaperSession(id); const s = sessions.get(id); if (s && result.closed) { s.status='COMPLETED'; s.endedAt=Date.now(); } return { closed: result.closed === true, reason: result.reason }; };
 
   return Object.freeze({
     getStage: () => clone(STAGE), getSafety: () => clone(SAFETY), assertSafety,
