@@ -54,7 +54,7 @@ export function createStage1ExtendedPaperTradingEngine(options = {}) {
     assertSafety();
     if (sessions.has(id)) return { started: false, reason: 'SESSION_EXISTS' };
     const session = qualification.startPaperSession(id);
-    const record = { ...session, config: { staleAfterMs: config.staleAfterMs ?? 30000, maxTicks: config.maxTicks ?? Infinity }, source: 'REAL_MARKET_OBSERVATION', mode: 'PAPER_ONLY', tickCount: 0, acceptedTicks: 0, rejectedTicks: 0, signalCount: 0, paperFills: 0, realizedPnl: 0, lastAcceptedTimestamp: null, lastAcceptedPrice: null };
+    const record = { ...session, config: { staleAfterMs: config.staleAfterMs ?? 30000, maxTicks: config.maxTicks ?? Infinity }, source: 'REAL_MARKET_OBSERVATION', mode: 'PAPER_ONLY', tickCount: 0, acceptedTicks: 0, rejectedTicks: 0, signalCount: 0, paperFills: 0, realizedPnl: 0, status: 'RUNNING', startedAt: Date.now() };
     sessions.set(id, record);
     return clone(record);
   };
@@ -136,12 +136,35 @@ export function createStage1ExtendedPaperTradingEngine(options = {}) {
 
   const getSnapshot = () => {
     assertSafety();
-    const pnls = trades.map(t => t.pnl); const wins = pnls.filter(x => x > 0).length;
-    const grossWin = pnls.filter(x => x > 0).reduce((a,b)=>a+b,0); const grossLoss = Math.abs(pnls.filter(x => x < 0).reduce((a,b)=>a+b,0));
-    return clone({ stage: STAGE, safety: SAFETY, source, paper: { quality, signals, trades: trades.length, openPositions: positions.size, realizedPnl: pnls.reduce((a,b)=>a+b,0), journalCount: journal.length, winRate: pnls.length ? wins / pnls.length : 0, profitFactor: grossLoss ? grossWin / grossLoss : (grossWin > 0 ? Infinity : 0) }, sessions: [...sessions.values()] });
+    const pnls = trades.map(t => t.pnl);
+    const wins = pnls.filter(x => x > 0).length;
+    const grossWin = pnls.filter(x => x > 0).reduce((a,b)=>a+b,0);
+    const grossLoss = Math.abs(pnls.filter(x => x < 0).reduce((a,b)=>a+b,0));
+    const realizedTotal = pnls.reduce((a,b)=>a+b,0);
+    const journalCount = journal.length;
+
+    return clone({
+      stage: STAGE,
+      safety: SAFETY,
+      source,
+      // top-level convenience fields for callers that expect flattened snapshot
+      realizedPnl: realizedTotal,
+      journalCount,
+      paper: {
+        quality,
+        signals,
+        trades: trades.length,
+        openPositions: positions.size,
+        realizedPnl: realizedTotal,
+        journalCount,
+        winCount: wins,
+        grossWin,
+        grossLoss
+      }
+    });
   };
 
-  const closeSession = (id) => { assertSafety(); const result = qualification.closePaperSession(id); const s = sessions.get(id); if (s && result.closed) { s.status='COMPLETED'; s.endedAt=Date.now(); } return { closed: result.closed === true, reason: result.reason }; };
+  const closeSession = (id) => { assertSafety(); const result = qualification.closePaperSession(id); const s = sessions.get(id); if (s && result.closed) { s.status='COMPLETED'; s.endedAt=Date.now(); } return result; };
 
   return Object.freeze({
     getStage: () => clone(STAGE), getSafety: () => clone(SAFETY), assertSafety,
