@@ -29,7 +29,27 @@ export function createStage2RealTimePaperQualificationEngine(options = {}) {
   const exit = (id, price) => { assertSafety(); return stage1.simulatePaperExit(sessionId, id, price); };
   const injectInterruption = reason => { assertSafety(); stage1.disconnectMarketSource(reason); incidents.push({ type: 'SOURCE_INTERRUPTION', reason, at: Date.now(), safe: true }); return { interrupted: true, safe: true, paperOnly: true }; };
   const recover = () => { assertSafety(); const symbol = stage1.getSnapshot().source.symbol || 'NIFTY'; stage1.connectMarketSource({ name: 'REAL_TIME_OBSERVATION_SOURCE_RECOVERY', symbol }); incidents.push({ type: 'SOURCE_RECOVERED', at: Date.now(), safe: true }); return { recovered: true, gatedUntilFreshTick: true, paperOnly: true }; };
-  const snapshot = () => { assertSafety(); const s = stage1.getSnapshot(); return Object.freeze({ stage: 2, activities: STAGE2_ACTIVITIES.map(x => x.id), safety: SAFETY, sessionId, started, heartbeat, heartbeatHealthy: started && Date.now() - heartbeat < 60000, observations: [...observations], incidents: [...incidents], paper: s }); };
+
+  // Keep the Stage 2 public snapshot contract flat. Stage 1 already exposes
+  // its operational metrics under `paper`; wrapping the whole Stage 1 snapshot
+  // here created `paper.paper.*`, while Stage 2 validation expects `paper.*`.
+  const snapshot = () => {
+    assertSafety();
+    const s = stage1.getSnapshot();
+    return Object.freeze({
+      stage: 2,
+      activities: STAGE2_ACTIVITIES.map(x => x.id),
+      safety: SAFETY,
+      sessionId,
+      started,
+      heartbeat,
+      heartbeatHealthy: started && Date.now() - heartbeat < 60000,
+      observations: [...observations],
+      incidents: [...incidents],
+      source: s.source,
+      paper: s.paper
+    });
+  };
   const stop = () => { assertSafety(); if (!sessionId) return { stopped: false, reason: 'NOT_STARTED' }; const r = stage1.closeSession(sessionId); started = false; return { stopped: r.closed === true, sessionId, paperOnly: true }; };
   return Object.freeze({ getActivities: () => [...STAGE2_ACTIVITIES], getSafety: () => ({ ...SAFETY }), assertSafety, start, heartbeatTick, observe, evaluateSignal, enter, exit, injectInterruption, recover, snapshot, stop });
 }
