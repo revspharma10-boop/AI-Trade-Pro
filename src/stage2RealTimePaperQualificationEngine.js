@@ -10,6 +10,30 @@ export const STAGE2_ACTIVITIES = Object.freeze([
 ]);
 const SAFETY = Object.freeze({ PAPER_ONLY: true, REAL_ORDER_PLACED: false, PRODUCTION_REAL_TRADING_ENABLED: false });
 
+function flattenPaperSnapshot(s) {
+  const paper = s?.paper?.paper ?? s?.paper ?? {};
+  const quality = paper?.quality ?? {};
+  return {
+    quality: {
+      accepted: Number(quality.accepted ?? 0),
+      rejected: Number(quality.rejected ?? 0),
+      stale: Number(quality.stale ?? 0),
+      invalid: Number(quality.invalid ?? 0),
+      outOfOrder: Number(quality.outOfOrder ?? 0),
+      duplicate: Number(quality.duplicate ?? 0),
+      sourceInterrupted: Number(quality.sourceInterrupted ?? 0)
+    },
+    signals: paper?.signals ?? {},
+    trades: Number(paper?.trades ?? 0),
+    openPositions: Number(paper?.openPositions ?? 0),
+    realizedPnl: Number(paper?.realizedPnl ?? s?.realizedPnl ?? 0),
+    journalCount: Number(paper?.journalCount ?? s?.journalCount ?? 0),
+    winCount: Number(paper?.winCount ?? 0),
+    grossWin: Number(paper?.grossWin ?? 0),
+    grossLoss: Number(paper?.grossLoss ?? 0)
+  };
+}
+
 export function createStage2RealTimePaperQualificationEngine(options = {}) {
   const stage1 = createStage1ExtendedPaperTradingEngine(options);
   let sessionId = null, started = false, heartbeat = 0;
@@ -29,26 +53,11 @@ export function createStage2RealTimePaperQualificationEngine(options = {}) {
   const exit = (id, price) => { assertSafety(); return stage1.simulatePaperExit(sessionId, id, price); };
   const injectInterruption = reason => { assertSafety(); stage1.disconnectMarketSource(reason); incidents.push({ type: 'SOURCE_INTERRUPTION', reason, at: Date.now(), safe: true }); return { interrupted: true, safe: true, paperOnly: true }; };
   const recover = () => { assertSafety(); const symbol = stage1.getSnapshot().source.symbol || 'NIFTY'; stage1.connectMarketSource({ name: 'REAL_TIME_OBSERVATION_SOURCE_RECOVERY', symbol }); incidents.push({ type: 'SOURCE_RECOVERED', at: Date.now(), safe: true }); return { recovered: true, gatedUntilFreshTick: true, paperOnly: true }; };
-
-  // Keep the Stage 2 public snapshot contract flat. Stage 1 already exposes
-  // its operational metrics under `paper`; wrapping the whole Stage 1 snapshot
-  // here created `paper.paper.*`, while Stage 2 validation expects `paper.*`.
   const snapshot = () => {
-    assertSafety();
-    const s = stage1.getSnapshot();
-    return Object.freeze({
-      stage: 2,
-      activities: STAGE2_ACTIVITIES.map(x => x.id),
-      safety: SAFETY,
-      sessionId,
-      started,
-      heartbeat,
-      heartbeatHealthy: started && Date.now() - heartbeat < 60000,
-      observations: [...observations],
-      incidents: [...incidents],
-      source: s.source,
-      paper: s.paper
-    });
+    assertSafety(); const s = stage1.getSnapshot();
+    return Object.freeze({ stage: 2, activities: STAGE2_ACTIVITIES.map(x => x.id), safety: SAFETY, sessionId, started, heartbeat,
+      heartbeatHealthy: started && Date.now() - heartbeat < 60000, observations: [...observations], incidents: [...incidents],
+      source: s.source, paper: flattenPaperSnapshot(s) });
   };
   const stop = () => { assertSafety(); if (!sessionId) return { stopped: false, reason: 'NOT_STARTED' }; const r = stage1.closeSession(sessionId); started = false; return { stopped: r.closed === true, sessionId, paperOnly: true }; };
   return Object.freeze({ getActivities: () => [...STAGE2_ACTIVITIES], getSafety: () => ({ ...SAFETY }), assertSafety, start, heartbeatTick, observe, evaluateSignal, enter, exit, injectInterruption, recover, snapshot, stop });
