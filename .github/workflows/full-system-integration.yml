@@ -27,3 +27,5 @@ jobs:
           NODE
       - name: Build application
         run: npm run build
+
+# trigger integration CI after validated paper-only console gate
