@@ -1,0 +1,30 @@
+name: Final Activation Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  final-activation-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate final activation gate
+        run: npm run test:production-qualification
+      - name: Build release candidate
+        run: npm run build
+      - name: Assert live trading remains disabled
+        run: |
+          test "${PRODUCTION_REAL_TRADING_ENABLED:-false}" != "true"
+          echo "FINAL_ACTIVATION_GATE=PASSED"
+          echo "PAPER_ONLY=true"
+          echo "REAL_ORDER_PLACED=false"
+          echo "PRODUCTION_REAL_TRADING_ENABLED=false"
