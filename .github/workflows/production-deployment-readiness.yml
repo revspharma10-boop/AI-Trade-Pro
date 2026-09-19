@@ -1,0 +1,28 @@
+name: Production Deployment Readiness
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  deployment-readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate production deployment readiness
+        run: |
+          node --input-type=module <<'NODE'
+          import { runProductionDeploymentReadiness } from './src/productionDeploymentReadinessValidationRunner.js';
+          const result = runProductionDeploymentReadiness();
+          if (!result.allAssertionsPassed) process.exit(1);
+          NODE
+      - name: Build application
+        run: npm run build
