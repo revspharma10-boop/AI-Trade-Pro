@@ -1,0 +1,27 @@
+name: Broker Adapter Live Environment Verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  broker-live-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify broker adapter and live environment safety
+        run: |
+          node --input-type=module <<'NODE'
+          import { runBrokerLiveEnvironmentVerification } from './src/brokerLiveEnvironmentVerificationValidationRunner.js';
+          const result = runBrokerLiveEnvironmentVerification();
+          if (!result.allAssertionsPassed) process.exit(1);
+          NODE
+      - name: Build application
+        run: npm run build
