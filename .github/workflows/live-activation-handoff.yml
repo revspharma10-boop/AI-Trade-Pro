@@ -1,0 +1,22 @@
+name: Controlled Live Activation Handoff
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  activation-handoff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Prepare activation handoff without enabling live trading
+        run: node src/liveActivationHandoffValidationRunner.js
+      - name: Build release candidate
+        run: npm run build
