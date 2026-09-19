@@ -1,0 +1,27 @@
+name: Production Security Operations Hardening
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  security-operations-hardening:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run security and operations hardening
+        run: |
+          node --input-type=module <<'NODE'
+          import { runProductionSecurityOperationsHardening } from './src/productionSecurityOperationsHardeningValidationRunner.js';
+          const result = runProductionSecurityOperationsHardening();
+          if (!result.allAssertionsPassed) process.exit(1);
+          NODE
+      - name: Build application
+        run: npm run build
