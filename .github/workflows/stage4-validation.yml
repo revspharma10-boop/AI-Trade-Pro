@@ -25,3 +25,5 @@ jobs:
           if (!result.allAssertionsPassed) process.exit(1);
           NODE
       - run: npm run build
+
+# Stage 4 validation trigger
