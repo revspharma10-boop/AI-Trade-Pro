@@ -1,0 +1,52 @@
+name: Upstox Sandbox Connectivity Validation
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "src/upstox/upstoxSandboxConnectivityValidationRunner.js"
+      - "src/upstox/upstoxSandboxHttpTransport.js"
+      - ".github/workflows/upstox-sandbox-connectivity.yml"
+
+jobs:
+  sandbox-connectivity:
+    runs-on: ubuntu-latest
+    env:
+      UPSTOX_ENVIRONMENT: SANDBOX
+      PRODUCTION_REAL_TRADING_ENABLED: "false"
+      UPSTOX_SANDBOX_ACCESS_TOKEN: ${{ secrets.UPSTOX_SANDBOX_ACCESS_TOKEN }}
+      UPSTOX_SANDBOX_TEST_INSTRUMENT: ${{ vars.UPSTOX_SANDBOX_TEST_INSTRUMENT }}
+      UPSTOX_SANDBOX_TEST_PRICE: ${{ vars.UPSTOX_SANDBOX_TEST_PRICE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate sandbox secret is configured
+        shell: bash
+        run: |
+          if [ -z "$UPSTOX_SANDBOX_ACCESS_TOKEN" ]; then
+            echo "UPSTOX_SANDBOX_ACCESS_TOKEN is not configured."
+            echo "Add it in GitHub Settings -> Secrets and variables -> Actions."
+            exit 2
+          fi
+
+      - name: Run Upstox sandbox connectivity validation
+        run: node src/upstox/upstoxSandboxConnectivityValidationRunner.js
+
+      - name: Assert live trading remains disabled
+        shell: bash
+        run: |
+          test "$UPSTOX_ENVIRONMENT" = "SANDBOX"
+          test "$PRODUCTION_REAL_TRADING_ENABLED" != "true"
+          echo "PAPER_ONLY=true"
+          echo "REAL_ORDER_PLACED=false"
+          echo "PRODUCTION_REAL_TRADING_ENABLED=false"
