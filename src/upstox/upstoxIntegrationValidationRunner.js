@@ -2,6 +2,8 @@ import { createUpstoxConfig } from './upstoxConfig.js';
 import { buildUpstoxAuthorizationUrl } from './upstoxOAuth.js';
 import { createUpstoxBrokerAdapter } from './upstoxBrokerAdapter.js';
 import { createUpstoxMarketDataProcessor } from './upstoxMarketData.js';
+import { reconcileOrder, reconcilePosition } from './upstoxReconciliation.js';
+import { evaluateExecutionSafety } from './upstoxExecutionSafety.js';
 
 export async function runUpstoxIntegrationValidation() {
   const checks = [];
