@@ -1,0 +1,29 @@
+name: Upstox Integration Validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  upstox-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run Upstox integration contract validation
+        run: node src/upstox/upstoxIntegrationValidationRunner.js
+      - name: Build
+        run: npm run build
+      - name: Assert production trading remains disabled
+        run: |
+          test "${PRODUCTION_REAL_TRADING_ENABLED:-false}" != "true"
+          test "${BROKER_ENVIRONMENT:-SANDBOX}" != "LIVE"
+          echo "PAPER_ONLY=true"
+          echo "REAL_ORDER_PLACED=false"
+          echo "PRODUCTION_REAL_TRADING_ENABLED=false"
