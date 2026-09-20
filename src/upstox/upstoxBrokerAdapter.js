@@ -39,7 +39,7 @@ export function createUpstoxBrokerAdapter({ config, transport }) {
     },
     async modifyOrder(order) {
       if (!order?.orderId) throw new Error('orderId is required.');
-      return request('/v3/order/modify', {method:'PUT', body:order});
+      return request('/v3/order/modify', {method:'PUT', body:{...order, order_id: order.order_id ?? order.orderId}});
     },
     async cancelOrder(orderId) {
       if (!orderId) throw new Error('orderId is required.');
