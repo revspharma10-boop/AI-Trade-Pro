@@ -40,9 +40,14 @@ export function runUpstoxIntegrationValidation() {
     const p=createUpstoxMarketDataProcessor({clock:()=>10000,maxAgeMs:1000});
     try { p.normalize({id:'a',instrumentToken:'X',timestamp:8000,price:10}); throw new Error('not rejected'); } catch(e) { if(e.message !== 'STALE_TICK') throw e; }
   });
-  check('sandbox order request stays inside adapter', async () => {
-    // Structural check only; no broker call is made by this runner.
+  check('sandbox order request stays inside adapter', () => {
     if (adapter.environment !== 'SANDBOX') throw new Error('wrong environment');
+  });
+  check('order lifecycle maps to V3 endpoints', async () => {
+    await adapter.placeOrder({instrumentToken:'NSE_EQ|TEST',quantity:1,orderType:'MARKET',transactionType:'BUY',validity:'DAY',tag:'AI-TRADE-PRO-TEST'});
+    await adapter.modifyOrder({orderId:'sandbox-order',quantity:1,validity:'DAY',price:100,orderType:'LIMIT',triggerPrice:0});
+    await adapter.cancelOrder('sandbox-order');
+    if (calls[0].path !== '/v3/order/place' || calls[1].path !== '/v3/order/modify' || !calls[2].path.startsWith('/v3/order/cancel')) throw new Error('order lifecycle endpoint mismatch');
   });
   check('production activation remains disabled', () => {
     if (config.liveExecutionEnabled !== false) throw new Error('unsafe default');
