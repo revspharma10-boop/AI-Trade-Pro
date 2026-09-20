@@ -1,0 +1,28 @@
+name: Live Activation Readiness Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  activation-readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify activation prerequisites without enabling live trading
+        run: |
+          test "${PRODUCTION_REAL_TRADING_ENABLED:-false}" != "true"
+          test "${BROKER_ENVIRONMENT:-SANDBOX}" != "LIVE"
+          echo "ACTIVATION_READINESS=READY_PENDING_EXPLICIT_MANUAL_ACTIVATION"
+          echo "PAPER_ONLY=true"
+          echo "REAL_ORDER_PLACED=false"
+          echo "PRODUCTION_REAL_TRADING_ENABLED=false"
+      - name: Build release candidate
+        run: npm run build
