@@ -14,7 +14,7 @@
 const token = process.env.UPSTOX_SANDBOX_ACCESS_TOKEN;
 const baseUrl = 'https://api-hft.upstox.com';
 const instrumentToken = process.env.UPSTOX_SANDBOX_TEST_INSTRUMENT || 'NSE_EQ|INE669E01016';
-const testPrice = Number(process.env.UPSTOX_SANDBOX_TEST_PRICE || '0.01');
+const testPrice = Number(process.env.UPSTOX_SANDBOX_TEST_PRICE || '9.12');
 
 if (!token) {
   console.error('UPSTOX_SANDBOX_ACCESS_TOKEN_REQUIRED');
@@ -56,7 +56,7 @@ const placeBody = {
   transaction_type: 'BUY',
   disclosed_quantity: 0,
   trigger_price: 0,
-  is_amo: false,
+  is_amo: true,
   slice: false
 };
 
