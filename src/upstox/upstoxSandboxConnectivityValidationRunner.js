@@ -57,7 +57,7 @@ const placeBody = {
   disclosed_quantity: 0,
   trigger_price: 0,
   is_amo: true,
-  slice: false
+  slice: true
 };
 
 console.log('UPSTOX_SANDBOX_CONNECTIVITY_START');
