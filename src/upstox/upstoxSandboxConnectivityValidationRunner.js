@@ -13,8 +13,8 @@
 
 const token = process.env.UPSTOX_SANDBOX_ACCESS_TOKEN;
 const baseUrl = 'https://api-hft.upstox.com';
-const instrumentToken = process.env.UPSTOX_SANDBOX_TEST_INSTRUMENT || 'NSE_EQ|INE669E01016';
-const testPrice = Number(process.env.UPSTOX_SANDBOX_TEST_PRICE || '9.12');
+const instrumentToken = 'NSE_EQ|INE669E01016';
+const testPrice = 9.12;
 
 if (!token) {
   console.error('UPSTOX_SANDBOX_ACCESS_TOKEN_REQUIRED');
@@ -70,6 +70,13 @@ const placed = await request('/v3/order/place', { method: 'POST', body: placeBod
 if (!placed.ok) {
   console.error('SANDBOX_PLACE_FAILED status=' + placed.status);
   console.error('SANDBOX_PLACE_MESSAGE=' + apiMessage(placed.payload));
+  if (Array.isArray(placed.payload?.errors)) {
+    for (const error of placed.payload.errors) {
+      console.error('SANDBOX_API_ERROR_CODE=' + (error?.errorCode ?? 'UNKNOWN'));
+      console.error('SANDBOX_API_ERROR_PATH=' + (error?.propertyPath ?? 'UNKNOWN'));
+      console.error('SANDBOX_API_ERROR_FIELD=' + (error?.invalidField ?? 'UNKNOWN'));
+    }
+  }
   process.exit(1);
 }
 
