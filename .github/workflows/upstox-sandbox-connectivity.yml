@@ -2,11 +2,6 @@ name: Upstox Sandbox Connectivity Validation
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "src/upstox/upstoxSandboxConnectivityValidationRunner.js"
-      - "src/upstox/upstoxSandboxHttpTransport.js"
-      - ".github/workflows/upstox-sandbox-connectivity.yml"
 
 jobs:
   sandbox-connectivity:
