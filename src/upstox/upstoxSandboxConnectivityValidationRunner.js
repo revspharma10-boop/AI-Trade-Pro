@@ -11,7 +11,8 @@
  * the runner fails closed and reports the response without exposing the token.
  */
 
-const token = process.env.UPSTOX_SANDBOX_ACCESS_TOKEN;
+const rawToken = process.env.UPSTOX_SANDBOX_ACCESS_TOKEN || '';
+const token = rawToken.trim();
 const baseUrl = 'https://api-hft.upstox.com';
 const instrumentToken = 'NSE_EQ|INE669E01016';
 const testPrice = 9.12;
@@ -64,6 +65,9 @@ console.log('UPSTOX_SANDBOX_CONNECTIVITY_START');
 console.log('environment=SANDBOX');
 console.log('real_order_placed=false');
 console.log('production_real_trading_enabled=false');
+console.log('sandbox_token_present=' + String(Boolean(token)));
+console.log('sandbox_token_length=' + token.length);
+console.log('sandbox_token_has_whitespace=' + /\\s/.test(rawToken));
 
 const placed = await request('/v3/order/place', { method: 'POST', body: placeBody });
 
