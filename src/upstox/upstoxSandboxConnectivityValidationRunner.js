@@ -13,7 +13,7 @@
 
 const rawToken = process.env.UPSTOX_SANDBOX_ACCESS_TOKEN || '';
 const token = rawToken.trim();
-const baseUrl = 'https://api-hft.upstox.com';
+const baseUrl = 'https://sandbox.upstox.com';
 const instrumentToken = 'NSE_EQ|INE669E01016';
 const testPrice = 9.12;
 
@@ -69,7 +69,9 @@ console.log('sandbox_token_present=' + String(Boolean(token)));
 console.log('sandbox_token_length=' + token.length);
 console.log('sandbox_token_has_whitespace=' + /\\s/.test(rawToken));
 
-const placed = await request('/v3/order/place', { method: 'POST', body: placeBody });
+console.log('sandbox_endpoint=' + baseUrl + '/v2/order/place');
+
+const placed = await request('/v2/order/place', { method: 'POST', body: placeBody });
 
 if (!placed.ok) {
   console.error('SANDBOX_PLACE_FAILED status=' + placed.status);
@@ -92,7 +94,7 @@ if (!orderId) {
 
 console.log('SANDBOX_PLACE_PASSED order_id_received=true');
 
-const cancelled = await request('/v3/order/cancel?order_id=' + encodeURIComponent(orderId), { method: 'DELETE' });
+const cancelled = await request('/v2/order/cancel?order_id=' + encodeURIComponent(orderId), { method: 'DELETE' });
 
 if (!cancelled.ok) {
   console.error('SANDBOX_CANCEL_FAILED status=' + cancelled.status);
