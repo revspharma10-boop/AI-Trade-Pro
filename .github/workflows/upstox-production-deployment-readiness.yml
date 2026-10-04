@@ -1,0 +1,43 @@
+name: Upstox Production Deployment Readiness
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Upstox Broker Qualification Gate
+    types:
+      - completed
+
+jobs:
+  readiness:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PAPER_ONLY: "true"
+      REAL_ORDER_PLACED: "false"
+      PRODUCTION_REAL_TRADING_ENABLED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate production deployment configuration
+        run: node src/upstox/upstoxProductionDeploymentValidationRunner.js
+      - name: Build release candidate
+        run: npm run build
+      - name: Enforce paper-only boundary
+        shell: bash
+        run: |
+          test "$PAPER_ONLY" = "true"
+          test "$REAL_ORDER_PLACED" = "false"
+          test "$PRODUCTION_REAL_TRADING_ENABLED" = "false"
+          echo "UPSTOX_PRODUCTION_DEPLOYMENT_READINESS=PASSED"
+          echo "PAPER_ONLY=true"
+          echo "REAL_ORDER_PLACED=false"
+          echo "PRODUCTION_REAL_TRADING_ENABLED=false"
