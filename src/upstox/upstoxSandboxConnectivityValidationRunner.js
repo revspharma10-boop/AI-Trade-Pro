@@ -14,8 +14,13 @@
 const rawToken = process.env.UPSTOX_SANDBOX_ACCESS_TOKEN || '';
 const token = rawToken.trim();
 const baseUrl = 'https://api-sandbox.upstox.com';
-const instrumentToken = 'NSE_EQ|INE669E01016';
-const testPrice = 9.12;
+const instrumentToken = process.env.UPSTOX_SANDBOX_TEST_INSTRUMENT || 'NSE_EQ|INE669E01016';
+const testPrice = Number(process.env.UPSTOX_SANDBOX_TEST_PRICE || '9.12');
+
+if (!Number.isFinite(testPrice) || testPrice <= 0) {
+  console.error('UPSTOX_SANDBOX_TEST_PRICE_INVALID');
+  process.exit(4);
+}
 
 if (!token) {
   console.error('UPSTOX_SANDBOX_ACCESS_TOKEN_REQUIRED');
@@ -70,12 +75,35 @@ console.log('sandbox_token_length=' + token.length);
 console.log('sandbox_token_has_whitespace=' + /\\s/.test(rawToken));
 
 console.log('sandbox_endpoint=' + baseUrl + '/v3/order/place');
+console.log('sandbox_instrument=' + instrumentToken);
+console.log('sandbox_test_price=' + testPrice);
+
+console.log('UPSTOX_SANDBOX_AUTH_PREFLIGHT_START');
+const authPreflight = await request('/v3/order/place', { method: 'POST', body: {} });
+
+if (authPreflight.status === 401) {
+  console.error('UPSTOX_SANDBOX_AUTH_PREFLIGHT_FAILED status=401');
+  console.error('UPSTOX_SANDBOX_AUTH_PREFLIGHT_MESSAGE=' + apiMessage(authPreflight.payload));
+  console.error('ACTION_REQUIRED=ROTATE_SANDBOX_TOKEN_AND_UPDATE_GITHUB_SECRET');
+  process.exit(5);
+}
+
+if (authPreflight.status < 400 || authPreflight.status >= 500) {
+  console.error('UPSTOX_SANDBOX_AUTH_PREFLIGHT_UNEXPECTED status=' + authPreflight.status);
+  console.error('UPSTOX_SANDBOX_AUTH_PREFLIGHT_MESSAGE=' + apiMessage(authPreflight.payload));
+  process.exit(6);
+}
+
+console.log('UPSTOX_SANDBOX_AUTH_PREFLIGHT_PASSED status=' + authPreflight.status);
 
 const placed = await request('/v3/order/place', { method: 'POST', body: placeBody });
 
 if (!placed.ok) {
   console.error('SANDBOX_PLACE_FAILED status=' + placed.status);
   console.error('SANDBOX_PLACE_MESSAGE=' + apiMessage(placed.payload));
+  if (placed.status === 401) {
+    console.error('ACTION_REQUIRED=ROTATE_SANDBOX_TOKEN_AND_UPDATE_GITHUB_SECRET');
+  }
   if (Array.isArray(placed.payload?.errors)) {
     for (const error of placed.payload.errors) {
       console.error('SANDBOX_API_ERROR_CODE=' + (error?.errorCode ?? 'UNKNOWN'));
