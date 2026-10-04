@@ -14,6 +14,8 @@
 const rawToken = process.env.UPSTOX_SANDBOX_ACCESS_TOKEN || '';
 const token = rawToken.trim();
 const baseUrl = 'https://api-sandbox.upstox.com';
+const sandboxV2Url = 'https://api-sandbox.upstox.com';
+const sandboxV3Url = 'https://api-sandbox.upstox.com';
 const instrumentToken = process.env.UPSTOX_SANDBOX_TEST_INSTRUMENT || 'NSE_EQ|INE669E01016';
 const testPrice = Number(process.env.UPSTOX_SANDBOX_TEST_PRICE || '9.12');
 
@@ -32,8 +34,8 @@ if (process.env.UPSTOX_ENVIRONMENT === 'LIVE' || process.env.PRODUCTION_REAL_TRA
   process.exit(3);
 }
 
-async function request(path, { method = 'GET', body } = {}) {
-  const response = await fetch(baseUrl + path, {
+async function request(path, { method = 'GET', body, host = baseUrl } = {}) {
+  const response = await fetch(host + path, {
     method,
     headers: {
       Accept: 'application/json',
@@ -79,24 +81,38 @@ console.log('sandbox_instrument=' + instrumentToken);
 console.log('sandbox_test_price=' + testPrice);
 
 console.log('UPSTOX_SANDBOX_AUTH_PREFLIGHT_START');
-const authPreflight = await request('/v3/order/place', { method: 'POST', body: {} });
 
-if (authPreflight.status === 401) {
-  console.error('UPSTOX_SANDBOX_AUTH_PREFLIGHT_FAILED status=401');
-  console.error('UPSTOX_SANDBOX_AUTH_PREFLIGHT_MESSAGE=' + apiMessage(authPreflight.payload));
-  console.error('ACTION_REQUIRED=ROTATE_SANDBOX_TOKEN_AND_UPDATE_GITHUB_SECRET');
+// Probe both documented Sandbox order API versions with an intentionally invalid body.
+// A 4xx validation response means the bearer token reached the authenticated API layer.
+// A 401 means the bearer token itself was rejected.
+const v2Preflight = await request('/v2/order/place', { method: 'POST', body: {}, host: sandboxV2Url });
+const v3Preflight = await request('/v3/order/place', { method: 'POST', body: {}, host: sandboxV3Url });
+
+console.log('sandbox_v2_preflight_status=' + v2Preflight.status);
+console.log('sandbox_v3_preflight_status=' + v3Preflight.status);
+
+if (v2Preflight.status === 401 && v3Preflight.status === 401) {
+  console.error('UPSTOX_SANDBOX_AUTH_PREFLIGHT_FAILED');
+  console.error('UPSTOX_SANDBOX_V2_AUTH_MESSAGE=' + apiMessage(v2Preflight.payload));
+  console.error('UPSTOX_SANDBOX_V3_AUTH_MESSAGE=' + apiMessage(v3Preflight.payload));
+  console.error('ACTION_REQUIRED=VERIFY_THE_GITHUB_SECRET_IS_THE_SANDBOX_ACCESS_TOKEN_GENERATED_BY_API_SANDBOX');
   process.exit(5);
 }
 
-if (authPreflight.status < 400 || authPreflight.status >= 500) {
-  console.error('UPSTOX_SANDBOX_AUTH_PREFLIGHT_UNEXPECTED status=' + authPreflight.status);
-  console.error('UPSTOX_SANDBOX_AUTH_PREFLIGHT_MESSAGE=' + apiMessage(authPreflight.payload));
+if ([v2Preflight, v3Preflight].some(result => result.status >= 500)) {
+  console.error('UPSTOX_SANDBOX_AUTH_PREFLIGHT_UPSTREAM_ERROR');
   process.exit(6);
 }
 
-console.log('UPSTOX_SANDBOX_AUTH_PREFLIGHT_PASSED status=' + authPreflight.status);
+if (v3Preflight.status < 400 || v3Preflight.status >= 500) {
+  console.error('UPSTOX_SANDBOX_AUTH_PREFLIGHT_UNEXPECTED status=' + v3Preflight.status);
+  console.error('UPSTOX_SANDBOX_AUTH_PREFLIGHT_MESSAGE=' + apiMessage(v3Preflight.payload));
+  process.exit(7);
+}
 
-const placed = await request('/v3/order/place', { method: 'POST', body: placeBody });
+console.log('UPSTOX_SANDBOX_AUTH_PREFLIGHT_PASSED status=' + v3Preflight.status);
+
+const placed = await request('/v3/order/place', { method: 'POST', body: placeBody, host: sandboxV3Url });
 
 if (!placed.ok) {
   console.error('SANDBOX_PLACE_FAILED status=' + placed.status);
