@@ -75,6 +75,13 @@ console.log('production_real_trading_enabled=false');
 console.log('sandbox_token_present=' + String(Boolean(token)));
 console.log('sandbox_token_length=' + token.length);
 console.log('sandbox_token_has_whitespace=' + /\\s/.test(rawToken));
+const looksLikeClientId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token);
+console.log('sandbox_token_looks_like_client_id=' + String(looksLikeClientId));
+if (looksLikeClientId) {
+  console.error('UPSTOX_SANDBOX_CREDENTIAL_TYPE_MISMATCH');
+  console.error('ACTION_REQUIRED=STORE_THE_SANDBOX_ACCESS_TOKEN_FROM_THE_SANDBOX_APP_GENERATE_BUTTON_NOT_THE_API_KEY_CLIENT_ID');
+  process.exit(8);
+}
 
 console.log('sandbox_endpoint=' + baseUrl + '/v3/order/place');
 console.log('sandbox_instrument=' + instrumentToken);
