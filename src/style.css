@@ -708,3 +708,35 @@ footer {
   }
 
 }
+
+/* ============================================================
+   PAPER-ONLY SAFETY BANNER
+============================================================ */
+.safety-banner {
+  margin: 0 0 22px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid #2c6b50;
+  border-radius: 12px;
+  background: #101b17;
+}
+.safety-banner strong { display:block; margin-bottom:5px; }
+.safety-banner > div > span { color:#9eaaac; font-size:12px; }
+.safety-chips { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.safety-chips span {
+  padding:6px 9px;
+  border:1px solid #2c6b50;
+  border-radius:999px;
+  color:#b8e7cf !important;
+  background:#13251d;
+  font-size:10px !important;
+  font-weight:700;
+  letter-spacing:.35px;
+}
+@media (max-width: 650px) {
+  .safety-banner { align-items:flex-start; flex-direction:column; }
+  .safety-chips { justify-content:flex-start; }
+}
