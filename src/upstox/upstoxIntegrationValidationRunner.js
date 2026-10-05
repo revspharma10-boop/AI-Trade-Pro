@@ -7,7 +7,7 @@ import { evaluateExecutionSafety } from './upstoxExecutionSafety.js';
 
 export async function runUpstoxIntegrationValidation() {
   const checks = [];
-  const check = (name, fn) => {
+  const check = async (name, fn) => {
     try { fn(); checks.push({name, passed:true}); }
     catch (error) { checks.push({name, passed:false, error:error.message}); }
   };
