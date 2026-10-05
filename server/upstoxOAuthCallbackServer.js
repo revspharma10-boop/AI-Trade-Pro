@@ -7,34 +7,40 @@ const CLIENT_ID = process.env.UPSTOX_CLIENT_ID || '';
 const CLIENT_SECRET = process.env.UPSTOX_CLIENT_SECRET || '';
 const REDIRECT_URI = process.env.UPSTOX_REDIRECT_URI || '';
 const COOKIE = 'ai_trade_pro_oauth_state';
+const PROFILE_URL = 'https://api.upstox.com/v2/user/profile';
 
 function safeCookie(value) {
   return `${COOKIE}=${encodeURIComponent(value)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=600`;
 }
-
 function send(res, status, body, headers = {}) {
   res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', ...headers });
   res.end(body);
 }
-
 function requireConfig() {
   if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) throw new Error('UPSTOX_OAUTH_SERVER_CONFIG_INCOMPLETE');
 }
-
 function cookieValue(req, name) {
   const cookies = String(req.headers.cookie || '').split(';').map(x => x.trim());
   const found = cookies.find(x => x.startsWith(name + '='));
   return found ? decodeURIComponent(found.slice(name.length + 1)) : '';
 }
+async function verifyProductionProfile(accessToken) {
+  const response = await fetch(PROFILE_URL, {
+    method: 'GET',
+    headers: { Accept: 'application/json', Authorization: 'Bearer ' + accessToken }
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error('UPSTOX_PRODUCTION_PROFILE_VERIFICATION_FAILED_' + response.status);
+  if (!(body?.data ?? body)) throw new Error('UPSTOX_PRODUCTION_PROFILE_EMPTY');
+  return true;
+}
 
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'https://oauth.invalid');
-
     if (url.pathname === '/health') {
       return send(res, 200, 'AI_TRADE_PRO_OAUTH_CALLBACK_HEALTHY\nPAPER_ONLY=true\nPRODUCTION_REAL_TRADING_ENABLED=false');
     }
-
     if (url.pathname === '/auth/upstox/start') {
       requireConfig();
       const state = crypto.randomBytes(32).toString('hex');
@@ -46,7 +52,6 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(302, { Location: auth.toString(), 'Set-Cookie': safeCookie(state) });
       return res.end();
     }
-
     if (url.pathname === '/auth/upstox/callback') {
       requireConfig();
       const code = url.searchParams.get('code');
@@ -57,21 +62,25 @@ const server = http.createServer(async (req, res) => {
       const token = await exchangeUpstoxAuthorizationCode({
         code, clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, redirectUri: REDIRECT_URI
       });
-
-      // Deliberately never return/log the access token. Persistent secret storage
-      // must be added through an approved server-side secret manager.
       if (!token?.access_token) return send(res, 502, 'UPSTOX_OAUTH_TOKEN_EXCHANGE_FAILED');
+
+      // The token is used only in memory for one allowlisted read-only request.
+      await verifyProductionProfile(token.access_token);
+
       return send(res, 200,
         'UPSTOX_OAUTH_AUTHENTICATION_PASSED\n' +
+        'UPSTOX_PRODUCTION_PROFILE_READ_PASSED\n' +
+        'UPSTOX_PRODUCTION_CONNECTIVITY_PASSED\n' +
         'TOKEN_RECEIVED_SERVER_SIDE=true\n' +
+        'TOKEN_PERSISTED=false\n' +
         'TOKEN_EXPOSED_TO_BROWSER=false\n' +
+        'order_submission_allowed=false\n' +
         'PAPER_ONLY=true\n' +
         'REAL_ORDER_PLACED=false\n' +
         'PRODUCTION_REAL_TRADING_ENABLED=false',
         { 'Set-Cookie': `${COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0` }
       );
     }
-
     return send(res, 404, 'NOT_FOUND');
   } catch (error) {
     return send(res, 500, 'OAUTH_CALLBACK_ERROR=' + String(error?.message || 'UNKNOWN'));
