@@ -1,0 +1,30 @@
+name: Upstox Read-Only Operational Qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/upstox/upstoxOperationalQualificationRunner.js'
+      - 'src/upstox/upstoxExecutionSafety.js'
+      - 'src/upstox/upstoxMarketData.js'
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    env:
+      PAPER_ONLY: "true"
+      REAL_ORDER_PLACED: "false"
+      PRODUCTION_REAL_TRADING_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node src/upstox/upstoxOperationalQualificationRunner.js
+      - run: npm run build
+      - name: Reassert safety boundary
+        run: |
+          test "$PAPER_ONLY" = "true"
+          test "$REAL_ORDER_PLACED" = "false"
+          test "$PRODUCTION_REAL_TRADING_ENABLED" = "false"
