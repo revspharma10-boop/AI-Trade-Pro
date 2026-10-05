@@ -26,7 +26,7 @@ app.innerHTML = `
           <h1>AI TRADE PRO</h1>
 
           <span>
-            Multi-Market Algo & Recommendation Platform
+            Live Market Intelligence • Paper Trading Platform
           </span>
         </div>
 
@@ -92,7 +92,7 @@ app.innerHTML = `
           <div>
 
             <h2>
-              Trading Intelligence Dashboard
+              Trading Intelligence & Paper Execution
             </h2>
 
             <p>
@@ -349,7 +349,7 @@ app.innerHTML = `
                 </h3>
 
                 <span>
-                  Algo execution layer
+                  Paper execution layer
                 </span>
 
               </div>
@@ -423,6 +423,16 @@ app.innerHTML = `
 
         </section>
 
+
+        <section class="safety-banner">
+          <div>
+            <strong>🛡️ PAPER-ONLY SAFETY LOCK</strong>
+            <span>Upstox production access is read-only. Live broker order submission is disabled.</span>
+          </div>
+          <div class="safety-chips">
+            <span>LIVE DATA</span><span>PAPER EXECUTION</span><span>REAL ORDERS BLOCKED</span>
+          </div>
+        </section>
 
         <!-- API CONNECTION TEST -->
 
