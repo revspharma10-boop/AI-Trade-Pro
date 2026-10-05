@@ -1,0 +1,35 @@
+name: Upstox OAuth Callback Qualification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'server/upstoxOAuthCallbackServer.js'
+      - 'server/upstoxOAuthCallbackValidationRunner.js'
+      - 'src/upstox/upstoxOAuth.js'
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PAPER_ONLY: "true"
+      REAL_ORDER_PLACED: "false"
+      PRODUCTION_REAL_TRADING_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate OAuth callback safety
+        run: node server/upstoxOAuthCallbackValidationRunner.js
+      - name: Build application
+        run: npm run build
+      - name: Assert paper-only boundary
+        run: |
+          test "$PAPER_ONLY" = "true"
+          test "$REAL_ORDER_PLACED" = "false"
+          test "$PRODUCTION_REAL_TRADING_ENABLED" = "false"
