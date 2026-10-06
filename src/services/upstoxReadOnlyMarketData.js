@@ -46,3 +46,11 @@ export async function getUpstoxFundamentals(isin) {
   const payload=await request('/api/upstox/fundamentals?isin='+encodeURIComponent(id));
   return { provider:'UPSTOX', mode:'READ_ONLY', isin:id, data:payload.data, orderSubmissionAllowed:false };
 }
+
+
+export async function searchUpstoxEquity(query) {
+  const q=String(query||'').trim();
+  if(!q) throw new Error('INSTRUMENT_QUERY_REQUIRED');
+  const payload=await request('/api/upstox/instrument-search?query='+encodeURIComponent(q));
+  return payload.data;
+}
