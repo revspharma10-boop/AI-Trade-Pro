@@ -1,0 +1,22 @@
+name: Stage C Decision Qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/services/stockAnalysisDecisionEngine.js'
+      - 'src/services/recommendationEngine.js'
+      - 'src/services/marketRegimeEngine.js'
+      - 'src/stageCDecisionQualificationRunner.js'
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node src/stageCDecisionQualificationRunner.js
+      - run: npm run build
