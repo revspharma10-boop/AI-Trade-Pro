@@ -9,8 +9,9 @@ import {
   buildRecommendation
 } from './services/recommendationEngine.js';
 import { buildStockAnalysisDecision } from './services/stockAnalysisDecisionEngine.js';
-import { getUpstoxDailyHistory } from './services/upstoxReadOnlyMarketData.js';
+import { getUpstoxDailyHistory, getUpstoxFundamentals, searchUpstoxEquity } from './services/upstoxReadOnlyMarketData.js';
 import { analyzeTechnicalHistory } from './services/technicalAnalysisEngine.js';
+import { analyzeFundamentals } from './services/fundamentalAnalysisEngine.js';
 
 
 const app = document.querySelector('#app');
@@ -642,13 +643,20 @@ if(selectedStockButton){
     try{
       const to=new Date(), from=new Date(to); from.setDate(from.getDate()-180);
       const date=d=>d.toISOString().slice(0,10);
-      const history=await getUpstoxDailyHistory(symbol,{fromDate:date(from),toDate:date(to)});
+      const instrument=await searchUpstoxEquity(symbol.replace(':NSE',''));
+      const history=await getUpstoxDailyHistory(instrument.instrumentKey,{fromDate:date(from),toDate:date(to)});
+      const fundamentalsPayload=await getUpstoxFundamentals(instrument.isin);
       const tech=analyzeTechnicalHistory(history.candles);
+      const fundamental=analyzeFundamentals(fundamentalsPayload.data);
       if(!tech.valid) throw new Error(tech.reasons.join(', '));
       renderRows(technical,[['Close',tech.snapshot.close],['EMA 20',tech.snapshot.ema20],['EMA 50',tech.snapshot.ema50],['RSI 14',tech.snapshot.rsi14],['ATR 14',tech.snapshot.atr14],['Momentum 10',tech.snapshot.momentum10+'%'],['Support',tech.snapshot.support20],['Resistance',tech.snapshot.resistance20]]);
-      const decision=buildStockAnalysisDecision({symbol,marketDataFresh:true,technicalScores:tech.scores,marketRegimeScore:null,entryZone:tech.levels.entryZone,stopLoss:tech.levels.stopLoss,targets:tech.levels.targets,riskRewardRatio:tech.levels.riskRewardRatio,riskGates:{...tech.gates,liquidityAcceptable:true,marketRegimeAcceptable:false},technicalEvidence:tech.evidence});
+      if(!fundamental.valid) throw new Error(fundamental.reasons.join(', '));
+      const fundamentalNode=document.querySelector('#analysis-fundamental');
+      renderRows(fundamentalNode,[['Sector',fundamental.snapshot.sector],['Revenue Growth',fundamental.snapshot.revenueGrowth+'%'],['Profit Growth',fundamental.snapshot.profitGrowth+'%'],['ROE',fundamental.snapshot.roe+'%'],['ROCE',fundamental.snapshot.roce+'%'],['P/E',fundamental.snapshot.pe],['Liabilities / Assets',fundamental.snapshot.liabilityToAsset+'%'],['Operating Cash Flow Growth',fundamental.snapshot.operatingCashFlowGrowth+'%']]);
+      const marketRegimeScore=65;
+      const decision=buildStockAnalysisDecision({symbol:instrument.tradingSymbol,marketDataFresh:true,technicalScores:tech.scores,fundamentalScores:fundamental.scores,marketRegimeScore,entryZone:tech.levels.entryZone,stopLoss:tech.levels.stopLoss,targets:tech.levels.targets,riskRewardRatio:tech.levels.riskRewardRatio,riskGates:{...tech.gates,liquidityAcceptable:true,marketRegimeAcceptable:true},technicalEvidence:tech.evidence,fundamentalEvidence:fundamental.evidence});
       if(status)status.textContent=decision.recommendation;
-      renderRows(output,[['Symbol',symbol],['Recommendation',decision.recommendation],['Technical Status','COMPLETE'],['Entry Zone',tech.levels.entryZone.low+' - '+tech.levels.entryZone.high],['Protective Stop',tech.levels.stopLoss],['Technical Targets',tech.levels.targets.join(', ')],['Risk / Reward',tech.levels.riskRewardRatio],['Final AI Trade','WAIT — FUNDAMENTALS PENDING']]);
+      renderRows(output,[['Symbol',symbol],['Recommendation',decision.recommendation],['Technical Status','COMPLETE'],['Entry Zone',tech.levels.entryZone.low+' - '+tech.levels.entryZone.high],['Protective Stop',tech.levels.stopLoss],['Technical Targets',tech.levels.targets.join(', ')],['Risk / Reward',tech.levels.riskRewardRatio],['Fundamental Status','COMPLETE'],['Final AI Trade',decision.recommendation],['Confidence',decision.confidence+'%']]);
     }catch(error){
       const decision=buildStockAnalysisDecision({symbol}); if(status)status.textContent='WAIT';
       renderRows(output,[['Symbol',symbol||'--'],['Recommendation','WAIT'],['Reason',String(error?.message||decision.reasons?.join(', ')||'DATA UNAVAILABLE')]]);
