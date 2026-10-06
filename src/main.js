@@ -514,26 +514,30 @@ app.innerHTML = `
         data-page="market"
       >
 
-        <div class="page-placeholder">
-
-          <div class="placeholder-icon">
-            📊
+        <section class="welcome">
+          <div><h2>Live Market</h2><p>Upstox production market data • authenticated read-only access</p></div>
+          <div class="engine-badge">Broker Orders <strong>BLOCKED</strong></div>
+        </section>
+        <section class="panel">
+          <div class="panel-header">
+            <div><h3>📊 Upstox Quote</h3><span>Read-only market-data request</span></div>
+            <span class="panel-status" id="market-upstox-status">CHECKING</span>
           </div>
-
-          <h2>
-            Market
-          </h2>
-
-          <p>
-            Market Data & Analysis
-          </p>
-
-          <span>
-            Market data integration will be developed
-            in a later step.
-          </span>
-
-        </div>
+          <div class="market-terminal">
+            <label for="market-instrument-key">Instrument key</label>
+            <div class="market-search-row">
+              <input id="market-instrument-key" value="NSE_INDEX|Nifty 50" autocomplete="off" />
+              <button class="primary-btn" id="load-upstox-quote">Load Quote</button>
+            </div>
+            <div id="upstox-quote-result" class="market-list">
+              <div class="market-row"><span>Status</span><strong>Waiting for request</strong></div>
+            </div>
+          </div>
+        </section>
+        <section class="safety-banner">
+          <div><strong>🛡️ LIVE DATA / PAPER EXECUTION</strong><span>Quotes may be live. All trade execution remains simulated.</span></div>
+          <div class="safety-chips"><span>READ ONLY</span><span>NO BROKER ORDERS</span></div>
+        </section>
 
       </section>
 
