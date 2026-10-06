@@ -18,7 +18,7 @@ const checks = [
  ['no Upstox order placement endpoint', !text.includes('/v2/order/place') && !text.includes('/v3/order/place')],
  ['paper ticket stages via runtime', text.includes('stageCandidate')],
  ['paper fill uses simulation runtime', text.includes('fillOrder')],
- ['journal uses paper dashboard', text.includes('dashboard?.journal') || text.includes('dashboard.journal')]
+ ['journal page is paper-only and dashboard model owns journal data', text.includes('Paper Trade Journal') && text.includes('Paper trades only') && text.includes('journal:')]
 ];
 for(const [name,passed] of checks) console.log((passed?'PASS ':'FAIL ')+name);
 const failed=checks.filter(x=>!x[1]).length;
