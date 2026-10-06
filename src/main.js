@@ -13,6 +13,8 @@ import { getUpstoxDailyHistory, getUpstoxFundamentals, searchUpstoxEquity } from
 import { analyzeTechnicalHistory } from './services/technicalAnalysisEngine.js';
 import { analyzeFundamentals } from './services/fundamentalAnalysisEngine.js';
 import { analyzeMarketRegime } from './services/marketRegimeEngine.js';
+import { buildPaperCandidateFromDecision } from './services/paperDecisionBridge.js';
+import { stagePaperCandidate, fillPaperOrder, getPaperTradingApplicationState } from './paperTradingApplicationBridge.js';
 
 
 const app = document.querySelector('#app');
@@ -554,7 +556,7 @@ app.innerHTML = `
           <div class="market-terminal"><label for="analysis-symbol">Stock / symbol</label><div class="market-search-row"><input id="analysis-symbol" placeholder="Example: INFY:NSE" autocomplete="off"><button class="primary-btn" id="analyze-selected-stock">Analyze Stock</button></div><p class="analysis-note">A trade setup is shown only when fresh market data plus complete technical and fundamental evidence are available.</p></div>
         </section>
         <section class="dashboard-grid analysis-grid">
-          <div class="panel"><div class="panel-header"><div><h3>🎯 AI Decision</h3><span>Entry, stop and targets</span></div><span class="panel-status" id="analysis-decision-status">WAIT</span></div><div id="analysis-decision" class="market-list"><div class="market-row"><span>Recommendation</span><strong>WAIT</strong></div><div class="market-row"><span>Reason</span><strong>Select a stock</strong></div></div></div>
+          <div class="panel"><div class="panel-header"><div><h3>🎯 AI Decision</h3><span>Entry, stop and targets</span></div><span class="panel-status" id="analysis-decision-status">WAIT</span></div><div id="analysis-decision" class="market-list"><div class="market-row"><span>Recommendation</span><strong>WAIT</strong></div><div class="market-row"><span>Reason</span><strong>Select a stock</strong></div></div><div class="api-test-content"><label for="paper-quantity">Paper quantity</label><input id="paper-quantity" type="number" min="1" step="1" value="1"><button class="primary-btn" id="stage-analysis-paper" disabled>Stage Paper Trade</button><p id="paper-analysis-status" class="analysis-note">Available only after a qualified BUY.</p></div></div>
           <div class="panel"><div class="panel-header"><div><h3>📈 Technical Analysis</h3><span>Trend, momentum, volume and structure</span></div><span class="panel-status">PENDING</span></div><div id="analysis-technical" class="market-list"><div class="market-row"><span>Evidence</span><strong>NOT LOADED</strong></div></div></div>
           <div class="panel"><div class="panel-header"><div><h3>🏢 Fundamental Analysis</h3><span>Growth, profitability, debt and valuation</span></div><span class="panel-status">PENDING</span></div><div id="analysis-fundamental" class="market-list"><div class="market-row"><span>Evidence</span><strong>NOT LOADED</strong></div></div></div>
         </section>
@@ -634,12 +636,16 @@ app.innerHTML = `
 // ============================================================
 // STOCK ANALYSIS WORKSPACE
 // ============================================================
+let latestQualifiedDecision=null;
+const paperStageButton=document.querySelector('#stage-analysis-paper');
+const paperStatus=document.querySelector('#paper-analysis-status');
 const selectedStockButton=document.querySelector('#analyze-selected-stock');
 if(selectedStockButton){
   selectedStockButton.addEventListener('click',async()=>{
     const symbol=document.querySelector('#analysis-symbol')?.value?.trim().toUpperCase()||'';
     const status=document.querySelector('#analysis-decision-status'), output=document.querySelector('#analysis-decision'), technical=document.querySelector('#analysis-technical');
     const renderRows=(node,rows)=>{node?.replaceChildren();rows.forEach(([label,value])=>{const row=document.createElement('div');row.className='market-row';const left=document.createElement('span');left.textContent=label;const right=document.createElement('strong');right.textContent=String(value);row.append(left,right);node?.appendChild(row);});};
+    latestQualifiedDecision=null; if(paperStageButton)paperStageButton.disabled=true; if(paperStatus)paperStatus.textContent='Waiting for qualified BUY.';
     selectedStockButton.disabled=true; selectedStockButton.textContent='Analyzing...'; if(status)status.textContent='LOADING';
     try{
       const to=new Date(), from=new Date(to); from.setDate(from.getDate()-180);
@@ -669,12 +675,30 @@ if(selectedStockButton){
       const marketRegimeScore=regime.score;
       const decision=buildStockAnalysisDecision({symbol:instrument.tradingSymbol,marketDataFresh:true,technicalScores:tech.scores,fundamentalScores:fundamental.scores,marketRegimeScore,entryZone:tech.levels.entryZone,stopLoss:tech.levels.stopLoss,targets:tech.levels.targets,riskRewardRatio:tech.levels.riskRewardRatio,riskGates:{...tech.gates,liquidityAcceptable:true,marketRegimeAcceptable:regime.regime==='BULLISH'||regime.regime==='STRONG BULLISH'},technicalEvidence:tech.evidence,fundamentalEvidence:fundamental.evidence});
       if(status)status.textContent=decision.recommendation;
+      if(decision.paperEligible===true){latestQualifiedDecision=decision;if(paperStageButton)paperStageButton.disabled=false;if(paperStatus)paperStatus.textContent='Qualified for PAPER simulation only.';}
       renderRows(output,[['Symbol',symbol],['Recommendation',decision.recommendation],['Technical Status','COMPLETE'],['Entry Zone',tech.levels.entryZone.low+' - '+tech.levels.entryZone.high],['Protective Stop',tech.levels.stopLoss],['Technical Targets',tech.levels.targets.join(', ')],['Risk / Reward',tech.levels.riskRewardRatio],['Fundamental Status','COMPLETE'],['Market Regime',regime.regime+' ('+regime.score+'/100)'],['Final AI Trade',decision.recommendation],['Confidence',decision.confidence+'%']]);
     }catch(error){
       const decision=buildStockAnalysisDecision({symbol}); if(status)status.textContent='WAIT';
       renderRows(output,[['Symbol',symbol||'--'],['Recommendation','WAIT'],['Reason',String(error?.message||decision.reasons?.join(', ')||'DATA UNAVAILABLE')]]);
       renderRows(technical,[['Status','TECHNICAL DATA UNAVAILABLE']]);
     }finally{selectedStockButton.disabled=false;selectedStockButton.textContent='Analyze Stock';}
+  });
+}
+
+
+if(paperStageButton){
+  paperStageButton.addEventListener('click',()=>{
+    if(!latestQualifiedDecision){if(paperStatus)paperStatus.textContent='No qualified BUY available.';return;}
+    const quantity=Math.floor(Number(document.querySelector('#paper-quantity')?.value||0));
+    const candidate=buildPaperCandidateFromDecision(latestQualifiedDecision,quantity);
+    if(!candidate.valid){if(paperStatus)paperStatus.textContent='Paper trade blocked: '+candidate.reasons.join(', ');return;}
+    const staged=stagePaperCandidate(candidate);
+    if(staged.status!=='PAPER_QUEUED'){if(paperStatus)paperStatus.textContent='Paper staging blocked: '+(staged.rejectionReasons||[]).join(', ');return;}
+    const filled=fillPaperOrder(staged.id,candidate.price);
+    if(!filled?.position?.valid){if(paperStatus)paperStatus.textContent='Paper fill failed safely.';return;}
+    const state=getPaperTradingApplicationState();
+    if(paperStatus)paperStatus.textContent='PAPER position opened: '+candidate.symbol+' × '+candidate.quantity+' @ '+candidate.price+'. Open positions: '+state.dashboard.account.openPositions+'. No broker order sent.';
+    paperStageButton.disabled=true;
   });
 }
 
