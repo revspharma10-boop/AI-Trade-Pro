@@ -93,6 +93,22 @@ async function readOnlyFundamentals(isin){
   return Object.fromEntries(entries);
 }
 
+async function searchEquityInstrument(query){
+  const q=String(query||'').trim();
+  if(!q||q.length>80)throw new Error('INVALID_INSTRUMENT_QUERY');
+  const url=new URL('https://api.upstox.com/v2/instruments/search');
+  url.searchParams.set('query',q); url.searchParams.set('exchanges','NSE'); url.searchParams.set('segments','EQ');
+  const response=await fetch(url,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
+  const body=await response.json().catch(()=>({}));
+  if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+  if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
+  if(!response.ok)throw new Error('UPSTOX_INSTRUMENT_SEARCH_FAILED');
+  const items=Array.isArray(body?.data)?body.data:[];
+  const exact=items.find(x=>String(x.trading_symbol||'').toUpperCase()===q.toUpperCase()&&x.segment==='NSE_EQ')||items.find(x=>x.segment==='NSE_EQ');
+  if(!exact?.instrument_key||!exact?.isin)throw new Error('UPSTOX_EQUITY_NOT_FOUND');
+  return {name:exact.name,shortName:exact.short_name,tradingSymbol:exact.trading_symbol,isin:exact.isin,instrumentKey:exact.instrument_key,exchange:exact.exchange,segment:exact.segment};
+}
+
 function safeCookie(value) {
   return `${COOKIE}=${encodeURIComponent(value)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=600`;
 }
@@ -169,6 +185,10 @@ const server = http.createServer(async (req, res) => {
         const status=message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_ISIN'?400:502;
         return json(res,status,{error:['UPSTOX_REAUTHENTICATION_REQUIRED','UPSTOX_RATE_LIMITED','UPSTOX_FUNDAMENTALS_REQUEST_FAILED','INVALID_ISIN'].includes(message)?message:'UPSTOX_FUNDAMENTALS_UNAVAILABLE',orderSubmissionAllowed:false});
       }
+    }
+    if (url.pathname === '/api/upstox/instrument-search' && req.method === 'GET') {
+      try { const data=await searchEquityInstrument(url.searchParams.get('query')); return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',data,orderSubmissionAllowed:false}); }
+      catch(error){ const message=String(error?.message||'INSTRUMENT_SEARCH_ERROR'); const status=message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_INSTRUMENT_QUERY'||message==='UPSTOX_EQUITY_NOT_FOUND'?400:502; return json(res,status,{error:message,orderSubmissionAllowed:false}); }
     }
     if (url.pathname === '/health') {
       return send(res, 200, 'AI_TRADE_PRO_OAUTH_CALLBACK_HEALTHY\nPAPER_ONLY=true\nPRODUCTION_REAL_TRADING_ENABLED=false');
