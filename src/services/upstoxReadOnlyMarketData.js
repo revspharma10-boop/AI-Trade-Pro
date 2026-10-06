@@ -38,3 +38,11 @@ export async function getUpstoxDailyHistory(instrumentKey, { fromDate, toDate } 
   if (!Array.isArray(payload?.candles)) throw new Error('UPSTOX_HISTORICAL_DATA_EMPTY');
   return { provider:'UPSTOX', mode:'READ_ONLY', instrumentKey, interval:'1day', candles:payload.candles, orderSubmissionAllowed:false };
 }
+
+
+export async function getUpstoxFundamentals(isin) {
+  const id=String(isin||'').trim().toUpperCase();
+  if(!/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(id)) throw new Error('VALID_ISIN_REQUIRED');
+  const payload=await request('/api/upstox/fundamentals?isin='+encodeURIComponent(id));
+  return { provider:'UPSTOX', mode:'READ_ONLY', isin:id, data:payload.data, orderSubmissionAllowed:false };
+}
