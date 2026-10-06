@@ -551,26 +551,18 @@ app.innerHTML = `
         data-page="recommendations"
       >
 
-        <div class="page-placeholder">
-
-          <div class="placeholder-icon">
-            🎯
+        <section class="welcome"><div><h2>Recommendations & Paper Ticket</h2><p>Review qualified opportunities and simulate execution.</p></div><div class="engine-badge">Broker Execution <strong>BLOCKED</strong></div></section>
+        <section class="dashboard-grid">
+          <div class="panel"><div class="panel-header"><div><h3>🎯 Qualified Setup</h3><span>Paper-only demonstration candidate</span></div><span class="panel-status">PAPER</span></div>
+            <div class="market-list"><div class="market-row"><span>Symbol</span><strong id="paper-symbol">INFY:NSE</strong></div><div class="market-row"><span>Side</span><strong>BUY</strong></div><div class="market-row"><span>Opportunity Score</span><strong>78</strong></div><div class="market-row"><span>Risk / Reward</span><strong>2.10</strong></div></div>
           </div>
-
-          <h2>
-            Recommendations
-          </h2>
-
-          <p>
-            Top Market Opportunities
-          </p>
-
-          <span>
-            Recommendation engine will be developed
-            in a later step.
-          </span>
-
-        </div>
+          <div class="panel"><div class="panel-header"><div><h3>📝 Paper Order Ticket</h3><span>Simulation only</span></div><span class="panel-status">NO BROKER ROUTE</span></div>
+            <div class="api-test-content"><label>Entry Price</label><input id="paper-entry" type="number" value="1500" min="0" step="0.05"><label>Quantity</label><input id="paper-qty" type="number" value="1" min="1" step="1"><button class="primary-btn" id="paper-stage">Stage Paper BUY</button><button class="primary-btn" id="paper-fill" disabled>Simulate Fill</button><div id="paper-ticket-status" class="market-list"><div class="market-row"><span>Status</span><strong>READY</strong></div></div></div>
+          </div>
+          <div class="panel"><div class="panel-header"><div><h3>💼 Paper Position</h3><span>Mark, P&amp;L and simulated close</span></div><span class="panel-status">SIMULATION</span></div>
+            <div class="api-test-content"><label>Market / Exit Price</label><input id="paper-mark" type="number" value="1510" min="0" step="0.05"><button class="primary-btn" id="paper-mark-btn">Update Mark</button><button class="primary-btn" id="paper-close">Close Paper Position</button><div id="paper-position-state" class="market-list"></div></div>
+          </div>
+        </section>
 
       </section>
 
