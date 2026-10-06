@@ -54,3 +54,15 @@ export async function searchUpstoxEquity(query) {
   const payload=await request('/api/upstox/instrument-search?query='+encodeURIComponent(q));
   return payload.data;
 }
+
+
+export function assessDailyHistoryFreshness(candles=[], now=new Date()) {
+  if(!Array.isArray(candles)||!candles.length)return {fresh:false,reason:'NO_CANDLES',latest:null};
+  const latest=String(candles[candles.length-1]?.datetime||candles[0]?.datetime||'');
+  const latestMs=Date.parse(latest), nowMs=new Date(now).getTime();
+  if(!Number.isFinite(latestMs)||!Number.isFinite(nowMs)||latestMs>nowMs+86400000)return {fresh:false,reason:'INVALID_CANDLE_TIMESTAMP',latest};
+  // Daily bars may legitimately lag across weekends/market holidays. A 4-calendar-day
+  // ceiling accepts a Friday bar through Monday while failing closed on older feeds.
+  const ageDays=(nowMs-latestMs)/86400000;
+  return {fresh:ageDays<=4,reason:ageDays<=4?'FRESH':'STALE_DAILY_HISTORY',latest,ageDays:Number(ageDays.toFixed(2))};
+}
