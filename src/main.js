@@ -8,6 +8,7 @@ import {
 import {
   buildRecommendation
 } from './services/recommendationEngine.js';
+import { buildStockAnalysisDecision } from './services/stockAnalysisDecisionEngine.js';
 
 
 const app = document.querySelector('#app');
@@ -542,30 +543,19 @@ app.innerHTML = `
       </section>
 
 
-      <!-- =========================
-           RECOMMENDATIONS PAGE
-      ========================== -->
-
-      <section
-        class="page-section"
-        data-page="recommendations"
-      >
-
-        <section class="welcome"><div><h2>Recommendations & Paper Ticket</h2><p>Review qualified opportunities and simulate execution.</p></div><div class="engine-badge">Broker Execution <strong>BLOCKED</strong></div></section>
-        <section class="dashboard-grid">
-          <div class="panel"><div class="panel-header"><div><h3>🎯 Qualified Setup</h3><span>Paper-only demonstration candidate</span></div><span class="panel-status">PAPER</span></div>
-            <div class="market-list"><div class="market-row"><span>Symbol</span><strong id="paper-symbol">INFY:NSE</strong></div><div class="market-row"><span>Side</span><strong>BUY</strong></div><div class="market-row"><span>Opportunity Score</span><strong>78</strong></div><div class="market-row"><span>Risk / Reward</span><strong>2.10</strong></div></div>
-          </div>
-          <div class="panel"><div class="panel-header"><div><h3>📝 Paper Order Ticket</h3><span>Simulation only</span></div><span class="panel-status">NO BROKER ROUTE</span></div>
-            <div class="api-test-content"><label>Entry Price</label><input id="paper-entry" type="number" value="1500" min="0" step="0.05"><label>Quantity</label><input id="paper-qty" type="number" value="1" min="1" step="1"><button class="primary-btn" id="paper-stage">Stage Paper BUY</button><button class="primary-btn" id="paper-fill" disabled>Simulate Fill</button><div id="paper-ticket-status" class="market-list"><div class="market-row"><span>Status</span><strong>READY</strong></div></div></div>
-          </div>
-          <div class="panel"><div class="panel-header"><div><h3>💼 Paper Position</h3><span>Mark, P&amp;L and simulated close</span></div><span class="panel-status">SIMULATION</span></div>
-            <div class="api-test-content"><label>Market / Exit Price</label><input id="paper-mark" type="number" value="1510" min="0" step="0.05"><button class="primary-btn" id="paper-mark-btn">Update Mark</button><button class="primary-btn" id="paper-close">Close Paper Position</button><div id="paper-position-state" class="market-list"></div></div>
-          </div>
+      <!-- STOCK ANALYSIS PAGE -->
+      <section class="page-section" data-page="recommendations">
+        <section class="welcome"><div><h2>AI Stock Analysis</h2><p>Select a stock for technical + fundamental analysis before any paper trade.</p></div><div class="engine-badge">Broker Execution <strong>BLOCKED</strong></div></section>
+        <section class="panel"><div class="panel-header"><div><h3>🔎 Select Stock</h3><span>Evidence-gated Indian equity analysis</span></div><span class="panel-status">FAIL CLOSED</span></div>
+          <div class="market-terminal"><label for="analysis-symbol">Stock / symbol</label><div class="market-search-row"><input id="analysis-symbol" placeholder="Example: INFY:NSE" autocomplete="off"><button class="primary-btn" id="analyze-selected-stock">Analyze Stock</button></div><p class="analysis-note">A trade setup is shown only when fresh market data plus complete technical and fundamental evidence are available.</p></div>
         </section>
-
+        <section class="dashboard-grid analysis-grid">
+          <div class="panel"><div class="panel-header"><div><h3>🎯 AI Decision</h3><span>Entry, stop and targets</span></div><span class="panel-status" id="analysis-decision-status">WAIT</span></div><div id="analysis-decision" class="market-list"><div class="market-row"><span>Recommendation</span><strong>WAIT</strong></div><div class="market-row"><span>Reason</span><strong>Select a stock</strong></div></div></div>
+          <div class="panel"><div class="panel-header"><div><h3>📈 Technical Analysis</h3><span>Trend, momentum, volume and structure</span></div><span class="panel-status">PENDING</span></div><div id="analysis-technical" class="market-list"><div class="market-row"><span>Evidence</span><strong>NOT LOADED</strong></div></div></div>
+          <div class="panel"><div class="panel-header"><div><h3>🏢 Fundamental Analysis</h3><span>Growth, profitability, debt and valuation</span></div><span class="panel-status">PENDING</span></div><div id="analysis-fundamental" class="market-list"><div class="market-row"><span>Evidence</span><strong>NOT LOADED</strong></div></div></div>
+        </section>
+        <section class="safety-banner"><div><strong>🛡️ EVIDENCE-GATED RECOMMENDATIONS</strong><span>Missing or stale evidence returns WAIT. Entry, stop-loss and targets are never fabricated.</span></div><div class="safety-chips"><span>TECHNICAL</span><span>FUNDAMENTAL</span><span>PAPER ONLY</span></div></section>
       </section>
-
 
       <!-- =========================
            SCANNER PAGE
@@ -636,6 +626,25 @@ app.innerHTML = `
   </div>
 `;
 
+
+// ============================================================
+// STOCK ANALYSIS WORKSPACE
+// ============================================================
+const selectedStockButton=document.querySelector('#analyze-selected-stock');
+if(selectedStockButton){
+  selectedStockButton.addEventListener('click',()=>{
+    const symbol=document.querySelector('#analysis-symbol')?.value?.trim().toUpperCase()||'';
+    const decision=buildStockAnalysisDecision({symbol});
+    const status=document.querySelector('#analysis-decision-status');
+    const output=document.querySelector('#analysis-decision');
+    if(status) status.textContent=decision.recommendation;
+    if(output){
+      output.replaceChildren();
+      const rows=[['Symbol',decision.symbol||'--'],['Recommendation',decision.recommendation],['Confidence',decision.confidence+'%'],['Entry Zone','NOT AVAILABLE'],['Stop Loss','NOT AVAILABLE'],['Targets','NOT AVAILABLE'],['Reason',decision.reasons?.join(', ')||decision.status]];
+      rows.forEach(([label,value])=>{const row=document.createElement('div');row.className='market-row';const left=document.createElement('span');left.textContent=label;const right=document.createElement('strong');right.textContent=String(value);row.append(left,right);output.appendChild(row);});
+    }
+  });
+}
 
 // ============================================================
 // ANALYSIS BUTTON
