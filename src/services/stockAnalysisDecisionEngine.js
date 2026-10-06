@@ -73,12 +73,15 @@ export function buildStockAnalysisDecision(input = {}) {
     marketRegimeScore: Number(input.marketRegimeScore),
     riskQualityScore, riskRewardRatio, riskGates
   });
+  const failedGates=Object.entries(riskGates).filter(([,passed])=>passed!==true).map(([name])=>name);
   const executable = ['BUY','STRONG BUY'].includes(result.recommendation) && result.riskGatesPassed;
   return {
     ...result,
     recommendation: executable ? result.recommendation : 'WAIT',
     confidence: executable ? Math.round(result.opportunityScore) : 0,
     status: executable ? 'QUALIFIED' : 'WAIT',
+    reasons: executable ? [] : (failedGates.length ? failedGates.map(x=>'RISK_GATE_FAILED_'+x.toUpperCase()) : ['OPPORTUNITY_SCORE_BELOW_BUY_THRESHOLD']),
+    failedGates,
     entryZone: { low: entryLow, high: entryHigh },
     stopLoss,
     targets,
