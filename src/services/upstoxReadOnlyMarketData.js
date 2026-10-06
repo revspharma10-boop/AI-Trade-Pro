@@ -5,7 +5,9 @@ async function request(path) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401) throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');
-    throw new Error(body?.error || 'UPSTOX_READ_ONLY_API_FAILED');
+    if (response.status === 429) throw new Error('UPSTOX_RATE_LIMITED');
+    if (response.status >= 500) throw new Error('UPSTOX_MARKET_DATA_UNAVAILABLE');
+    throw new Error(['INVALID_INSTRUMENT_KEY','UPSTOX_MARKET_DATA_EMPTY'].includes(body?.error) ? body.error : 'UPSTOX_READ_ONLY_API_FAILED');
   }
   return body;
 }
