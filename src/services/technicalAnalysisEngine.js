@@ -33,6 +33,24 @@ function atr(candles,period=14){
 function vwap(candles,period=20){const x=candles.slice(-period);let pv=0,v=0;for(const q of x){if(Number.isFinite(q.volume)&&q.volume>0){pv+=((q.high+q.low+q.close)/3)*q.volume;v+=q.volume;}}return v?pv/v:null;}
 function adx(candles,period=14){if(candles.length<=period)return null;let tr=0,pdm=0,mdm=0;for(let i=candles.length-period;i<candles.length;i++){const q=candles[i],p=candles[i-1],up=q.high-p.high,down=p.low-q.low;tr+=Math.max(q.high-q.low,Math.abs(q.high-p.close),Math.abs(q.low-p.close));pdm+=up>down&&up>0?up:0;mdm+=down>up&&down>0?down:0;}if(!tr)return 0;const pdi=100*pdm/tr,mdi=100*mdm/tr,sum=pdi+mdi;return sum?100*Math.abs(pdi-mdi)/sum:0;}
 function supertrendDirection(candles,period=10,mult=3){const a=atr(candles,period);if(!a)return null;const last=candles.at(-1),mid=(last.high+last.low)/2;return {direction:last.close>=mid-mult*a?'BULLISH':'BEARISH',band:last.close>=mid-mult*a?mid-mult*a:mid+mult*a};}
+
+function chartStructure(candles){
+  const recent=candles.slice(-41), last=recent.at(-1), prior=recent.slice(0,-1);
+  const high20=Math.max(...prior.slice(-20).map(x=>x.high)), low20=Math.min(...prior.slice(-20).map(x=>x.low));
+  const breakout=last.close>high20, breakdown=last.close<low20;
+  const a=prior.slice(-40,-20),b=prior.slice(-20);
+  const ah=Math.max(...a.map(x=>x.high)),bh=Math.max(...b.map(x=>x.high)),al=Math.min(...a.map(x=>x.low)),bl=Math.min(...b.map(x=>x.low));
+  const rising=bh>ah&&bl>al, falling=bh<ah&&bl<al;
+  const range=Math.max(high20-low20,Number.EPSILON), nearHigh=(high20-last.close)/range<=.15;
+  let pattern='RANGE',score=50;
+  if(breakout){pattern='20D_BREAKOUT';score=95;}
+  else if(breakdown){pattern='20D_BREAKDOWN';score=10;}
+  else if(rising){pattern='RISING_STRUCTURE';score=80;}
+  else if(falling){pattern='FALLING_STRUCTURE';score=25;}
+  else if(nearHigh){pattern='NEAR_RESISTANCE';score=65;}
+  return {pattern,score,breakout,breakdown,priorHigh:high20,priorLow:low20};
+}
+
 function candleScore(candles){const q=candles.at(-1),p=candles.at(-2),body=Math.abs(q.close-q.open),range=Math.max(q.high-q.low,Number.EPSILON),bull=q.close>q.open;let s=bull?65:35;if(bull&&q.close>p.high)s+=20;if(!bull&&q.close<p.low)s-=20;if(body/range<.2)s=50;return clamp(s);}
 
 export function analyzeTechnicalHistory(values=[]){
@@ -43,7 +61,7 @@ export function analyzeTechnicalHistory(values=[]){
   const vols=recent.map(x=>x.volume).filter(Number.isFinite), volumeAvg=avg(vols.slice(0,-1)), volumeRatio=Number.isFinite(last.volume)&&volumeAvg>0?last.volume/volumeAvg:null;
   const momentum=((last.close/closes.at(-11))-1)*100;
   const atrPct=a/last.close*100;
-  const adx14=adx(c), vw=vwap(c), st=supertrendDirection(c), candle=candleScore(c);
+  const adx14=adx(c), vw=vwap(c), st=supertrendDirection(c), candle=candleScore(c), chart=chartStructure(c);
   const bullish=last.close>e20&&e20>e50;
   const trendScore=bullish?90:last.close>e50?65:35;
   const momentumScore=r>=50&&r<=70?85:r>70?60:r>=40?55:30;
@@ -57,10 +75,10 @@ export function analyzeTechnicalHistory(values=[]){
   const rr=(target2-entryHigh)/(entryHigh-stopLoss);
   return {
     valid:true,
-    snapshot:{close:round(last.close),ema20:round(e20),ema50:round(e50),rsi14:round(r),atr14:round(a),atrPercent:round(atrPct),adx14:round(adx14),vwap20:vw===null?null:round(vw),supertrend:st?.direction||'UNKNOWN',supertrendBand:st?round(st.band):null,momentum10:round(momentum),volumeRatio:volumeRatio===null?null:round(volumeRatio),support20:round(support),resistance20:round(resistance)},
-    scores:{trend:trendScore,momentum:momentumScore,adx:round(clamp(adx14)),supertrend:st?.direction==='BULLISH'?85:25,volume:round(volumeScore),candlestick:candle,chartPattern:50,supportResistance:srScore,vwap:vw===null?50:(last.close>vw?80:35),atr:volatilityScore},
+    snapshot:{close:round(last.close),ema20:round(e20),ema50:round(e50),rsi14:round(r),atr14:round(a),atrPercent:round(atrPct),adx14:round(adx14),vwap20:vw===null?null:round(vw),supertrend:st?.direction||'UNKNOWN',supertrendBand:st?round(st.band):null,chartPattern:chart.pattern,breakout20:chart.breakout,momentum10:round(momentum),volumeRatio:volumeRatio===null?null:round(volumeRatio),support20:round(support),resistance20:round(resistance)},
+    scores:{trend:trendScore,momentum:momentumScore,adx:round(clamp(adx14)),supertrend:st?.direction==='BULLISH'?85:25,volume:round(volumeScore),candlestick:candle,chartPattern:chart.score,supportResistance:srScore,vwap:vw===null?50:(last.close>vw?80:35),atr:volatilityScore},
     levels:{entryZone:{low:round(entryLow),high:round(entryHigh)},stopLoss:round(stopLoss),targets:[round(target1),round(target2)],riskRewardRatio:round(rr)},
-    gates:{technicalConfirmation:bullish&&r>=45,stopLossValid:stopLoss>0&&stopLoss<entryLow,volatilityAcceptable:atrPct<=5},
-    evidence:[`Close ${round(last.close)} vs EMA20 ${round(e20)} / EMA50 ${round(e50)}`,`RSI(14) ${round(r)}; 10-period momentum ${round(momentum)}%`,`ATR(14) ${round(a)} (${round(atrPct)}%); ADX(14) ${round(adx14)}`,`VWAP(20) ${vw===null?'unavailable':round(vw)}; Supertrend ${st?.direction||'UNKNOWN'}`,`20-period support ${round(support)} / resistance ${round(resistance)}`,volumeRatio===null?'Volume evidence unavailable':`Latest volume ${round(volumeRatio)}x recent average`]
+    gates:{technicalConfirmation:bullish&&r>=45&&adx14>=15&&st?.direction==='BULLISH'&&!chart.breakdown,stopLossValid:stopLoss>0&&stopLoss<entryLow,volatilityAcceptable:atrPct<=5},
+    evidence:[`Close ${round(last.close)} vs EMA20 ${round(e20)} / EMA50 ${round(e50)}`,`RSI(14) ${round(r)}; 10-period momentum ${round(momentum)}%`,`ATR(14) ${round(a)} (${round(atrPct)}%); ADX(14) ${round(adx14)}`,`VWAP(20) ${vw===null?'unavailable':round(vw)}; Supertrend ${st?.direction||'UNKNOWN'}`,`Chart structure ${chart.pattern}; prior 20D high ${round(chart.priorHigh)} / low ${round(chart.priorLow)}`,`20-period support ${round(support)} / resistance ${round(resistance)}`,volumeRatio===null?'Volume evidence unavailable':`Latest volume ${round(volumeRatio)}x recent average`]
   };
 }
