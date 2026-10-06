@@ -28,3 +28,13 @@ export const UPSTOX_READ_ONLY_SAFETY = Object.freeze({
   PRODUCTION_REAL_TRADING_ENABLED: false,
   ORDER_SUBMISSION_ALLOWED: false
 });
+
+
+export async function getUpstoxDailyHistory(instrumentKey, { fromDate, toDate } = {}) {
+  if (!instrumentKey) throw new Error('INSTRUMENT_KEY_REQUIRED');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fromDate||'')) || !/^\d{4}-\d{2}-\d{2}$/.test(String(toDate||''))) throw new Error('DATE_RANGE_REQUIRED');
+  const q = new URLSearchParams({ instrument_key: instrumentKey, from_date: fromDate, to_date: toDate });
+  const payload = await request('/api/upstox/history?' + q.toString());
+  if (!Array.isArray(payload?.candles)) throw new Error('UPSTOX_HISTORICAL_DATA_EMPTY');
+  return { provider:'UPSTOX', mode:'READ_ONLY', instrumentKey, interval:'1day', candles:payload.candles, orderSubmissionAllowed:false };
+}
