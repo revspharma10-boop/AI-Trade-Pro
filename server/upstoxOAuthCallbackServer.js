@@ -8,6 +8,46 @@ const CLIENT_SECRET = process.env.UPSTOX_CLIENT_SECRET || '';
 const REDIRECT_URI = process.env.UPSTOX_REDIRECT_URI || '';
 const COOKIE = 'ai_trade_pro_oauth_state';
 const PROFILE_URL = 'https://api.upstox.com/v2/user/profile';
+const QUOTE_URL = 'https://api.upstox.com/v2/market-quote/quotes';
+let productionAccessToken = '';
+let tokenReceivedAt = 0;
+const TOKEN_SESSION_MAX_MS = 20 * 60 * 60 * 1000;
+
+function activeToken() {
+  if (!productionAccessToken || Date.now() - tokenReceivedAt > TOKEN_SESSION_MAX_MS) {
+    productionAccessToken = '';
+    tokenReceivedAt = 0;
+    throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');
+  }
+  return productionAccessToken;
+}
+function json(res, status, payload) {
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+    'Access-Control-Allow-Origin': process.env.APP_ORIGIN || '*'
+  });
+  res.end(JSON.stringify(payload));
+}
+async function readOnlyQuote(instrumentKey) {
+  const key = String(instrumentKey || '').trim();
+  if (!key || key.length > 120 || /order/i.test(key)) throw new Error('INVALID_INSTRUMENT_KEY');
+  const url = new URL(QUOTE_URL);
+  url.searchParams.set('instrument_key', key);
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json', Authorization: 'Bearer ' + activeToken() }
+  });
+  const body = await response.json().catch(() => ({}));
+  if (response.status === 401 || response.status === 403) {
+    productionAccessToken = ''; tokenReceivedAt = 0;
+    throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');
+  }
+  if (!response.ok) throw new Error('UPSTOX_MARKET_DATA_FAILED_' + response.status);
+  return body;
+}
 
 function safeCookie(value) {
   return `${COOKIE}=${encodeURIComponent(value)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=600`;
@@ -38,6 +78,31 @@ async function verifyProductionProfile(accessToken) {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'https://oauth.invalid');
+    if (url.pathname === '/api/upstox/status') {
+      return json(res, 200, {
+        provider: 'UPSTOX',
+        authenticated: Boolean(productionAccessToken && Date.now() - tokenReceivedAt <= TOKEN_SESSION_MAX_MS),
+        marketDataMode: 'READ_ONLY',
+        executionMode: 'PAPER_ONLY',
+        orderSubmissionAllowed: false,
+        realOrderPlaced: false,
+        productionRealTradingEnabled: false
+      });
+    }
+    if (url.pathname === '/api/upstox/quote' && req.method === 'GET') {
+      try {
+        const payload = await readOnlyQuote(url.searchParams.get('instrument_key'));
+        return json(res, 200, {
+          provider: 'UPSTOX',
+          mode: 'READ_ONLY',
+          data: payload?.data ?? payload,
+          orderSubmissionAllowed: false
+        });
+      } catch (error) {
+        const message = String(error?.message || 'MARKET_DATA_ERROR');
+        return json(res, message === 'UPSTOX_REAUTHENTICATION_REQUIRED' ? 401 : 502, { error: message, orderSubmissionAllowed: false });
+      }
+    }
     if (url.pathname === '/health') {
       return send(res, 200, 'AI_TRADE_PRO_OAUTH_CALLBACK_HEALTHY\nPAPER_ONLY=true\nPRODUCTION_REAL_TRADING_ENABLED=false');
     }
