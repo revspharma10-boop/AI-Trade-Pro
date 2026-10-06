@@ -1,0 +1,25 @@
+name: UI Paper Trading Qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'server/**'
+      - 'index.html'
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    env:
+      PAPER_ONLY: "true"
+      REAL_ORDER_PLACED: "false"
+      PRODUCTION_REAL_TRADING_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node src/uiPaperTradingQualificationRunner.js
