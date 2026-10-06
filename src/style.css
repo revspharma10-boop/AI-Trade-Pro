@@ -750,3 +750,11 @@ footer {
 }
 .market-search-row input:focus { border-color:#1677ff; }
 @media (max-width:650px) { .market-search-row { flex-direction:column; } }
+
+.api-test-content input {
+  width:100%; box-sizing:border-box; padding:11px 12px; margin:6px 0 12px;
+  border:1px solid #263244; border-radius:8px; background:#0d131b; color:#f4f7fb;
+}
+.api-test-content label { display:block; color:#8995a5; font-size:12px; margin-top:8px; }
+.api-test-content .primary-btn + .primary-btn { margin-left:8px; }
+@media (max-width:650px){ .api-test-content .primary-btn + .primary-btn { margin-left:0; margin-top:8px; } }
