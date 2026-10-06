@@ -1,0 +1,21 @@
+name: Technical Analysis Qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/services/technicalAnalysisEngine.js'
+      - 'src/technicalAnalysisQualificationRunner.js'
+      - '.github/workflows/technical-analysis-qualification.yml'
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node src/technicalAnalysisQualificationRunner.js
+      - run: npm run build
