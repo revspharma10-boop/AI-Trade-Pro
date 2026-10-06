@@ -1,0 +1,25 @@
+name: Stage E Paper Go-Live Qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/stageEGoLiveQualificationRunner.js'
+      - 'src/services/**'
+      - 'src/main.js'
+      - 'server/upstoxOAuthCallbackServer.js'
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node src/technicalAnalysisQualificationRunner.js
+      - run: node src/stageCDecisionQualificationRunner.js
+      - run: node src/stageDPaperLifecycleQualificationRunner.js
+      - run: node src/stageEGoLiveQualificationRunner.js
+      - run: npm run build
