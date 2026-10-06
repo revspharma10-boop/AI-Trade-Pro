@@ -77,6 +77,22 @@ async function readOnlyHistoricalDaily(instrumentKey, fromDate, toDate) {
   return candles;
 }
 
+function validIsin(value){return /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(value||'').toUpperCase());}
+async function readOnlyFundamentals(isin){
+  const id=String(isin||'').trim().toUpperCase();
+  if(!validIsin(id))throw new Error('INVALID_ISIN');
+  const endpoints={profile:'profile',income:'income-statement?type=consolidated&time_period=yearly',balance:'balance-sheet?type=consolidated',cashFlow:'cash-flow?type=consolidated',keyRatios:'key-ratios'};
+  const entries=await Promise.all(Object.entries(endpoints).map(async([name,path])=>{
+    const response=await fetch('https://api.upstox.com/v2/fundamentals/'+encodeURIComponent(id)+'/'+path,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
+    const body=await response.json().catch(()=>({}));
+    if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+    if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
+    if(!response.ok)throw new Error('UPSTOX_FUNDAMENTALS_REQUEST_FAILED');
+    return [name,body?.data??body];
+  }));
+  return Object.fromEntries(entries);
+}
+
 function safeCookie(value) {
   return `${COOKIE}=${encodeURIComponent(value)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=600`;
 }
@@ -142,6 +158,16 @@ const server = http.createServer(async (req, res) => {
         const status=message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_DATE_RANGE'||message==='INVALID_INSTRUMENT_KEY'?400:502;
         const allowed=['UPSTOX_REAUTHENTICATION_REQUIRED','UPSTOX_RATE_LIMITED','UPSTOX_MARKET_DATA_UNAVAILABLE','UPSTOX_HISTORICAL_DATA_REQUEST_FAILED','UPSTOX_HISTORICAL_DATA_EMPTY','INVALID_INSTRUMENT_KEY','INVALID_DATE_RANGE'];
         return json(res,status,{error:allowed.includes(message)?message:'UPSTOX_MARKET_DATA_UNAVAILABLE',orderSubmissionAllowed:false});
+      }
+    }
+    if (url.pathname === '/api/upstox/fundamentals' && req.method === 'GET') {
+      try {
+        const data=await readOnlyFundamentals(url.searchParams.get('isin'));
+        return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',data,orderSubmissionAllowed:false});
+      } catch(error) {
+        const message=String(error?.message||'FUNDAMENTALS_ERROR');
+        const status=message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_ISIN'?400:502;
+        return json(res,status,{error:['UPSTOX_REAUTHENTICATION_REQUIRED','UPSTOX_RATE_LIMITED','UPSTOX_FUNDAMENTALS_REQUEST_FAILED','INVALID_ISIN'].includes(message)?message:'UPSTOX_FUNDAMENTALS_UNAVAILABLE',orderSubmissionAllowed:false});
       }
     }
     if (url.pathname === '/health') {
