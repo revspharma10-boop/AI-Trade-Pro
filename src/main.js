@@ -12,6 +12,7 @@ import { buildStockAnalysisDecision } from './services/stockAnalysisDecisionEngi
 import { getUpstoxDailyHistory, getUpstoxFundamentals, searchUpstoxEquity } from './services/upstoxReadOnlyMarketData.js';
 import { analyzeTechnicalHistory } from './services/technicalAnalysisEngine.js';
 import { analyzeFundamentals } from './services/fundamentalAnalysisEngine.js';
+import { analyzeMarketRegime } from './services/marketRegimeEngine.js';
 
 
 const app = document.querySelector('#app');
@@ -653,10 +654,22 @@ if(selectedStockButton){
       if(!fundamental.valid) throw new Error(fundamental.reasons.join(', '));
       const fundamentalNode=document.querySelector('#analysis-fundamental');
       renderRows(fundamentalNode,[['Sector',fundamental.snapshot.sector],['Revenue Growth',fundamental.snapshot.revenueGrowth+'%'],['Profit Growth',fundamental.snapshot.profitGrowth+'%'],['ROE',fundamental.snapshot.roe+'%'],['ROCE',fundamental.snapshot.roce+'%'],['P/E',fundamental.snapshot.pe],['Liabilities / Assets',fundamental.snapshot.liabilityToAsset+'%'],['Operating Cash Flow Growth',fundamental.snapshot.operatingCashFlowGrowth+'%']]);
-      const marketRegimeScore=65;
-      const decision=buildStockAnalysisDecision({symbol:instrument.tradingSymbol,marketDataFresh:true,technicalScores:tech.scores,fundamentalScores:fundamental.scores,marketRegimeScore,entryZone:tech.levels.entryZone,stopLoss:tech.levels.stopLoss,targets:tech.levels.targets,riskRewardRatio:tech.levels.riskRewardRatio,riskGates:{...tech.gates,liquidityAcceptable:true,marketRegimeAcceptable:true},technicalEvidence:tech.evidence,fundamentalEvidence:fundamental.evidence});
+      const indexHistory=await getUpstoxDailyHistory('NSE_INDEX|Nifty 50',{fromDate:date(from),toDate:date(to)});
+      const indexTech=analyzeTechnicalHistory(indexHistory.candles);
+      if(!indexTech.valid) throw new Error('MARKET_REGIME_DATA_INCOMPLETE');
+      const regime=analyzeMarketRegime({
+        trend:{direction:indexTech.snapshot.close>indexTech.snapshot.ema20&&indexTech.snapshot.ema20>indexTech.snapshot.ema50?'BULLISH':'BEARISH',strength:indexTech.scores.trend},
+        momentum:{direction:indexTech.snapshot.rsi14>=50?'BULLISH':'BEARISH',rsi:indexTech.snapshot.rsi14},
+        supertrend:{direction:indexTech.gates.technicalConfirmation?'BULLISH':'BEARISH'},
+        adx:indexTech.scores.adx,
+        volume:{ratio:indexTech.snapshot.volumeRatio},
+        volatility:{level:indexTech.snapshot.atrPercent<=3?'NORMAL':indexTech.snapshot.atrPercent<=5?'HIGH':'EXTREME'}
+      });
+      if(!regime.valid) throw new Error('MARKET_REGIME_INVALID');
+      const marketRegimeScore=regime.score;
+      const decision=buildStockAnalysisDecision({symbol:instrument.tradingSymbol,marketDataFresh:true,technicalScores:tech.scores,fundamentalScores:fundamental.scores,marketRegimeScore,entryZone:tech.levels.entryZone,stopLoss:tech.levels.stopLoss,targets:tech.levels.targets,riskRewardRatio:tech.levels.riskRewardRatio,riskGates:{...tech.gates,liquidityAcceptable:true,marketRegimeAcceptable:regime.regime==='BULLISH'||regime.regime==='STRONG BULLISH'},technicalEvidence:tech.evidence,fundamentalEvidence:fundamental.evidence});
       if(status)status.textContent=decision.recommendation;
-      renderRows(output,[['Symbol',symbol],['Recommendation',decision.recommendation],['Technical Status','COMPLETE'],['Entry Zone',tech.levels.entryZone.low+' - '+tech.levels.entryZone.high],['Protective Stop',tech.levels.stopLoss],['Technical Targets',tech.levels.targets.join(', ')],['Risk / Reward',tech.levels.riskRewardRatio],['Fundamental Status','COMPLETE'],['Final AI Trade',decision.recommendation],['Confidence',decision.confidence+'%']]);
+      renderRows(output,[['Symbol',symbol],['Recommendation',decision.recommendation],['Technical Status','COMPLETE'],['Entry Zone',tech.levels.entryZone.low+' - '+tech.levels.entryZone.high],['Protective Stop',tech.levels.stopLoss],['Technical Targets',tech.levels.targets.join(', ')],['Risk / Reward',tech.levels.riskRewardRatio],['Fundamental Status','COMPLETE'],['Market Regime',regime.regime+' ('+regime.score+'/100)'],['Final AI Trade',decision.recommendation],['Confidence',decision.confidence+'%']]);
     }catch(error){
       const decision=buildStockAnalysisDecision({symbol}); if(status)status.textContent='WAIT';
       renderRows(output,[['Symbol',symbol||'--'],['Recommendation','WAIT'],['Reason',String(error?.message||decision.reasons?.join(', ')||'DATA UNAVAILABLE')]]);
