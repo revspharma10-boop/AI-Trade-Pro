@@ -9,6 +9,7 @@ const REDIRECT_URI = process.env.UPSTOX_REDIRECT_URI || '';
 const COOKIE = 'ai_trade_pro_oauth_state';
 const PROFILE_URL = 'https://api.upstox.com/v2/user/profile';
 const QUOTE_URL = 'https://api.upstox.com/v2/market-quote/quotes';
+const HISTORICAL_V3_URL = 'https://api.upstox.com/v3/historical-candle';
 let productionAccessToken = '';
 let tokenReceivedAt = 0;
 const TOKEN_SESSION_MAX_MS = 20 * 60 * 60 * 1000;
@@ -50,6 +51,30 @@ async function readOnlyQuote(instrumentKey) {
   if (!response.ok) throw new Error('UPSTOX_MARKET_DATA_REQUEST_FAILED');
   if (!body || typeof body !== 'object' || !(body.data ?? body)) throw new Error('UPSTOX_MARKET_DATA_EMPTY');
   return body;
+}
+
+function isoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) ? String(value) : '';
+}
+async function readOnlyHistoricalDaily(instrumentKey, fromDate, toDate) {
+  const key = String(instrumentKey || '').trim();
+  const from = isoDate(fromDate), to = isoDate(toDate);
+  if (!key || key.length > 120 || /order/i.test(key)) throw new Error('INVALID_INSTRUMENT_KEY');
+  if (!from || !to || from > to) throw new Error('INVALID_DATE_RANGE');
+  const endpoint = HISTORICAL_V3_URL + '/' + encodeURIComponent(key) + '/days/1/' + to + '/' + from;
+  const response = await fetch(endpoint, { method:'GET', headers:{ Accept:'application/json', Authorization:'Bearer '+activeToken() } });
+  const body = await response.json().catch(() => ({}));
+  if (response.status === 401 || response.status === 403) { productionAccessToken=''; tokenReceivedAt=0; throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED'); }
+  if (response.status === 429) throw new Error('UPSTOX_RATE_LIMITED');
+  if (response.status >= 500) throw new Error('UPSTOX_MARKET_DATA_UNAVAILABLE');
+  if (!response.ok) throw new Error('UPSTOX_HISTORICAL_DATA_REQUEST_FAILED');
+  const raw = body?.data?.candles;
+  if (!Array.isArray(raw) || !raw.length) throw new Error('UPSTOX_HISTORICAL_DATA_EMPTY');
+  const candles = raw.map(x => ({ datetime:String(x?.[0]||''), open:Number(x?.[1]), high:Number(x?.[2]), low:Number(x?.[3]), close:Number(x?.[4]), volume:Number(x?.[5]) }))
+    .filter(x => x.datetime && [x.open,x.high,x.low,x.close].every(Number.isFinite))
+    .sort((a,b)=>a.datetime.localeCompare(b.datetime));
+  if (!candles.length) throw new Error('UPSTOX_HISTORICAL_DATA_EMPTY');
+  return candles;
 }
 
 function safeCookie(value) {
@@ -106,6 +131,17 @@ const server = http.createServer(async (req, res) => {
         const status = message === 'UPSTOX_REAUTHENTICATION_REQUIRED' ? 401 : message === 'UPSTOX_RATE_LIMITED' ? 429 : 502;
         const safeError = ['UPSTOX_REAUTHENTICATION_REQUIRED','UPSTOX_RATE_LIMITED','UPSTOX_MARKET_DATA_UNAVAILABLE','UPSTOX_MARKET_DATA_REQUEST_FAILED','UPSTOX_MARKET_DATA_EMPTY','INVALID_INSTRUMENT_KEY'].includes(message) ? message : 'UPSTOX_MARKET_DATA_UNAVAILABLE';
         return json(res, status, { error: safeError, orderSubmissionAllowed: false });
+      }
+    }
+    if (url.pathname === '/api/upstox/history' && req.method === 'GET') {
+      try {
+        const candles = await readOnlyHistoricalDaily(url.searchParams.get('instrument_key'), url.searchParams.get('from_date'), url.searchParams.get('to_date'));
+        return json(res, 200, { provider:'UPSTOX', mode:'READ_ONLY', interval:'1day', candles, orderSubmissionAllowed:false });
+      } catch (error) {
+        const message=String(error?.message||'MARKET_DATA_ERROR');
+        const status=message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_DATE_RANGE'||message==='INVALID_INSTRUMENT_KEY'?400:502;
+        const allowed=['UPSTOX_REAUTHENTICATION_REQUIRED','UPSTOX_RATE_LIMITED','UPSTOX_MARKET_DATA_UNAVAILABLE','UPSTOX_HISTORICAL_DATA_REQUEST_FAILED','UPSTOX_HISTORICAL_DATA_EMPTY','INVALID_INSTRUMENT_KEY','INVALID_DATE_RANGE'];
+        return json(res,status,{error:allowed.includes(message)?message:'UPSTOX_MARKET_DATA_UNAVAILABLE',orderSubmissionAllowed:false});
       }
     }
     if (url.pathname === '/health') {
