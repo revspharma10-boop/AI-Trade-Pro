@@ -27,7 +27,7 @@ function json(res, status, payload) {
     'Cache-Control': 'no-store',
     'Referrer-Policy': 'no-referrer',
     'X-Content-Type-Options': 'nosniff',
-    'Access-Control-Allow-Origin': process.env.APP_ORIGIN || '*'
+    ...(process.env.APP_ORIGIN ? { 'Access-Control-Allow-Origin': process.env.APP_ORIGIN, 'Vary': 'Origin' } : {})
   });
   res.end(JSON.stringify(payload));
 }
@@ -45,7 +45,10 @@ async function readOnlyQuote(instrumentKey) {
     productionAccessToken = ''; tokenReceivedAt = 0;
     throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');
   }
-  if (!response.ok) throw new Error('UPSTOX_MARKET_DATA_FAILED_' + response.status);
+  if (response.status === 429) throw new Error('UPSTOX_RATE_LIMITED');
+  if (response.status >= 500) throw new Error('UPSTOX_MARKET_DATA_UNAVAILABLE');
+  if (!response.ok) throw new Error('UPSTOX_MARKET_DATA_REQUEST_FAILED');
+  if (!body || typeof body !== 'object' || !(body.data ?? body)) throw new Error('UPSTOX_MARKET_DATA_EMPTY');
   return body;
 }
 
@@ -100,7 +103,9 @@ const server = http.createServer(async (req, res) => {
         });
       } catch (error) {
         const message = String(error?.message || 'MARKET_DATA_ERROR');
-        return json(res, message === 'UPSTOX_REAUTHENTICATION_REQUIRED' ? 401 : 502, { error: message, orderSubmissionAllowed: false });
+        const status = message === 'UPSTOX_REAUTHENTICATION_REQUIRED' ? 401 : message === 'UPSTOX_RATE_LIMITED' ? 429 : 502;
+        const safeError = ['UPSTOX_REAUTHENTICATION_REQUIRED','UPSTOX_RATE_LIMITED','UPSTOX_MARKET_DATA_UNAVAILABLE','UPSTOX_MARKET_DATA_REQUEST_FAILED','UPSTOX_MARKET_DATA_EMPTY','INVALID_INSTRUMENT_KEY'].includes(message) ? message : 'UPSTOX_MARKET_DATA_UNAVAILABLE';
+        return json(res, status, { error: safeError, orderSubmissionAllowed: false });
       }
     }
     if (url.pathname === '/health') {
@@ -129,8 +134,10 @@ const server = http.createServer(async (req, res) => {
       });
       if (!token?.access_token) return send(res, 502, 'UPSTOX_OAUTH_TOKEN_EXCHANGE_FAILED');
 
-      // The token is used only in memory for one allowlisted read-only request.
+      // The token remains server-side in volatile memory and is never returned to the browser.
       await verifyProductionProfile(token.access_token);
+      productionAccessToken = token.access_token;
+      tokenReceivedAt = Date.now();
 
       return send(res, 200,
         'UPSTOX_OAUTH_AUTHENTICATION_PASSED\n' +
