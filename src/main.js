@@ -584,26 +584,9 @@ app.innerHTML = `
         data-page="scanner"
       >
 
-        <div class="page-placeholder">
-
-          <div class="placeholder-icon">
-            🔎
-          </div>
-
-          <h2>
-            Scanner
-          </h2>
-
-          <p>
-            Market Opportunity Scanner
-          </p>
-
-          <span>
-            Scanner rules will be developed
-            in a later step.
-          </span>
-
-        </div>
+        <section class="welcome"><div><h2>Paper Opportunity Scanner</h2><p>Qualify candidates through score, risk/reward and risk gates.</p></div><div class="engine-badge">Execution <strong>PAPER ONLY</strong></div></section>
+        <section class="panel"><div class="panel-header"><div><h3>🔎 Candidate Qualification</h3><span>Sample candidates exercise the real paper-safe scanner engine</span></div><span class="panel-status" id="scanner-status">READY</span></div>
+        <div class="api-test-content"><button class="primary-btn" id="run-paper-scanner">Run Scanner</button><div id="scanner-results" class="market-list"><div class="market-row"><span>Results</span><strong>WAITING</strong></div></div></div></section>
 
       </section>
 
@@ -617,26 +600,8 @@ app.innerHTML = `
         data-page="watchlist"
       >
 
-        <div class="page-placeholder">
-
-          <div class="placeholder-icon">
-            ⭐
-          </div>
-
-          <h2>
-            Watchlist
-          </h2>
-
-          <p>
-            Your Selected Opportunities
-          </p>
-
-          <span>
-            Watchlist functionality will be developed
-            in a later step.
-          </span>
-
-        </div>
+        <section class="welcome"><div><h2>Watchlist</h2><p>Research symbols managed by the paper-only control center.</p></div></section>
+        <section class="panel"><div class="panel-header"><div><h3>⭐ Research Watchlist</h3><span>No broker execution capability</span></div><span class="panel-status">PAPER ONLY</span></div><div class="api-test-content"><input id="watchlist-symbol" placeholder="INFY:NSE"><button class="primary-btn" id="watchlist-add">Add Symbol</button><div id="watchlist-page-results" class="market-list"></div></div></section>
 
       </section>
 
@@ -650,26 +615,8 @@ app.innerHTML = `
         data-page="journal"
       >
 
-        <div class="page-placeholder">
-
-          <div class="placeholder-icon">
-            📓
-          </div>
-
-          <h2>
-            Journal
-          </h2>
-
-          <p>
-            Trading Journal
-          </p>
-
-          <span>
-            Journal functionality will be developed
-            in a later step.
-          </span>
-
-        </div>
+        <section class="welcome"><div><h2>Paper Trade Journal</h2><p>Closed simulated trades and realized results.</p></div></section>
+        <section class="panel"><div class="panel-header"><div><h3>📓 Journal</h3><span>Paper trades only</span></div><span class="panel-status">SIMULATION</span></div><div id="journal-results" class="market-list"><div class="market-row"><span>Trades</span><strong>NONE</strong></div></div></section>
 
       </section>
 
