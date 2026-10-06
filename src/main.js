@@ -233,7 +233,7 @@ app.innerHTML = `
 
 
             <div class="market-list">
-
+              <div class="market-row"><span>Upstox</span><strong id="upstox-ui-status">CHECKING</strong></div>
 
               <div class="market-row">
 
