@@ -9,6 +9,8 @@ import {
   buildRecommendation
 } from './services/recommendationEngine.js';
 import { buildStockAnalysisDecision } from './services/stockAnalysisDecisionEngine.js';
+import { getUpstoxDailyHistory } from './services/upstoxReadOnlyMarketData.js';
+import { analyzeTechnicalHistory } from './services/technicalAnalysisEngine.js';
 
 
 const app = document.querySelector('#app');
@@ -632,17 +634,26 @@ app.innerHTML = `
 // ============================================================
 const selectedStockButton=document.querySelector('#analyze-selected-stock');
 if(selectedStockButton){
-  selectedStockButton.addEventListener('click',()=>{
+  selectedStockButton.addEventListener('click',async()=>{
     const symbol=document.querySelector('#analysis-symbol')?.value?.trim().toUpperCase()||'';
-    const decision=buildStockAnalysisDecision({symbol});
-    const status=document.querySelector('#analysis-decision-status');
-    const output=document.querySelector('#analysis-decision');
-    if(status) status.textContent=decision.recommendation;
-    if(output){
-      output.replaceChildren();
-      const rows=[['Symbol',decision.symbol||'--'],['Recommendation',decision.recommendation],['Confidence',decision.confidence+'%'],['Entry Zone','NOT AVAILABLE'],['Stop Loss','NOT AVAILABLE'],['Targets','NOT AVAILABLE'],['Reason',decision.reasons?.join(', ')||decision.status]];
-      rows.forEach(([label,value])=>{const row=document.createElement('div');row.className='market-row';const left=document.createElement('span');left.textContent=label;const right=document.createElement('strong');right.textContent=String(value);row.append(left,right);output.appendChild(row);});
-    }
+    const status=document.querySelector('#analysis-decision-status'), output=document.querySelector('#analysis-decision'), technical=document.querySelector('#analysis-technical');
+    const renderRows=(node,rows)=>{node?.replaceChildren();rows.forEach(([label,value])=>{const row=document.createElement('div');row.className='market-row';const left=document.createElement('span');left.textContent=label;const right=document.createElement('strong');right.textContent=String(value);row.append(left,right);node?.appendChild(row);});};
+    selectedStockButton.disabled=true; selectedStockButton.textContent='Analyzing...'; if(status)status.textContent='LOADING';
+    try{
+      const to=new Date(), from=new Date(to); from.setDate(from.getDate()-180);
+      const date=d=>d.toISOString().slice(0,10);
+      const history=await getUpstoxDailyHistory(symbol,{fromDate:date(from),toDate:date(to)});
+      const tech=analyzeTechnicalHistory(history.candles);
+      if(!tech.valid) throw new Error(tech.reasons.join(', '));
+      renderRows(technical,[['Close',tech.snapshot.close],['EMA 20',tech.snapshot.ema20],['EMA 50',tech.snapshot.ema50],['RSI 14',tech.snapshot.rsi14],['ATR 14',tech.snapshot.atr14],['Momentum 10',tech.snapshot.momentum10+'%'],['Support',tech.snapshot.support20],['Resistance',tech.snapshot.resistance20]]);
+      const decision=buildStockAnalysisDecision({symbol,marketDataFresh:true,technicalScores:tech.scores,marketRegimeScore:null,entryZone:tech.levels.entryZone,stopLoss:tech.levels.stopLoss,targets:tech.levels.targets,riskRewardRatio:tech.levels.riskRewardRatio,riskGates:{...tech.gates,liquidityAcceptable:true,marketRegimeAcceptable:false},technicalEvidence:tech.evidence});
+      if(status)status.textContent=decision.recommendation;
+      renderRows(output,[['Symbol',symbol],['Recommendation',decision.recommendation],['Technical Status','COMPLETE'],['Entry Zone',tech.levels.entryZone.low+' - '+tech.levels.entryZone.high],['Protective Stop',tech.levels.stopLoss],['Technical Targets',tech.levels.targets.join(', ')],['Risk / Reward',tech.levels.riskRewardRatio],['Final AI Trade','WAIT — FUNDAMENTALS PENDING']]);
+    }catch(error){
+      const decision=buildStockAnalysisDecision({symbol}); if(status)status.textContent='WAIT';
+      renderRows(output,[['Symbol',symbol||'--'],['Recommendation','WAIT'],['Reason',String(error?.message||decision.reasons?.join(', ')||'DATA UNAVAILABLE')]]);
+      renderRows(technical,[['Status','TECHNICAL DATA UNAVAILABLE']]);
+    }finally{selectedStockButton.disabled=false;selectedStockButton.textContent='Analyze Stock';}
   });
 }
 
