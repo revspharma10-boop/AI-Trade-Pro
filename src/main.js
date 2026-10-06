@@ -1,7 +1,7 @@
 import './style.css';
 
 import { buildStockAnalysisDecision } from './services/stockAnalysisDecisionEngine.js';
-import { getUpstoxDailyHistory, getUpstoxFundamentals, searchUpstoxEquity } from './services/upstoxReadOnlyMarketData.js';
+import { getUpstoxDailyHistory, assessDailyHistoryFreshness, getUpstoxFundamentals, searchUpstoxEquity } from './services/upstoxReadOnlyMarketData.js';
 import { analyzeTechnicalHistory } from './services/technicalAnalysisEngine.js';
 import { analyzeFundamentals } from './services/fundamentalAnalysisEngine.js';
 import { analyzeMarketRegime } from './services/marketRegimeEngine.js';
@@ -594,6 +594,7 @@ if(selectedStockButton){
       const date=d=>d.toISOString().slice(0,10);
       const instrument=await searchUpstoxEquity(symbol.replace(':NSE',''));
       const history=await getUpstoxDailyHistory(instrument.instrumentKey,{fromDate:date(from),toDate:date(to)});
+      const freshness=assessDailyHistoryFreshness(history.candles,new Date());
       const fundamentalsPayload=await getUpstoxFundamentals(instrument.isin);
       const tech=analyzeTechnicalHistory(history.candles);
       const fundamental=analyzeFundamentals(fundamentalsPayload.data);
@@ -615,10 +616,10 @@ if(selectedStockButton){
       });
       if(!regime.valid) throw new Error('MARKET_REGIME_INVALID');
       const marketRegimeScore=regime.score;
-      const decision=buildStockAnalysisDecision({symbol:instrument.tradingSymbol,marketDataFresh:true,technicalScores:tech.scores,fundamentalScores:fundamental.scores,marketRegimeScore,entryZone:tech.levels.entryZone,stopLoss:tech.levels.stopLoss,targets:tech.levels.targets,riskRewardRatio:tech.levels.riskRewardRatio,riskGates:{...tech.gates,liquidityAcceptable:true,marketRegimeAcceptable:regime.regime==='BULLISH'||regime.regime==='STRONG BULLISH'},technicalEvidence:tech.evidence,fundamentalEvidence:fundamental.evidence});
+      const decision=buildStockAnalysisDecision({symbol:instrument.tradingSymbol,marketDataFresh:freshness.fresh,technicalScores:tech.scores,fundamentalScores:fundamental.scores,marketRegimeScore,entryZone:tech.levels.entryZone,stopLoss:tech.levels.stopLoss,targets:tech.levels.targets,riskRewardRatio:tech.levels.riskRewardRatio,riskGates:{...tech.gates,liquidityAcceptable:true,marketRegimeAcceptable:regime.regime==='BULLISH'||regime.regime==='STRONG BULLISH'},technicalEvidence:tech.evidence,fundamentalEvidence:fundamental.evidence});
       if(status)status.textContent=decision.recommendation;
       if(decision.paperEligible===true){latestQualifiedDecision=decision;if(paperStageButton)paperStageButton.disabled=false;if(paperStatus)paperStatus.textContent='Qualified for PAPER simulation only.';}
-      renderRows(output,[['Symbol',instrument.tradingSymbol],['Final AI Trade',decision.recommendation],['Confidence',decision.confidence+'%'],['Technical Score',decision.technicalScore+'/100'],['Fundamental Score',decision.fundamentalScore+'/100'],['Market Regime',regime.regime+' ('+decision.marketRegimeScore+'/100)'],['Risk Quality',decision.riskQualityScore+'/100'],['Risk / Reward',decision.riskRewardRatio],['Entry Zone',decision.entryZone.low+' - '+decision.entryZone.high],['Protective Stop',decision.stopLoss],['Targets',decision.targets.join(', ')],['Technical Evidence',decision.technicalEvidence.join(' | ')],['Fundamental Evidence',decision.fundamentalEvidence.join(' | ')],['Failed Gates',decision.failedGates?.length?decision.failedGates.join(', '):'NONE'],['Decision Reason',decision.reasons?.length?decision.reasons.join(', '):'All qualification gates passed'],['Invalidation',decision.invalidation],['Execution','PAPER ONLY — broker orders blocked']]);
+      renderRows(output,[['Symbol',instrument.tradingSymbol],['Final AI Trade',decision.recommendation],['Confidence',decision.confidence+'%'],['Technical Score',decision.technicalScore+'/100'],['Fundamental Score',decision.fundamentalScore+'/100'],['Market Regime',regime.regime+' ('+decision.marketRegimeScore+'/100)'],['Risk Quality',decision.riskQualityScore+'/100'],['Risk / Reward',decision.riskRewardRatio],['Entry Zone',decision.entryZone.low+' - '+decision.entryZone.high],['Protective Stop',decision.stopLoss],['Targets',decision.targets.join(', ')],['Technical Evidence',decision.technicalEvidence.join(' | ')],['Fundamental Evidence',decision.fundamentalEvidence.join(' | ')],['Failed Gates',decision.failedGates?.length?decision.failedGates.join(', '):'NONE'],['Decision Reason',decision.reasons?.length?decision.reasons.join(', '):'All qualification gates passed'],['Invalidation',decision.invalidation],['Data Freshness',freshness.fresh?'FRESH ('+freshness.latest+')':'STALE ('+freshness.latest+')'],['Execution','PAPER ONLY — broker orders blocked']]);
     }catch(error){
       const decision=buildStockAnalysisDecision({symbol}); if(status)status.textContent='WAIT';
       renderRows(output,[['Symbol',symbol||'--'],['Recommendation','WAIT'],['Reason',String(error?.message||decision.reasons?.join(', ')||'DATA UNAVAILABLE')]]);
