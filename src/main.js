@@ -598,6 +598,15 @@ app.innerHTML = `
       </section>
 
 
+      <section class="page-section" data-page="risk">
+        <section class="welcome"><div><h2>Risk & Safety Center</h2><p>Operational guardrails for the paper-only trading workspace.</p></div><div class="engine-badge">Real Orders <strong>BLOCKED</strong></div></section>
+        <section class="dashboard-grid">
+          <div class="panel"><div class="panel-header"><div><h3>🛡️ Portfolio Risk</h3><span>Live paper-runtime controls</span></div><span class="panel-status" id="risk-runtime-status">CHECKING</span></div><div id="risk-runtime" class="market-list"></div></div>
+          <div class="panel"><div class="panel-header"><div><h3>🔐 Broker Boundary</h3><span>Upstox production access</span></div><span class="panel-status" id="risk-broker-status">CHECKING</span></div><div class="market-list"><div class="market-row"><span>Market Data</span><strong>READ ONLY</strong></div><div class="market-row"><span>Paper Execution</span><strong>ENABLED</strong></div><div class="market-row"><span>Broker Orders</span><strong>BLOCKED</strong></div><div class="market-row"><span>Token in Browser</span><strong>NO</strong></div></div></div>
+          <div class="panel"><div class="panel-header"><div><h3>📡 Recovery</h3><span>Authentication and data health</span></div><span class="panel-status">FAIL CLOSED</span></div><div class="api-test-content"><p id="risk-recovery-message">Checking Upstox authentication.</p><a class="primary-btn" href="https://ai-trade-pro-oauth.onrender.com/auth/upstox/start">Re-authenticate Upstox</a></div></div>
+        </section>
+      </section>
+
       <!-- =========================
            JOURNAL PAGE
       ========================== -->
