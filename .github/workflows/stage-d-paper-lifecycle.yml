@@ -1,0 +1,21 @@
+name: Stage D Paper Lifecycle Qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/services/paperDecisionBridge.js'
+      - 'src/stageDPaperLifecycleQualificationRunner.js'
+      - 'src/paperTradingRuntimeEngine.js'
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node src/stageDPaperLifecycleQualificationRunner.js
+      - run: npm run build
