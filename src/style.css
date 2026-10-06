@@ -740,3 +740,13 @@ footer {
   .safety-banner { align-items:flex-start; flex-direction:column; }
   .safety-chips { justify-content:flex-start; }
 }
+
+.market-terminal { padding: 20px; }
+.market-terminal label { display:block; margin-bottom:8px; color:#8995a5; font-size:12px; }
+.market-search-row { display:flex; gap:10px; margin-bottom:16px; }
+.market-search-row input {
+  flex:1; min-width:0; padding:11px 12px; border:1px solid #263244;
+  border-radius:8px; background:#0d131b; color:#f4f7fb; outline:none;
+}
+.market-search-row input:focus { border-color:#1677ff; }
+@media (max-width:650px) { .market-search-row { flex-direction:column; } }
