@@ -88,3 +88,10 @@ button:disabled{opacity:.55;cursor:wait}
 .ir-demo-item span{color:#a6b6ca;overflow-wrap:anywhere}
 .ir-demo-panel .ir-actions{flex-wrap:wrap;gap:8px}
 @media(max-width:760px){.ir-demo-recent{grid-template-columns:1fr}}
+
+.ir-live-panel{margin:18px 0;padding:14px;border:1px solid #284864;border-radius:10px;background:#0d2034}
+.ir-live-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ir-live-head h3{margin:0 0 10px}
+#ir-live-status{font-size:12px;color:#7dd3fc}
+.ir-live-panel .ir-muted{font-size:12px;margin:12px 0 0}
+@media(max-width:760px){.ir-live-head{align-items:flex-start;flex-direction:column}}

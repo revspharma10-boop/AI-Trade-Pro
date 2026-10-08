@@ -8,6 +8,7 @@ import {deriveAutoOptionDirection,chooseAutoOptionContract,calculateAutoOptionPa
 import {chooseMcxOptionUnderlying,deriveMcxOptionDirection,chooseMcxOptionContract,calculateMcxOptionPaperPlan} from './services/mcxAutoOptionResearchEngine.js';
 import {searchUpstoxDerivatives} from './services/upstoxReadOnlyMarketData.js';
 import {describeMcxTechnicalSetup} from './services/mcxWaitDiagnostics.js';
+import {MARKET_QUOTE_POLL_MS,assessMarketQuote,mayPollMarketQuote} from './services/marketQuoteRefreshPolicy.js';
 
 const fmt=n=>typeof n==='number'&&Number.isFinite(n)?'₹'+n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'NOT VERIFIED';
 const time=n=>Number.isFinite(n)?new Date(n).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour12:true}):'NOT VERIFIED';
@@ -70,6 +71,10 @@ export function mountAutoOptionResearch(){
   '<label>Symbol<input id="ir-auto-symbol" value="NIFTY" maxlength="35" autocomplete="off" spellcheck="false" placeholder="NIFTY / RELIANCE / GOLD / SILVER"></label></div>',
   '<div class="ir-actions"><button class="ir-primary" id="ir-auto-analyze" type="button">Analyze chart &amp; find CE / PE</button><a href="https://ai-trade-pro-oauth.onrender.com/auth/upstox/start" target="_blank" rel="noopener noreferrer">Connect Upstox</a></div>',
   '<p id="ir-auto-status" class="ir-status" role="status" aria-live="polite">Select instrument and symbol, then analyze.</p>',
+  '<section id="ir-live-panel" class="ir-live-panel" aria-label="30-second read-only Upstox price refresh">',
+  '<div class="ir-live-head"><h3>Broker quote • 30-second refresh</h3><span id="ir-live-status">Awaiting analysis</span></div>',
+  '<div id="ir-live-facts" class="ir-facts"></div>',
+  '<p class="ir-muted">Read-only Upstox quotes update approximately every 30 seconds while this tab is visible and the market is open. Not a live WebSocket stream. Strategy candles are 5-minute bars: re-run Analyze to refresh CE/PE levels.</p></section>',
   '<div class="ir-decision ir-option-result"><h3>Option research result</h3><span class="ir-paper-wait" id="ir-auto-direction">WAIT</span></div>',
   '<p class="ir-paper-warning">Illustrative long-option premium prices, not instructions or order previews. ₹50,000 capital, ₹500 planned risk. Real trading is disabled.</p>',
   '<h3>Underlying 5-minute candle chart</h3><div class="ir-option-chart" id="ir-auto-chart">Awaiting fresh market data.</div>',
@@ -83,6 +88,91 @@ export function mountAutoOptionResearch(){
  const blocks=find('ir-auto-blocks'),label=find('ir-auto-direction'),chart=find('ir-auto-chart');
  const mcxEvidence=find('ir-mcx-evidence'),mcxFacts=find('ir-mcx-facts');
  const mcxChecklist=find('ir-mcx-checks'),mcxSummary=find('ir-mcx-confirm-summary');
+ const liveLabel=find('ir-live-status'),liveFacts=find('ir-live-facts');
+ let quoteSelection=null,refreshInProgress=false,lastResearchAt=null;
+ function quoteSelectionFor(key,segment,underlyingSymbol){
+  quoteSelection={key,segment,underlyingSymbol,optionKey:null,underlyingQuote:null,
+    optionQuote:null,underlyingError:null,optionError:null,updatedAt:null};
+  paintQuoteStatus();
+ }
+ function setOptionQuoteKey(key){
+  if(!quoteSelection)return;
+  quoteSelection.optionKey=key;quoteSelection.optionQuote=null;quoteSelection.optionError=null;
+  paintQuoteStatus();
+ }
+ function observedQuote(role,quote){
+  if(!quoteSelection)return;
+  if(role==='option'){quoteSelection.optionQuote=quote;quoteSelection.optionError=null;}
+  else{quoteSelection.underlyingQuote=quote;quoteSelection.underlyingError=null;}
+  quoteSelection.updatedAt=Date.now();paintQuoteStatus();
+ }
+ function paintQuoteStatus(){
+  liveFacts.replaceChildren();
+  if(!quoteSelection){liveLabel.textContent='Awaiting analysis';return;}
+  const now=Date.now(),session=marketClockState({segment:quoteSelection.segment,
+    underlyingSymbol:quoteSelection.underlyingSymbol,asOf:now});
+  const cases=[{label:'Underlying',key:quoteSelection.key,raw:quoteSelection.underlyingQuote,
+    error:quoteSelection.underlyingError,option:false}];
+  if(quoteSelection.optionKey)cases.push({label:'Option premium',key:quoteSelection.optionKey,
+    raw:quoteSelection.optionQuote,error:quoteSelection.optionError,option:true});
+  const states=[];
+  for(const part of cases){
+   const evidence=assessMarketQuote({quote:part.raw,expectedInstrumentKey:part.key,asOf:now,option:part.option});
+   const state=!session.open?'MARKET CLOSED':part.error?'UNAVAILABLE':evidence.fresh?'FRESH':evidence.state;
+   states.push(state);
+   const values=[
+    [part.label+' status',state],[part.label+' last',evidence.fresh?fmt(evidence.lastPrice):'NOT CURRENT'],
+    [part.label+' broker quote time (IST)',evidence.quoteAt?
+      new Date(evidence.quoteAt).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata'}):'NOT VERIFIED']
+   ];
+   if(part.option){values.push(['Option best bid',evidence.fresh?fmt(evidence.bid):'NOT CURRENT'],
+     ['Option best ask',evidence.fresh?fmt(evidence.ask):'NOT CURRENT']);}
+   if(part.error)values.push([part.label+' data error',part.error]);
+   for(const [name,value] of values)row(liveFacts,name,value);
+  }
+  liveLabel.textContent=!session.open?'Market closed — polling paused':
+    states.every(x=>x==='FRESH')?'FRESH • 30s polling':
+    states.includes('STALE')?'STALE — no current price':'WAITING FOR FRESH QUOTE';
+  if(lastResearchAt&&now-lastResearchAt>120000){
+   if(label.textContent!=='RE-ANALYZE'){
+    label.textContent='RE-ANALYZE';label.className='ir-paper-wait';
+    for(const fact of result.querySelectorAll('.ir-fact')){
+     const title=fact.querySelector('span')?.textContent||'';
+     if(/(entry|stop loss|target 1|target 2|theoretical lots|risk: theoretical lots)/i.test(title)){
+      const value=fact.querySelector('strong');if(value)value.textContent='EXPIRED — RE-ANALYZE';
+     }
+    }
+    status.textContent='Previous paper entry/stop/targets expired after 2 minutes. Live quotes still refresh; click Analyze for new research levels.';
+   }
+  }
+ }
+ async function pollBrokerQuotes(){
+  const selection=quoteSelection;
+  if(!selection)return;
+  const session=marketClockState({segment:selection.segment,underlyingSymbol:selection.underlyingSymbol,asOf:Date.now()});
+  if(!mayPollMarketQuote({visible:!document.hidden,session,hasInstrument:!!selection.key,alreadyRunning:refreshInProgress})){
+   if(!session.open)paintQuoteStatus();
+   return;
+  }
+  refreshInProgress=true;
+  try{
+   const keys=[selection.key,...(selection.optionKey?[selection.optionKey]:[])];
+   const responses=await Promise.allSettled(keys.map(key=>getUpstoxLiveQuote(key)));
+   if(selection!==quoteSelection)return;
+   responses.forEach((r,i)=>{
+    const option=i===1;
+    const value=option?'optionQuote':'underlyingQuote',error=option?'optionError':'underlyingError';
+    if(r.status==='fulfilled'){selection[value]=r.value;selection[error]=null;}
+    else{selection[value]=null;selection[error]=String(r.reason?.message||'UPSTOX_QUOTE_UNAVAILABLE');}
+   });
+   selection.updatedAt=Date.now();paintQuoteStatus();
+  }finally{refreshInProgress=false;}
+ }
+ setInterval(()=>{void pollBrokerQuotes().catch(()=>{
+  if(quoteSelection){quoteSelection.underlyingQuote=null;quoteSelection.underlyingError='READ_ONLY_QUOTE_REFRESH_FAILED';paintQuoteStatus();}
+ });},MARKET_QUOTE_POLL_MS);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)void pollBrokerQuotes();});
+
  function clearMcxEvidence(){
   mcxEvidence.hidden=true;mcxFacts.replaceChildren();mcxChecklist.replaceChildren();mcxSummary.textContent='';
  }
@@ -119,6 +209,7 @@ export function mountAutoOptionResearch(){
  const reset=()=>{
   version++;label.textContent='WAIT';label.className='ir-paper-wait';
   result.replaceChildren();blocks.replaceChildren();chart.textContent='Awaiting fresh market data.';clearMcxEvidence();
+  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();
   status.textContent='Select instrument type and symbol, then analyze.';
  };
  type.addEventListener('change',()=>{symbol.value=type.value==='INDEX'?'NIFTY':type.value==='MCX'?'GOLD':'RELIANCE';reset();});
@@ -161,6 +252,7 @@ export function mountAutoOptionResearch(){
   const current=()=>thisRun===version;
   button.disabled=true;label.textContent='WAIT';label.className='ir-paper-wait';
   result.replaceChildren();blocks.replaceChildren();chart.replaceChildren();status.textContent='Loading underlying market evidence...';clearMcxEvidence();
+  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();
   let chosen=null,plan=null,direction='WAIT';
   const issues=[];
   try{
@@ -188,6 +280,7 @@ export function mountAutoOptionResearch(){
     issues.push(...linked.reasons);
     if(!linked.future){showPlan(null,null,issues);status.textContent='WAIT — MCX futures/option underlying link not verified';return;}
     const future=linked.future;
+    quoteSelectionFor(future.instrumentKey,'MCX_FO',input);
     const [barsResponse,quoteResponse]=await Promise.allSettled([
       getUpstoxIntradayCandles(future.instrumentKey,'5m'),
       getUpstoxLiveQuote(future.instrumentKey)
@@ -198,6 +291,7 @@ export function mountAutoOptionResearch(){
     const research=analyzeIntradayCandles(candles,{asOf:now,intervalMinutes:5,session});
     const quote=quoteResponse.status==='fulfilled'?
       extractUpstoxLiveQuoteEvidence(quoteResponse.value,future.instrumentKey,now):null;
+    if(quoteResponse.status==='fulfilled')observedQuote('underlying',quoteResponse.value);
     if(barsResponse.status==='rejected')issues.push(String(barsResponse.reason?.message||'MCX_FUTURE_CANDLES_UNAVAILABLE'));
     if(quoteResponse.status==='rejected')issues.push(String(quoteResponse.reason?.message||'MCX_FUTURE_QUOTE_UNAVAILABLE'));
     const bias=deriveMcxOptionDirection({future,research,quote,session,asOf:now});
@@ -213,6 +307,7 @@ export function mountAutoOptionResearch(){
     const picked=chooseMcxOptionContract({options:[...calls,...puts],future,
       spot:quote.lastPrice,direction,asOf:now});
     chosen=picked.contract;issues.push(...picked.reasons);
+    if(chosen)setOptionQuoteKey(chosen.instrumentKey);
     if(!chosen){showPlan(null,null,issues);status.textContent='WAIT — exact MCX '+direction+' contract not verified';return;}
     const [optionBars,optionQuote]=await Promise.allSettled([
       getUpstoxIntradayCandles(chosen.instrumentKey,'5m'),
@@ -223,6 +318,7 @@ export function mountAutoOptionResearch(){
       analyzeIntradayCandles(optionBars.value.candles,{asOf:now,intervalMinutes:5,session}):null;
     const premiumQuote=optionQuote.status==='fulfilled'?
       extractUpstoxLiveQuoteEvidence(optionQuote.value,chosen.instrumentKey,now):null;
+    if(optionQuote.status==='fulfilled')observedQuote('option',optionQuote.value);
     if(optionBars.status==='rejected')issues.push(String(optionBars.reason?.message||'MCX_OPTION_CANDLES_UNAVAILABLE'));
     if(optionQuote.status==='rejected')issues.push(String(optionQuote.reason?.message||'MCX_OPTION_QUOTE_UNAVAILABLE'));
     const inputs={future,contract:chosen,direction,quote:premiumQuote,research:premiumResearch,asOf:now};
@@ -246,6 +342,7 @@ export function mountAutoOptionResearch(){
    if(!isIndex&&String(underlying.tradingSymbol||'').toUpperCase()!==input)
     throw Error('EXACT_STOCK_SYMBOL_NOT_RESOLVED');
    const key=underlying.instrumentKey;
+   quoteSelectionFor(key,isIndex?underlying.segment:'NSE_EQ',input);
    const [barsResponse,quoteResponse]=await Promise.allSettled([
     getUpstoxIntradayCandles(key,'5m'),getUpstoxLiveQuote(key)
    ]);
@@ -255,6 +352,7 @@ export function mountAutoOptionResearch(){
    const research=analyzeIntradayCandles(candles,{asOf:now,intervalMinutes:5,session});
    const quote=quoteResponse.status==='fulfilled'?
     isIndex?quoteResponse.value:extractUpstoxLiveQuoteEvidence(quoteResponse.value,key,now):null;
+   if(quoteResponse.status==='fulfilled')observedQuote('underlying',quoteResponse.value);
    const side=deriveAutoOptionDirection({research,underlyingQuote:quote,
     underlyingSegment:isIndex?underlying.segment:'NSE_EQ',session,asOf:now});
    direction=side.direction;issues.push(...side.reasons);
@@ -266,6 +364,7 @@ export function mountAutoOptionResearch(){
    if(!current())return;
    const selection=chooseAutoOptionContract({contracts,underlyingKey:key,spot:quote.lastPrice,direction,asOf:now});
    chosen=selection.contract;issues.push(...selection.reasons);
+   if(chosen)setOptionQuoteKey(chosen.instrumentKey);
    if(!chosen){showPlan(null,null,issues);status.textContent='WAIT — verified option contract not found';return;}
    const [optionBars,optionQuote]=await Promise.allSettled([
     getUpstoxIntradayCandles(chosen.instrumentKey,'5m'),getUpstoxLiveQuote(chosen.instrumentKey)
@@ -275,6 +374,7 @@ export function mountAutoOptionResearch(){
     analyzeIntradayCandles(optionBars.value.candles,{asOf:now,intervalMinutes:5,session}):null;
    const premiumQuote=optionQuote.status==='fulfilled'?
     extractUpstoxLiveQuoteEvidence(optionQuote.value,chosen.instrumentKey,now):null;
+   if(optionQuote.status==='fulfilled')observedQuote('option',optionQuote.value);
    if(optionBars.status!=='fulfilled')issues.push(String(optionBars.reason?.message??'OPTION_CANDLES_UNAVAILABLE'));
    if(optionQuote.status!=='fulfilled')issues.push(String(optionQuote.reason?.message??'OPTION_QUOTE_UNAVAILABLE'));
    const inputs={direction,contract:chosen,underlyingKey:key,optionQuote:premiumQuote,
@@ -298,7 +398,7 @@ export function mountAutoOptionResearch(){
    showPlan(plan,chosen,issues);
    status.textContent='WAIT — '+issues.at(-1);
   }finally{
-   if(current())button.disabled=false;
+   if(current()){lastResearchAt=Date.now();button.disabled=false;paintQuoteStatus();}
   }
  });
 }
