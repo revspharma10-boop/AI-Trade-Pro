@@ -1,4 +1,5 @@
 import './intradayRecommendations.css';
+import {mountAutoOptionResearch} from './autoOptionResearchUI.js';
 import {evaluateIntradayRecommendation} from './services/intradayRecommendationEngine.js';
 import {deriveIntradayPaperSignal} from './services/intradayPaperSignalEngine.js';
 import {calculateIntradayPaperTradePlan} from './services/intradayPaperTradePlan.js';
@@ -270,3 +271,4 @@ export function mountIntradayRecommendations(){
  });
 }
 mountIntradayRecommendations();
+mountAutoOptionResearch();
