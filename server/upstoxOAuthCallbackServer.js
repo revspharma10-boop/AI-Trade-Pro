@@ -181,9 +181,13 @@ async function readOnlyFullMarketQuote(instrumentKey){
   const bid=Number(quote?.depth?.buy?.[0]?.price),ask=Number(quote?.depth?.sell?.[0]?.price);
   const stamp=quote?.timestamp;
   const timestamp=typeof stamp==='number'?stamp:typeof stamp==='string'&&/^\d+$/.test(stamp)?Number(stamp):Date.parse(stamp);
+  // Quote.timestamp describes response generation; last_trade_time is the last actual execution.
+  // Keep both so the client can fail closed on inactive or stale contracts.
+  const tradeTime=Number(quote.last_trade_time);
+  const lastTradeTime=Number.isFinite(tradeTime)&&tradeTime>0?tradeTime:null;
   return {instrumentKey:key,lastPrice:Number.isFinite(Number(quote.last_price))?Number(quote.last_price):null,
     bid:Number.isFinite(bid)&&bid>0?bid:null,ask:Number.isFinite(ask)&&ask>0?ask:null,
-    timestamp:Number.isFinite(timestamp)?timestamp:null,
+    timestamp:Number.isFinite(timestamp)?timestamp:null,lastTradeTime,
     openInterest:typeof quote.oi==='number'&&Number.isFinite(quote.oi)?quote.oi:null,
     tradedVolume:typeof quote.volume==='number'&&Number.isFinite(quote.volume)?quote.volume:null,
     mode:'READ_ONLY'};
