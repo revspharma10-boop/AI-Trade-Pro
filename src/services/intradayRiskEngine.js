@@ -20,16 +20,18 @@ export function extractUpstoxQuoteEvidence(payload,instrumentKey,asOf=Date.now()
 }
 export function extractUpstoxLiveQuoteEvidence(payload,instrumentKey,asOf=Date.now()){
  const quote=payload?.quote??payload,now=Number(new Date(asOf));
- const bid=quote?.bid,ask=quote?.ask,timestamp=quote?.timestamp;
+ const bid=quote?.bid,ask=quote?.ask,timestamp=quote?.timestamp,lastTradeTime=quote?.lastTradeTime;
  const reasons=[];
  if(!quote||quote.instrumentKey!==instrumentKey)reasons.push('QUOTE_INSTRUMENT_MISMATCH');
  if(!(valid(bid)&&bid>0&&valid(ask)&&ask>=bid))reasons.push('BID_ASK_DEPTH_UNAVAILABLE');
  if(!valid(timestamp)||!valid(now)||timestamp>now+10000||now-timestamp>120000)reasons.push('QUOTE_STALE_OR_UNDATED');
+ if(!valid(lastTradeTime)||lastTradeTime<=0||!valid(now)||lastTradeTime>now+10000||now-lastTradeTime>120000)
+  reasons.push('LAST_TRADE_STALE_OR_UNDATED');
  const spreadPercent=valid(bid)&&bid>0&&valid(ask)&&ask>=bid?
   Number((100*(ask-bid)/((ask+bid)/2)).toFixed(4)):null;
  const lastPrice=valid(quote?.lastPrice)&&quote.lastPrice>0?quote.lastPrice:null;
  if(lastPrice===null)reasons.push('LAST_TRADED_PRICE_UNAVAILABLE');
- return {valid:reasons.length===0,bid,ask,lastPrice,spreadPercent,timestamp,
+ return {valid:reasons.length===0,bid,ask,lastPrice,spreadPercent,timestamp,lastTradeTime:valid(lastTradeTime)&&lastTradeTime>0?lastTradeTime:null,
   openInterest:valid(quote?.openInterest)?quote.openInterest:null,
   tradedVolume:valid(quote?.tradedVolume)?quote.tradedVolume:null,
   reasons:[...new Set(reasons)]};
