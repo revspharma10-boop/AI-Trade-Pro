@@ -93,7 +93,10 @@ export function mountIntradayRecommendations(){
    const invalid=assessments.filter(x=>!x.classification.valid);
    status.textContent=contracts.length?
     contracts.length+' exchange contract(s) returned; '+invalid.length+' have incomplete risk metadata. Select exact contract to inspect.':
-    'Upstox returned 0 matching contracts. Check backend search filters or expiry.';
+    'Upstox returned 0 matching contracts. '+(result.diagnostics?
+      'Upstream records: '+result.diagnostics.upstreamCount+', pages: '+result.diagnostics.pagesRead+
+      ', reason: '+result.diagnostics.result+(result.diagnostics.morePagesAvailable?' (more pages available)':'')+'.':
+      'Search diagnostics not available; check backend deployment.');
   }catch(e){status.textContent='Contract lookup: '+String(e?.message||'ERROR');}
   finally{button.disabled=false;}
  });
