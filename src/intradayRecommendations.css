@@ -53,3 +53,20 @@ button:disabled{opacity:.55;cursor:wait}
 [hidden]{display:none!important}
 @media(max-width:760px){.ir-controls{grid-template-columns:1fr 1fr}.ir-facts,.ir-reasons{grid-template-columns:1fr}.ir-header{flex-wrap:wrap}.ir-safety{margin-left:0}.ir-panel{padding:17px}}
 @media(max-width:460px){.ir-controls{grid-template-columns:1fr}.ir-actions{align-items:flex-start;flex-direction:column}}
+
+/* Default two-field option finder; legacy research remains collapsed but accessible. */
+.ir-auto-option-panel{border-color:#375b76;background:linear-gradient(115deg,#122b3f,#111e33 75%);}
+.ir-auto-option-panel>h2{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.ir-auto-option-panel .ir-safety{margin-left:0;flex-shrink:0}
+.ir-auto-controls{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ir-auto-controls label{display:flex;flex-direction:column;gap:9px;font-size:13px;color:#94a3b8}
+.ir-auto-controls select,.ir-auto-controls input{width:100%;padding:13px;border-radius:9px;border:1px solid #41536f;background:#0b1526;color:#f8fafc}
+.ir-auto-controls :is(select,input):focus{outline:2px solid #38bdf8;outline-offset:2px}
+.ir-auto-option-panel .ir-option-result{margin:25px 0 12px}
+.ir-auto-option-panel .ir-option-result h3{margin:0}
+.ir-auto-option-panel #ir-auto-direction{border:1px solid #a16207;border-radius:8px;padding:9px 18px;font-weight:800}
+.ir-option-chart{border:1px solid #334155;background:#091629;padding:12px;border-radius:12px;margin:12px 0 18px;min-height:100px;font-size:13px;color:#94a3b8}
+.ir-option-chart-svg{width:100%;height:auto;max-height:280px;display:block}
+.ir-option-chart p{margin:8px 0 0}
+.ir-advanced-toggle{margin-top:22px}
+@media(max-width:760px){.ir-auto-controls{grid-template-columns:1fr}.ir-auto-option-panel>h2{flex-wrap:wrap}}

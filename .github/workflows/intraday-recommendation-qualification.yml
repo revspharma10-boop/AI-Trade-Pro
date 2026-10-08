@@ -17,6 +17,8 @@ jobs:
       - run: node src/intradayRecommendationQualificationRunner.js
       - run: node src/intradayPaperSignalQualificationRunner.js
       - run: node src/intradayPaperTradePlanQualificationRunner.js
+      - run: node src/autoOptionResearchQualificationRunner.js
+      - run: node src/autoOptionBackendQualificationRunner.js
       - run: node --check src/services/intradayPaperTradePlan.js
       - run: node --check src/services/intradayPaperSignalEngine.js
       - run: node src/intradayInstrumentQualificationRunner.js
