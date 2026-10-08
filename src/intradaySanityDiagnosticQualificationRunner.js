@@ -3,6 +3,8 @@ import { normalizeReadOnlyFailure } from './services/upstoxReadOnlyErrorCodes.js
 import { extractUpstoxLiveQuoteEvidence } from './services/intradayRiskEngine.js';
 const tests=[
   [401,{},'UPSTOX_REAUTHENTICATION_REQUIRED'],
+  [401,{error:'UPSTOX_ANALYTICS_TOKEN_INVALID_OR_EXPIRED'},'UPSTOX_ANALYTICS_TOKEN_INVALID_OR_EXPIRED'],
+  [403,{error:'UPSTOX_ANALYTICS_PERMISSION_DENIED'},'UPSTOX_ANALYTICS_PERMISSION_DENIED'],
   [429,{},'UPSTOX_RATE_LIMITED'],
   [404,{},'BACKEND_ROUTE_NOT_DEPLOYED'],
   [403,{},'UPSTOX_PERMISSION_DENIED'],
