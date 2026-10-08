@@ -28,7 +28,6 @@ export function classifyIntradayInstrument(input={}){
     if(segment==='MCX_FO'){
       if(!underlyingSymbol)reasons.push('MCX_UNDERLYING_REQUIRED');
       if(!(tickSize>0))reasons.push('MCX_TICK_SIZE_REQUIRED');
-      if(!(qtyMultiplier>0))reasons.push('MCX_QTY_MULTIPLIER_REQUIRED');
     }
   }
   return {valid:reasons.length===0,kind,exchange:segment==='MCX_FO'?'MCX':segment.startsWith('NSE_')?'NSE':'UNKNOWN',
