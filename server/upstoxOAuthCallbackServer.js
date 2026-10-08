@@ -90,6 +90,7 @@ async function readOnlyQuote(instrumentKey) {
   if (response.status === 429) throw new Error('UPSTOX_RATE_LIMITED');
   if (response.status >= 500) throw new Error('UPSTOX_MARKET_DATA_UNAVAILABLE');
   if (!response.ok) throw new Error('UPSTOX_MARKET_DATA_REQUEST_FAILED');
+  markUpstoxReadVerified();
   if (!body || typeof body !== 'object' || !(body.data ?? body)) throw new Error('UPSTOX_MARKET_DATA_EMPTY');
   return body;
 }
@@ -109,6 +110,7 @@ async function readOnlyHistoricalDaily(instrumentKey, fromDate, toDate) {
   if (response.status === 429) throw new Error('UPSTOX_RATE_LIMITED');
   if (response.status >= 500) throw new Error('UPSTOX_MARKET_DATA_UNAVAILABLE');
   if (!response.ok) throw new Error('UPSTOX_HISTORICAL_DATA_REQUEST_FAILED');
+  markUpstoxReadVerified();
   const raw = body?.data?.candles;
   if (!Array.isArray(raw) || !raw.length) throw new Error('UPSTOX_HISTORICAL_DATA_EMPTY');
   const candles = raw.map(x => ({ datetime:String(x?.[0]||''), open:Number(x?.[1]), high:Number(x?.[2]), low:Number(x?.[3]), close:Number(x?.[4]), volume:Number(x?.[5]) }))
@@ -129,6 +131,7 @@ async function readOnlyIntradayCandles(instrumentKey, interval){
  if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
  if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
  if(!response.ok)throw new Error('UPSTOX_INTRADAY_REQUEST_FAILED');
+  markUpstoxReadVerified();
  const raw=body?.data?.candles;
  if(!Array.isArray(raw)||!raw.length)throw new Error('UPSTOX_INTRADAY_DATA_EMPTY');
  const candles=raw.map(x=>({datetime:String(x?.[0]||''),open:Number(x?.[1]),high:Number(x?.[2]),low:Number(x?.[3]),close:Number(x?.[4]),volume:Number(x?.[5])})).filter(x=>Number.isFinite(Date.parse(x.datetime))&&[x.open,x.high,x.low,x.close,x.volume].every(Number.isFinite)&&x.volume>=0&&x.low>0&&x.high>=x.low).sort((a,b)=>Date.parse(a.datetime)-Date.parse(b.datetime));
@@ -147,6 +150,7 @@ async function readOnlyFundamentals(isin){
     if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
     if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
     if(!response.ok)throw new Error('UPSTOX_FUNDAMENTALS_REQUEST_FAILED');
+  markUpstoxReadVerified();
     return [name,body?.data??body];
   }));
   return Object.fromEntries(entries);
@@ -162,6 +166,7 @@ async function searchEquityInstrument(query){
   if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
   if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
   if(!response.ok)throw new Error('UPSTOX_INSTRUMENT_SEARCH_FAILED');
+  markUpstoxReadVerified();
   const items=Array.isArray(body?.data)?body.data:[];
   const exact=items.find(x=>String(x.trading_symbol||'').toUpperCase()===q.toUpperCase()&&x.segment==='NSE_EQ')||items.find(x=>x.segment==='NSE_EQ');
   if(!exact?.instrument_key||!exact?.isin)throw new Error('UPSTOX_EQUITY_NOT_FOUND');
@@ -234,13 +239,17 @@ async function searchIntradayDerivativeContracts(query,type,exchange='NSE'){
   let totalPages=1;
   let pagesRead=0;
   const MAX_PAGES=12;
-  for(let page=1;page<=Math.min(totalPages,MAX_PAGES);page++){
+  // The Analytics Token supports public market-data GET APIs, but MCX's
+  // official instrument master is more reliable than the optional search
+  // endpoint. Use that public master directly for analytics-only MCX research.
+  for(let page=1;!(market==='MCX'&&ANALYTICS_TOKEN)&&page<=Math.min(totalPages,MAX_PAGES);page++){
     url.searchParams.set('page_number',String(page));
     const response=await fetch(url,{headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
     const body=await response.json().catch(()=>({}));
     if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
     if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
     if(!response.ok)throw new Error('UPSTOX_DERIVATIVE_SEARCH_FAILED');
+  markUpstoxReadVerified();
     if(!Array.isArray(body?.data))throw new Error('UPSTOX_DERIVATIVE_SEARCH_BAD_PAYLOAD');
     rows.push(...body.data);
     pagesRead++;
@@ -295,6 +304,7 @@ async function readOnlyFullMarketQuote(instrumentKey){
   if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
   if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
   if(!response.ok)throw new Error('UPSTOX_LIVE_QUOTE_FAILED');
+  markUpstoxReadVerified();
   const raw=body?.data;
   if(!raw||typeof raw!=='object')throw new Error('UPSTOX_LIVE_QUOTE_EMPTY');
   const quote=Object.values(raw).find(x=>x?.instrument_token===key);
@@ -323,6 +333,7 @@ async function readOnlyOptionGreeks(instrumentKey){
   if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
   if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
   if(!response.ok)throw new Error('UPSTOX_OPTION_GREEKS_UNAVAILABLE');
+  markUpstoxReadVerified();
   const match=Object.values(body?.data||{}).find(x=>x?.instrument_token===key);
   if(!match)throw new Error('UPSTOX_OPTION_GREEKS_UNAVAILABLE');
   const numbers=['delta','gamma','theta','vega','iv'];
