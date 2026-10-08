@@ -1,6 +1,8 @@
 // Browser-facing diagnostic codes. Never reveal provider payloads, tokens or secrets.
 const SAFE_CODES = new Set([
   'UPSTOX_REAUTHENTICATION_REQUIRED',
+  'UPSTOX_ANALYTICS_TOKEN_INVALID_OR_EXPIRED',
+  'UPSTOX_ANALYTICS_PERMISSION_DENIED',
   'UPSTOX_RATE_LIMITED',
   'UPSTOX_LIVE_QUOTE_FAILED',
   'UPSTOX_LIVE_QUOTE_EMPTY',
@@ -23,10 +25,10 @@ const SAFE_CODES = new Set([
   'INVALID_DATE_RANGE'
 ]);
 export function normalizeReadOnlyFailure(status,body={}){
-  if(status===401)return 'UPSTOX_REAUTHENTICATION_REQUIRED';
+  if(status===401)return body?.error==='UPSTOX_ANALYTICS_TOKEN_INVALID_OR_EXPIRED'?'UPSTOX_ANALYTICS_TOKEN_INVALID_OR_EXPIRED':'UPSTOX_REAUTHENTICATION_REQUIRED';
   if(status===429)return 'UPSTOX_RATE_LIMITED';
   if(status===404)return 'BACKEND_ROUTE_NOT_DEPLOYED';
-  if(status===403)return 'UPSTOX_PERMISSION_DENIED';
+  if(status===403)return body?.error==='UPSTOX_ANALYTICS_PERMISSION_DENIED'?'UPSTOX_ANALYTICS_PERMISSION_DENIED':'UPSTOX_PERMISSION_DENIED';
   const code=typeof body?.error==='string'?body.error:'';
   if(SAFE_CODES.has(code))return code;
   if(status===502||status===503||status===504)return 'UPSTOX_MARKET_DATA_UNAVAILABLE';
