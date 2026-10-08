@@ -294,6 +294,43 @@ async function searchIntradayDerivativeContracts(query,type,exchange='NSE'){
       matches.length?'MATCHES_FOUND':rows.length?'FILTERED_OUT':'UPSTREAM_EMPTY'}};
 
 }
+// POST /charges/margin computes a margin QUOTE only. It is not an order API.
+// This is the single upstream non-GET call intentionally permitted in research mode.
+const marginEstimateCache=new Map();
+async function readOnlyMarginEstimate({instrumentKey,side,quantity,price}={}){
+  const key=String(instrumentKey||'').trim(),direction=String(side||'').toUpperCase();
+  const qty=Number(quantity),value=Number(price);
+  if(!/^(MCX_FO|NSE_FO|NSE_EQ)\\|[A-Za-z0-9_]+$/.test(key)||
+     !['BUY','SELL'].includes(direction)||!Number.isInteger(qty)||qty<1||qty>100000||
+     !Number.isFinite(value)||value<=0||value>100000000)
+    throw new Error('INVALID_PAPER_MARGIN_REQUEST');
+  const cacheKey=[key,direction,qty,value].join(':');
+  const cached=marginEstimateCache.get(cacheKey);
+  if(cached&&Date.now()-cached.asOf<30000)return cached;
+  const response=await fetch('https://api.upstox.com/v2/charges/margin',{
+    method:'POST',
+    headers:{Accept:'application/json','Content-Type':'application/json',
+      Authorization:'Bearer '+activeToken()},
+    body:JSON.stringify({instruments:[{instrument_key:key,quantity:qty,
+      transaction_type:direction,product:'I',price:value}]}),
+    signal:AbortSignal.timeout(12000)
+  });
+  const body=await response.json().catch(()=>({}));
+  if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
+  if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
+  if(!response.ok)throw new Error('UPSTOX_MARGIN_ESTIMATE_UNAVAILABLE');
+  const required=Number(body?.data?.required_margin);
+  if(!Number.isFinite(required)||required<=0)
+    throw new Error('UPSTOX_MARGIN_ESTIMATE_UNAVAILABLE');
+  markUpstoxReadVerified();
+  const result={provider:'UPSTOX',mode:'READ_ONLY_MARGIN_CALCULATION',
+    instrumentKey:key,direction,quantity:qty,product:'I',price:value,
+    requiredMargin:Number(required.toFixed(2)),asOf:Date.now(),verified:true,
+    userAvailableFundsVerified:false,orderSubmissionAllowed:false};
+  if(marginEstimateCache.size>=128)marginEstimateCache.clear();
+  marginEstimateCache.set(cacheKey,result);
+  return result;
+}
 async function readOnlyFullMarketQuote(instrumentKey){
   const key=String(instrumentKey||'').trim();
   if(!/^(NSE_EQ|NSE_FO|MCX_FO)\|[A-Za-z0-9_]+$/.test(key))throw new Error('INVALID_INSTRUMENT_KEY');
@@ -439,6 +476,26 @@ const server = http.createServer(async (req, res) => {
         const message=String(error?.message||'UPSTOX_DERIVATIVE_SEARCH_FAILED');
         return json(res,(authErrorHttpStatus(message)??(message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_DERIVATIVE_SEARCH'?400:502)),
           {error:message,orderSubmissionAllowed:false});
+      }
+    }
+    if (url.pathname === '/api/upstox/paper-margin' && req.method === 'GET') {
+      try{
+        const quote=await readOnlyMarginEstimate({
+          instrumentKey:url.searchParams.get('instrument_key'),
+          side:url.searchParams.get('side'),
+          quantity:url.searchParams.get('quantity'),
+          price:url.searchParams.get('price')
+        });
+        return json(res,200,quote);
+      }catch(error){
+        const reason=String(error?.message||'UPSTOX_MARGIN_ESTIMATE_UNAVAILABLE');
+        const status=authErrorHttpStatus(reason)??(reason==='INVALID_PAPER_MARGIN_REQUEST'?400:
+          reason==='UPSTOX_RATE_LIMITED'?429:502);
+        const safe=['INVALID_PAPER_MARGIN_REQUEST','UPSTOX_MARGIN_ESTIMATE_UNAVAILABLE',
+          'UPSTOX_REAUTHENTICATION_REQUIRED','UPSTOX_ANALYTICS_TOKEN_INVALID_OR_EXPIRED',
+          'UPSTOX_ANALYTICS_PERMISSION_DENIED','UPSTOX_RATE_LIMITED'];
+        return json(res,status,{error:safe.includes(reason)?reason:'UPSTOX_MARGIN_ESTIMATE_UNAVAILABLE',
+          orderSubmissionAllowed:false});
       }
     }
     if (url.pathname === '/api/upstox/live-quote' && req.method === 'GET') {
