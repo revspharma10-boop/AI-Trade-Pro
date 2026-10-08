@@ -1,3 +1,4 @@
+import { normalizeReadOnlyFailure } from './upstoxReadOnlyErrorCodes.js';
 const DEFAULT_BASE = import.meta.env.VITE_UPSTOX_READONLY_API_BASE || 'https://ai-trade-pro-oauth.onrender.com';
 
 async function request(path) {
@@ -5,12 +6,7 @@ async function request(path) {
   try { response = await fetch(DEFAULT_BASE + path, { method: 'GET', headers: { Accept: 'application/json' } }); }
   catch { throw new Error('UPSTOX_BACKEND_UNREACHABLE: Check Render service availability and browser connectivity.'); }
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    if (response.status === 401) throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');
-    if (response.status === 429) throw new Error('UPSTOX_RATE_LIMITED');
-    if (response.status >= 500) throw new Error('UPSTOX_MARKET_DATA_UNAVAILABLE');
-    throw new Error(['INVALID_INSTRUMENT_KEY','UPSTOX_MARKET_DATA_EMPTY'].includes(body?.error) ? body.error : 'UPSTOX_READ_ONLY_API_FAILED');
-  }
+  if (!response.ok) throw new Error(normalizeReadOnlyFailure(response.status,body));
   return body;
 }
 
