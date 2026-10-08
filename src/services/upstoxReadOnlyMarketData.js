@@ -1,7 +1,9 @@
 const DEFAULT_BASE = import.meta.env.VITE_UPSTOX_READONLY_API_BASE || 'https://ai-trade-pro-oauth.onrender.com';
 
 async function request(path) {
-  const response = await fetch(DEFAULT_BASE + path, { method: 'GET', headers: { Accept: 'application/json' } });
+  let response;
+  try { response = await fetch(DEFAULT_BASE + path, { method: 'GET', headers: { Accept: 'application/json' } }); }
+  catch { throw new Error('UPSTOX_BACKEND_UNREACHABLE: Check Render service availability and browser connectivity.'); }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401) throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');
