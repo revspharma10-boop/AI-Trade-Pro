@@ -5,6 +5,7 @@ const istDate=ms=>new Date(ms+330*60000).toISOString().slice(0,10);
 const round=(n,d=4)=>Number(n.toFixed(d));
 export function summarizeIntradayPerformance({trades=[],provenance='UNVERIFIED',minTrades=200}={}){
   const reasons=[];
+  const threshold=Number.isInteger(minTrades)&&minTrades>=200?minTrades:200;
   if(!Array.isArray(trades)||trades.length===0)reasons.push('NO_TRADE_RECORDS');
   const acceptedProvenance=['VERIFIED_OUT_OF_SAMPLE_BACKTEST','VERIFIED_FORWARD_PAPER'];
   if(!acceptedProvenance.includes(provenance))reasons.push('VERIFIED_PROVENANCE_REQUIRED');
@@ -13,9 +14,14 @@ export function summarizeIntradayPerformance({trades=[],provenance='UNVERIFIED',
   for(const t of Array.isArray(trades)?trades:[]){
     const entryAt=Date.parse(t?.entryAt),exitAt=Date.parse(t?.exitAt);
     const qty=t?.quantity,entry=t?.entry,exit=t?.exit,fees=t?.fees,slippage=t?.slippage;
+    const entryIST=new Date(entryAt+330*60000),exitIST=new Date(exitAt+330*60000);
+    const entryMinutes=entryIST.getUTCHours()*60+entryIST.getUTCMinutes();
+    const exitMinutes=exitIST.getUTCHours()*60+exitIST.getUTCMinutes();
+    const day=entryIST.getUTCDay();
     const direction=t?.direction;
     const kind=t?.kind;
     if(!Number.isFinite(entryAt)||!Number.isFinite(exitAt)||exitAt<=entryAt||istDate(entryAt)!==istDate(exitAt)||
+       day===0||day===6||entryMinutes<555||exitMinutes>930||
        !finite(entry)||entry<=0||!finite(exit)||exit<=0||!Number.isInteger(qty)||qty<=0||
        !finite(fees)||fees<0||!finite(slippage)||slippage<0||!['LONG','SHORT'].includes(direction)||
        !['EQUITY','FUTURE','CALL_OPTION','PUT_OPTION'].includes(kind)||
@@ -33,7 +39,7 @@ export function summarizeIntradayPerformance({trades=[],provenance='UNVERIFIED',
     sampleSize:0,winRatePercent:null,lower95Percent:null,netProfit:null,reasons:[...new Set(reasons)],paperOnly:true};
   const n=wins+losses+breakeven,p=n?wins/n:0,z=1.96,z2=z*z;
   const wilson=n?(p+z2/(2*n)-z*Math.sqrt(p*(1-p)/n+z2/(4*n*n)))/(1+z2/n):0;
-  if(n<minTrades)reasons.push('INSUFFICIENT_OUTCOME_SAMPLE');
+  if(n<threshold)reasons.push('INSUFFICIENT_OUTCOME_SAMPLE');
   if(dates.size<20)reasons.push('INSUFFICIENT_DISTINCT_TRADING_DAYS');
   if(p<0.90)reasons.push('WIN_RATE_BELOW_90_PERCENT_TARGET');
   if(wilson<0.90)reasons.push('LOWER_95_CONFIDENCE_BOUND_BELOW_90_PERCENT');
