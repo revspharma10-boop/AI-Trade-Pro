@@ -9,7 +9,7 @@ const fakeToken='TEST_ONLY_FAKE_TOKEN';
 const future={segment:'MCX_FO',exchange:'MCX',instrument_type:'FUT',underlying_type:'COM',
  instrument_key:'MCX_FO|12345',trading_symbol:'GOLD FUT 05 NOV 26',underlying_symbol:'GOLD',
  expiry:'2026-11-05',lot_size:100,tick_size:1,qty_multiplier:1,strike_price:0};
-const call={...future,instrument_type:'CE',instrument_key:'MCX_FO|12346',
+const call={...future,underlying_key:future.instrument_key,instrument_type:'CE',instrument_key:'MCX_FO|12346',
  trading_symbol:'GOLD 100000 CE 05 NOV 26',strike_price:100000};
 globalThis.fetch=async(url,options={})=>{
  const u=new URL(typeof url==='string'?url:url.toString());
@@ -33,6 +33,7 @@ globalThis.fetch=async(url,options={})=>{
    assert.equal(u.searchParams.get('records'),'30');
    const kind=u.searchParams.get('instrument_types');
    if(kind==='CE')return reply({status:'success',data:[call],meta_data:{page:{total_pages:1,page_number:1}}});
+   if(kind==='PE')return reply({status:'success',data:[{...call,instrument_type:'PE',instrument_key:'MCX_FO|12347'}],meta_data:{page:{total_pages:1,page_number:1}}});
    assert.equal(kind,null,'Futures lookup must not use CE/PE-only filtering');
    const query=u.searchParams.get('query');
    if(query==='GOLD'||query==='NOTLISTED')
@@ -118,6 +119,11 @@ try{
  const opt=await get('/api/upstox/derivative-search?query=GOLD&type=CE&exchange=MCX');
  assert.equal(opt.json.contracts.length,1);
  assert.equal(opt.json.contracts[0].strike,100000);
+ assert.equal(opt.json.contracts[0].underlyingKey,future.instrument_key);
+ const putResult=await get('/api/upstox/derivative-search?query=GOLD&type=PE&exchange=MCX');
+ assert.equal(putResult.response.status,200);
+ assert.equal(putResult.json.contracts[0].instrumentType,'PE');
+ assert.equal(putResult.json.contracts[0].underlyingKey,future.instrument_key);
  const empty=await get('/api/upstox/derivative-search?query=NOTLISTED&type=FUT&exchange=MCX');
  assert.equal(empty.json.contracts.length,0);
  assert.equal(empty.json.diagnostics.result,'BOD_NO_MATCHES');
