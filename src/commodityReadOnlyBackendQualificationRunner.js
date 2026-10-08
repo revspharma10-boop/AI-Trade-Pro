@@ -25,7 +25,7 @@ globalThis.fetch=async(url,options={})=>{
  if(u.pathname==='/v3/market-quote/quotes'){
    return reply({status:'success',data:{'MCX_FO:GOLD':{
      instrument_token:u.searchParams.get('instrument_key'),last_price:101000,
-     timestamp:new Date().toISOString(),oi:1000,volume:20000,
+     timestamp:new Date().toISOString(),last_trade_time:String(Date.now()),oi:1000,volume:20000,
      depth:{buy:[{price:100999}],sell:[{price:101001}]}
    }}});
  }
@@ -83,6 +83,7 @@ try{
  assert.equal(quote.json.quote.openInterest,1000);
  assert.equal(quote.json.quote.bid,100999);
  assert.equal(quote.json.quote.ask,101001);
+ assert.ok(Number.isFinite(quote.json.quote.lastTradeTime));
  assert.equal(quote.json.body?.access_token,undefined);
  assert.equal(quote.response.headers.get('access-control-allow-origin'),'https://revspharma10-boop.github.io');
  const greek=await get('/api/upstox/option-greeks?instrument_key=MCX_FO%7C12346');
