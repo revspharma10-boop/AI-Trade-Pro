@@ -37,4 +37,5 @@ jobs:
       - run: node --check src/services/intradayRiskEngine.js
       - run: node --check server/upstoxOAuthCallbackServer.js
       - run: node --check src/intradayRecommendationsUI.js
+      - run: node src/simplifiedAutoOptionUIQualificationRunner.js
       - run: npm run build
