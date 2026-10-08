@@ -68,3 +68,11 @@ export function assessDailyHistoryFreshness(candles=[], now=new Date()) {
   const ageDays=(nowMs-latestMs)/86400000;
   return {fresh:ageDays<=4,reason:ageDays<=4?'FRESH':'STALE_DAILY_HISTORY',latest,ageDays:Number(ageDays.toFixed(2))};
 }
+
+export async function getUpstoxIntradayCandles(instrumentKey,interval='5m'){
+ if(!instrumentKey||!['1m','5m','15m'].includes(interval))throw new Error('INVALID_INTRADAY_REQUEST');
+ const q=new URLSearchParams({instrument_key:instrumentKey,interval});
+ const payload=await request('/api/upstox/intraday?'+q.toString());
+ if(!Array.isArray(payload.candles))throw new Error('UPSTOX_INTRADAY_DATA_EMPTY');
+ return {provider:'UPSTOX',mode:'READ_ONLY',interval,candles:payload.candles,orderSubmissionAllowed:false};
+}
