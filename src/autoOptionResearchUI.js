@@ -9,6 +9,7 @@ import {chooseMcxOptionUnderlying,deriveMcxOptionDirection,chooseMcxOptionContra
 import {searchUpstoxDerivatives} from './services/upstoxReadOnlyMarketData.js';
 import {describeMcxTechnicalSetup} from './services/mcxWaitDiagnostics.js';
 import {MARKET_QUOTE_POLL_MS,assessMarketQuote,mayPollMarketQuote} from './services/marketQuoteRefreshPolicy.js';
+import {frozenResearchWindow,frozenResearchState} from './services/frozenResearchPolicy.js';
 
 const fmt=n=>typeof n==='number'&&Number.isFinite(n)?'₹'+n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'NOT VERIFIED';
 const time=n=>Number.isFinite(n)?new Date(n).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour12:true}):'NOT VERIFIED';
@@ -71,10 +72,14 @@ export function mountAutoOptionResearch(){
   '<label>Symbol<input id="ir-auto-symbol" value="NIFTY" maxlength="35" autocomplete="off" spellcheck="false" placeholder="NIFTY / RELIANCE / GOLD / SILVER"></label></div>',
   '<div class="ir-actions"><button class="ir-primary" id="ir-auto-analyze" type="button">Analyze chart &amp; find CE / PE</button><a href="https://ai-trade-pro-oauth.onrender.com/auth/upstox/start" target="_blank" rel="noopener noreferrer">Connect Upstox</a></div>',
   '<p id="ir-auto-status" class="ir-status" role="status" aria-live="polite">Select instrument and symbol, then analyze.</p>',
+  '<section class="ir-freeze-panel" aria-label="Frozen five-minute research snapshot">',
+  '<div class="ir-freeze-head"><h3>Frozen 5-minute prediction</h3><strong id="ir-freeze-state">AWAITING ANALYSIS</strong></div>',
+  '<div class="ir-freeze-times"><span id="ir-freeze-taken">Snapshot: not captured</span><span id="ir-freeze-next">Next update: after analysis</span></div>',
+  '<p class="ir-muted">CALL/PUT/WAIT, option premium entry, stop and targets freeze for each 5-minute candle interval. They update automatically after the next candle completes. Broker quotes refresh independently every 30 seconds.</p></section>',
   '<section id="ir-live-panel" class="ir-live-panel" aria-label="30-second read-only Upstox price refresh">',
   '<div class="ir-live-head"><h3>Broker quote • 30-second refresh</h3><span id="ir-live-status">Awaiting analysis</span></div>',
   '<div id="ir-live-facts" class="ir-facts"></div>',
-  '<p class="ir-muted">Read-only Upstox quotes update approximately every 30 seconds while this tab is visible and the market is open. Not a live WebSocket stream. Strategy candles are 5-minute bars: re-run Analyze to refresh CE/PE levels.</p></section>',
+  '<p class="ir-muted">Read-only Upstox quotes update approximately every 30 seconds while this tab is visible and the market is open. Not a live WebSocket stream. Strategy candles are 5-minute bars; predictions update after each completed 5-minute candle.</p></section>',
   '<div class="ir-decision ir-option-result"><h3>Option research result</h3><span class="ir-paper-wait" id="ir-auto-direction">WAIT</span></div>',
   '<p class="ir-paper-warning">Illustrative long-option premium prices, not instructions or order previews. ₹50,000 capital, ₹500 planned risk. Real trading is disabled.</p>',
   '<h3>Underlying 5-minute candle chart</h3><div class="ir-option-chart" id="ir-auto-chart">Awaiting fresh market data.</div>',
@@ -90,6 +95,51 @@ export function mountAutoOptionResearch(){
  const mcxChecklist=find('ir-mcx-checks'),mcxSummary=find('ir-mcx-confirm-summary');
  const liveLabel=find('ir-live-status'),liveFacts=find('ir-live-facts');
  let quoteSelection=null,refreshInProgress=false,lastResearchAt=null;
+ let hasStartedAnalysis=false,capturedSlot=null,analysisInFlight=false;
+ const freezeLabel=find('ir-freeze-state'),freezeTaken=find('ir-freeze-taken'),freezeNext=find('ir-freeze-next');
+ const istTime=n=>new Date(n).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour12:true});
+ function selectedExchangeClock(asOf=Date.now()){
+  const input=symbol.value.trim().toUpperCase(),mcx=type.value==='MCX',index=type.value==='INDEX';
+  return marketClockState({segment:mcx?'MCX_FO':index?(input==='SENSEX'?'BSE_INDEX':'NSE_INDEX'):'NSE_EQ',
+   underlyingSymbol:mcx?input:'',asOf});
+ }
+ function expireOldSnapshot(){
+  if(label.textContent==='WAIT — EXPIRED')return;
+  label.textContent='WAIT — EXPIRED';label.className='ir-paper-wait';
+  for(const fact of result.querySelectorAll('.ir-fact')){
+   const name=fact.querySelector('span')?.textContent||'';
+   if(/(entry|stop loss|target 1|target 2|theoretical lots|risk: theoretical lots)/i.test(name)){
+    const value=fact.querySelector('strong');if(value)value.textContent='EXPIRED — WAIT';
+   }
+  }
+ }
+ function paintFrozenResearch(){
+  const now=Date.now(),window=frozenResearchWindow(now);
+  if(!hasStartedAnalysis){
+   freezeLabel.textContent='AWAITING ANALYSIS';freezeTaken.textContent='Snapshot: not captured';
+   freezeNext.textContent='Next update: after first analysis';return;
+  }
+  const state=frozenResearchState({asOf:now,capturedSlot,hasSelection:true,
+   session:selectedExchangeClock(now),visible:!document.hidden,running:analysisInFlight});
+  freezeTaken.textContent=lastResearchAt?'Analyzed at '+istTime(lastResearchAt)+' IST':'Analyzing...';
+  freezeNext.textContent='Next 5-minute candle update: '+istTime(window.nextRefreshAt)+' IST';
+  if(capturedSlot!==null&&capturedSlot<window.slot){
+   expireOldSnapshot();
+   freezeLabel.textContent=analysisInFlight?'UPDATING — WAIT':state.status==='MARKET_CLOSED'?
+    'MARKET CLOSED — WAIT':state.status==='TAB_NOT_VISIBLE'?'TAB PAUSED — WAIT':'REFRESH DUE — WAIT';
+  }else{
+   freezeLabel.textContent=analysisInFlight?'ANALYZING — WAIT':
+    state.status==='MARKET_CLOSED'?'FROZEN • MARKET CLOSED':'FROZEN — 5 MIN';
+  }
+ }
+ function maybeRefreshFiveMinuteResearch(){
+  if(!hasStartedAnalysis)return;
+  const state=frozenResearchState({asOf:Date.now(),capturedSlot,hasSelection:true,
+   session:selectedExchangeClock(),visible:!document.hidden,running:analysisInFlight});
+  paintFrozenResearch();
+  if(state.shouldRefresh&&!button.disabled)button.click();
+ }
+
  function quoteSelectionFor(key,segment,underlyingSymbol){
   quoteSelection={key,segment,underlyingSymbol,optionKey:null,underlyingQuote:null,
     optionQuote:null,underlyingError:null,optionError:null,updatedAt:null};
@@ -133,18 +183,8 @@ export function mountAutoOptionResearch(){
   liveLabel.textContent=!session.open?'Market closed — polling paused':
     states.every(x=>x==='FRESH')?'FRESH • 30s polling':
     states.includes('STALE')?'STALE — no current price':'WAITING FOR FRESH QUOTE';
-  if(lastResearchAt&&now-lastResearchAt>120000){
-   if(label.textContent!=='RE-ANALYZE'){
-    label.textContent='RE-ANALYZE';label.className='ir-paper-wait';
-    for(const fact of result.querySelectorAll('.ir-fact')){
-     const title=fact.querySelector('span')?.textContent||'';
-     if(/(entry|stop loss|target 1|target 2|theoretical lots|risk: theoretical lots)/i.test(title)){
-      const value=fact.querySelector('strong');if(value)value.textContent='EXPIRED — RE-ANALYZE';
-     }
-    }
-    status.textContent='Previous paper entry/stop/targets expired after 2 minutes. Live quotes still refresh; click Analyze for new research levels.';
-   }
-  }
+  // A quote refresh never changes the frozen directional prediction or premium levels.
+  paintFrozenResearch();
  }
  async function pollBrokerQuotes(){
   const selection=quoteSelection;
@@ -172,6 +212,8 @@ export function mountAutoOptionResearch(){
   if(quoteSelection){quoteSelection.underlyingQuote=null;quoteSelection.underlyingError='READ_ONLY_QUOTE_REFRESH_FAILED';paintQuoteStatus();}
  });},MARKET_QUOTE_POLL_MS);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)void pollBrokerQuotes();});
+ setInterval(maybeRefreshFiveMinuteResearch,MARKET_QUOTE_POLL_MS);
+ document.addEventListener('visibilitychange',maybeRefreshFiveMinuteResearch);
 
  function clearMcxEvidence(){
   mcxEvidence.hidden=true;mcxFacts.replaceChildren();mcxChecklist.replaceChildren();mcxSummary.textContent='';
@@ -207,9 +249,10 @@ export function mountAutoOptionResearch(){
 
  let version=0;
  const reset=()=>{
-  version++;label.textContent='WAIT';label.className='ir-paper-wait';
+  version++;hasStartedAnalysis=false;capturedSlot=null;analysisInFlight=false;button.disabled=false;
+  label.textContent='WAIT';label.className='ir-paper-wait';
   result.replaceChildren();blocks.replaceChildren();chart.textContent='Awaiting fresh market data.';clearMcxEvidence();
-  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();
+  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();paintFrozenResearch();
   status.textContent='Select instrument type and symbol, then analyze.';
  };
  type.addEventListener('change',()=>{symbol.value=type.value==='INDEX'?'NIFTY':type.value==='MCX'?'GOLD':'RELIANCE';reset();});
@@ -248,11 +291,18 @@ export function mountAutoOptionResearch(){
   [...new Set([...issues,...(plan?.reasons??[])])].forEach(x=>blocks.append(element('li',explanations[x]??String(x))));
  }
  button.addEventListener('click',async()=>{
-  const thisRun=++version,now=Date.now(),input=symbol.value.trim().toUpperCase(),isIndex=type.value==='INDEX',isMcx=type.value==='MCX';
+  const now=Date.now(),window=frozenResearchWindow(now);
+  if(analysisInFlight)return;
+  if(hasStartedAnalysis&&capturedSlot===window.slot){
+   status.textContent='Frozen research output; next five-minute refresh after '+istTime(window.nextRefreshAt)+' IST.';
+   paintFrozenResearch();return;
+  }
+  const thisRun=++version,input=symbol.value.trim().toUpperCase(),isIndex=type.value==='INDEX',isMcx=type.value==='MCX';
   const current=()=>thisRun===version;
+  hasStartedAnalysis=true;capturedSlot=window.slot;analysisInFlight=true;
   button.disabled=true;label.textContent='WAIT';label.className='ir-paper-wait';
   result.replaceChildren();blocks.replaceChildren();chart.replaceChildren();status.textContent='Loading underlying market evidence...';clearMcxEvidence();
-  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();
+  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();paintFrozenResearch();
   let chosen=null,plan=null,direction='WAIT';
   const issues=[];
   try{
@@ -398,7 +448,10 @@ export function mountAutoOptionResearch(){
    showPlan(plan,chosen,issues);
    status.textContent='WAIT — '+issues.at(-1);
   }finally{
-   if(current()){lastResearchAt=Date.now();button.disabled=false;paintQuoteStatus();}
+   if(current()){
+    lastResearchAt=Date.now();analysisInFlight=false;button.disabled=false;
+    paintQuoteStatus();paintFrozenResearch();
+   }
   }
  });
 }
