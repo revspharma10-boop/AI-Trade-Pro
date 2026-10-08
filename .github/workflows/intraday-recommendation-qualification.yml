@@ -18,6 +18,7 @@ jobs:
       - run: node src/intradayPerformanceQualificationRunner.js
       - run: node src/commodityIntradayQualificationRunner.js
       - run: node src/commodityReadOnlyBackendQualificationRunner.js
+      - run: node src/upstoxAnalyticsTokenQualificationRunner.js
       - run: node src/intradaySanityDiagnosticQualificationRunner.js
       - run: node --check src/services/intradayMarketClock.js
       - run: node --check src/services/intradayRiskEngine.js
