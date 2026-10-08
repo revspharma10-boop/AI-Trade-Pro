@@ -54,7 +54,7 @@ button:disabled{opacity:.55;cursor:wait}
 @media(max-width:760px){.ir-controls{grid-template-columns:1fr 1fr}.ir-facts,.ir-reasons{grid-template-columns:1fr}.ir-header{flex-wrap:wrap}.ir-safety{margin-left:0}.ir-panel{padding:17px}}
 @media(max-width:460px){.ir-controls{grid-template-columns:1fr}.ir-actions{align-items:flex-start;flex-direction:column}}
 
-/* Default two-field option finder; legacy research remains collapsed but accessible. */
+/* Default two-field finder; manual contract search is no longer mounted. */
 .ir-auto-option-panel{border-color:#375b76;background:linear-gradient(115deg,#122b3f,#111e33 75%);}
 .ir-auto-option-panel>h2{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .ir-auto-option-panel .ir-safety{margin-left:0;flex-shrink:0}
@@ -68,7 +68,6 @@ button:disabled{opacity:.55;cursor:wait}
 .ir-option-chart{border:1px solid #334155;background:#091629;padding:12px;border-radius:12px;margin:12px 0 18px;min-height:100px;font-size:13px;color:#94a3b8}
 .ir-option-chart-svg{width:100%;height:auto;max-height:280px;display:block}
 .ir-option-chart p{margin:8px 0 0}
-.ir-advanced-toggle{margin-top:22px}
 @media(max-width:760px){.ir-auto-controls{grid-template-columns:1fr}.ir-auto-option-panel>h2{flex-wrap:wrap}}
 
 .ir-mcx-evidence{margin:18px 0;padding:16px;border:1px solid #344863;border-radius:12px;background:#0b1929}

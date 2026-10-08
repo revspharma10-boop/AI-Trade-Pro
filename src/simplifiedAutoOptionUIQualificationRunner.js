@@ -1,0 +1,27 @@
+// Guard against accidentally restoring the legacy advanced-search interface.
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=path=>readFileSync(new URL(path,import.meta.url),'utf8');
+const entry=read('./intradayRecommendationsUI.js');
+const form=read('./autoOptionResearchUI.js');
+const demo=read('./indexDemoSessionUI.js');
+const backend=read('../server/upstoxOAuthCallbackServer.js');
+const signal=read('./services/autoOptionResearchEngine.js');
+assert.match(entry,/mountAutoOptionResearch\(\)/);
+assert.match(entry,/mountIndexDemoJournal\(\)/);
+assert.doesNotMatch(entry,/mountIntradayRecommendations\(\)/);
+assert.doesNotMatch(entry,/ir-kind|ir-find|ir-contract|ir-interval/);
+assert.match(form,/id="ir-auto-type"/);
+assert.match(form,/id="ir-auto-symbol"/);
+assert.match(form,/id="ir-auto-analyze"/);
+assert.match(form,/Connect Upstox/);
+assert.match(form,/REAL ORDERS BLOCKED/);
+assert.match(form,/MCX Commodity Options/);
+assert.match(form,/NIFTY \/ BANKNIFTY \/ SENSEX/);
+assert.doesNotMatch(form,/ir-auto-advanced|Show advanced research controls|oldPanels/);
+assert.match(demo,/Arm tomorrow.s paper demo/);
+assert.match(demo,/Export CSV/);
+assert.match(backend,/\/api\/upstox\/derivative-search/);
+assert.match(backend,/\/api\/upstox\/option-contracts/);
+assert.match(signal,/orderSubmissionAllowed:false/);
+console.log('SIMPLE AUTO OPTION UI QUALIFICATION PASSED: legacy controls removed, demo and backend lookups retained, real orders blocked');

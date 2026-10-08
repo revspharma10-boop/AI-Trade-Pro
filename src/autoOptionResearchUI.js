@@ -52,26 +52,32 @@ function candlesChart(container,raw,asOf){
  container.append(svg,element('p',valid.length+' completed 5m candles • Last close '+fmt(valid.at(-1).close)+' • '+time(Date.parse(valid.at(-1).datetime))+' IST','ir-muted'));
 }
 export function mountAutoOptionResearch(){
- const legacy=document.querySelector('#intraday-recommendation-app .ir-app');
- if(!legacy)return;
- const oldPanels=[...legacy.querySelectorAll(':scope > section')];
- oldPanels.forEach(p=>p.hidden=true);
+ const root=document.querySelector('#intraday-recommendation-app');
+ if(!root)return;
+ // Only automatic CE/PE research and the paper-demo journal are mounted.
+ // Existing contract search and analysis services remain available to the backend.
+ root.innerHTML='<main class="ir-app">'+
+  '<header class="ir-header"><span class="ir-logo">↗</span><div>'+
+  '<h1>AI TRADE PRO</h1><p>Automatic intraday CE/PE research • Paper demo</p></div>'+
+  '<span class="ir-safety">REAL ORDERS BLOCKED</span></header>'+
+  '<footer>Upstox read-only market data • Real orders disabled</footer></main>';
+ const app=root.querySelector('.ir-app');
  const panel=document.createElement('section');panel.className='ir-panel ir-auto-option-panel';
  panel.innerHTML=[
   '<h2>One-click CALL / PUT research <span class="ir-safety">PAPER ONLY</span></h2>',
   '<p class="ir-muted">Choose just the instrument type and symbol. NSE and MCX research require fresh candles and an authenticated Upstox data connection.</p>',
   '<div class="ir-auto-controls"><label>Instrument type<select id="ir-auto-type"><option value="INDEX">NIFTY / BANKNIFTY / SENSEX Options — Auto CE/PE</option><option value="STOCK">NSE Stock Options — Auto CE/PE</option><option value="MCX">MCX Commodity Options — Auto CE/PE</option></select></label>',
   '<label>Symbol<input id="ir-auto-symbol" value="NIFTY" maxlength="35" autocomplete="off" spellcheck="false" placeholder="NIFTY / RELIANCE / GOLD / SILVER"></label></div>',
-  '<div class="ir-actions"><button class="ir-primary" id="ir-auto-analyze" type="button">Analyze chart &amp; find CE / PE</button></div>',
+  '<div class="ir-actions"><button class="ir-primary" id="ir-auto-analyze" type="button">Analyze chart &amp; find CE / PE</button><a href="https://ai-trade-pro-oauth.onrender.com/auth/upstox/start" target="_blank" rel="noopener noreferrer">Connect Upstox</a></div>',
   '<p id="ir-auto-status" class="ir-status" role="status" aria-live="polite">Select instrument and symbol, then analyze.</p>',
   '<div class="ir-decision ir-option-result"><h3>Option research result</h3><span class="ir-paper-wait" id="ir-auto-direction">WAIT</span></div>',
   '<p class="ir-paper-warning">Illustrative long-option premium prices, not instructions or order previews. ₹50,000 capital, ₹500 planned risk. Real trading is disabled.</p>',
   '<h3>Underlying 5-minute candle chart</h3><div class="ir-option-chart" id="ir-auto-chart">Awaiting fresh market data.</div>',
   '<section id="ir-mcx-evidence" class="ir-mcx-evidence" hidden><h3>MCX futures technical evidence</h3><div id="ir-mcx-facts" class="ir-facts"></div><h3>CALL vs PUT confirmation checklist</h3><p class="ir-muted" id="ir-mcx-confirm-summary"></p><div id="ir-mcx-checks" class="ir-mcx-checks"></div></section>',
   '<div id="ir-auto-results" class="ir-facts"></div><h3>Qualification and WAIT reasons</h3><ul id="ir-auto-blocks" class="ir-reasons"></ul>',
-  '<button class="ir-secondary ir-advanced-toggle" id="ir-auto-advanced" type="button" aria-expanded="false">Show advanced research controls</button>'
+  '<p class="ir-note">Contract discovery, option selection and risk checks run automatically. Manual advanced search is not required.</p>'
  ].join('');
- const header=legacy.querySelector('.ir-header');header.insertAdjacentElement('afterend',panel);
+ const header=app.querySelector('.ir-header');header.insertAdjacentElement('afterend',panel);
  const find=id=>panel.querySelector('#'+id),type=find('ir-auto-type'),symbol=find('ir-auto-symbol');
  const button=find('ir-auto-analyze'),status=find('ir-auto-status'),result=find('ir-auto-results');
  const blocks=find('ir-auto-blocks'),label=find('ir-auto-direction'),chart=find('ir-auto-chart');
@@ -117,12 +123,6 @@ export function mountAutoOptionResearch(){
  };
  type.addEventListener('change',()=>{symbol.value=type.value==='INDEX'?'NIFTY':type.value==='MCX'?'GOLD':'RELIANCE';reset();});
  symbol.addEventListener('input',reset);
- find('ir-auto-advanced').addEventListener('click',()=>{
-  const visible=oldPanels[0]?.hidden!==false;
-  oldPanels.forEach(p=>p.hidden=!visible);
-  const toggle=find('ir-auto-advanced');toggle.setAttribute('aria-expanded',String(visible));
-  toggle.textContent=visible?'Hide advanced research controls':'Show advanced research controls';
- });
  function showPlan(plan=null,contract=null,issues=[]){
   result.replaceChildren();blocks.replaceChildren();
   const available=plan?.status==='UNVALIDATED_PAPER_LEVELS';
