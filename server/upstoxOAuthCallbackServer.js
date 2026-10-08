@@ -300,7 +300,7 @@ const marginEstimateCache=new Map();
 async function readOnlyMarginEstimate({instrumentKey,side,quantity,price}={}){
   const key=String(instrumentKey||'').trim(),direction=String(side||'').toUpperCase();
   const qty=Number(quantity),value=Number(price);
-  if(!/^(MCX_FO|NSE_FO|NSE_EQ)\\|[A-Za-z0-9_]+$/.test(key)||
+  if(!/^(MCX_FO|NSE_FO|NSE_EQ)\|[A-Za-z0-9_]+$/.test(key)||
      !['BUY','SELL'].includes(direction)||!Number.isInteger(qty)||qty<1||qty>100000||
      !Number.isFinite(value)||value<=0||value>100000000)
     throw new Error('INVALID_PAPER_MARGIN_REQUEST');
