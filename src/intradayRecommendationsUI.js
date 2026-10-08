@@ -1,11 +1,12 @@
 import './intradayRecommendations.css';
 import {evaluateIntradayRecommendation} from './services/intradayRecommendationEngine.js';
 import {deriveIntradayPaperSignal} from './services/intradayPaperSignalEngine.js';
+import {calculateIntradayPaperTradePlan} from './services/intradayPaperTradePlan.js';
 import {analyzeIntradayCandles} from './services/intradayTechnicalEngine.js';
 import {marketClockState} from './services/intradayMarketClock.js';
 import {assessIntradayInstrumentRisk,extractUpstoxLiveQuoteEvidence} from './services/intradayRiskEngine.js';
 import {classifyIntradayInstrument} from './services/intradayInstrumentContract.js';
-import {getUpstoxReadOnlyStatus,getUpstoxIntradayCandles,getUpstoxLiveQuote,getUpstoxOptionGreeks,searchUpstoxEquity,searchUpstoxDerivatives} from './services/upstoxReadOnlyMarketData.js';
+import {getUpstoxReadOnlyStatus,getUpstoxIntradayCandles,getUpstoxLiveQuote,getUpstoxOptionGreeks,getUpstoxPaperMarginQuote,searchUpstoxEquity,searchUpstoxDerivatives} from './services/upstoxReadOnlyMarketData.js';
 
 function addRow(parent,label,value){
  const el=document.createElement('div');el.className='ir-fact';
@@ -14,6 +15,8 @@ function addRow(parent,label,value){
  el.append(title,content);parent.append(el);
 }
 function addReason(node,reason){const li=document.createElement('li');li.textContent=String(reason);node.append(li);}
+const INR=n=>typeof n==='number'&&Number.isFinite(n)?
+ '₹'+n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'Not verified';
 export function mountIntradayRecommendations(){
  const root=document.querySelector('#intraday-recommendation-app');
  if(!root)return;
@@ -31,6 +34,9 @@ export function mountIntradayRecommendations(){
  '<section class="ir-panel ir-paper-panel" aria-label="Research-only directional signals"><div class="ir-decision"><h2>Paper Research Signal</h2><span id="ir-paper-direction" class="ir-paper-wait">WAIT</span></div>',
  '<p class="ir-paper-warning">PROVISIONAL &amp; UNVALIDATED. A BUY/SELL here is a research watch signal, NOT a qualified trade, an order or an instruction to trade. Full risk gate remains WAIT.</p>',
  '<div id="ir-paper-facts" class="ir-facts"></div><ul id="ir-paper-reasons" class="ir-reasons"></ul></section>',
+ '<section class="ir-panel ir-tradeplan-panel" aria-label="Paper intraday price and lot calculator"><h2>Paper Intraday Trade Plan — ₹50,000 Capital</h2>',
+ '<p class="ir-tradeplan-warning">₹500 maximum risk per idea (1% of capital). Illustrative price levels only; quotes and margin estimates can change. Actual broker funds, fees, slippage, tender risk, and strategy are NOT verified. Approved trade lots always remain zero.</p>',
+ '<div id="ir-plan-facts" class="ir-facts"></div><h3>Plan qualification checks</h3><ul id="ir-plan-reasons" class="ir-reasons"></ul></section>',
  '<section class="ir-panel"><div class="ir-decision"><h2>AI Decision</h2><span id="ir-decision">WAIT</span></div>',
  '<div id="ir-facts" class="ir-facts"></div><h3>Intraday technical evidence</h3><div id="ir-technical" class="ir-facts"></div>',
  '<h3>Qualification reasons</h3><ul id="ir-reasons" class="ir-reasons"><li>Run analysis to see evidence.</li></ul>',
@@ -41,12 +47,46 @@ export function mountIntradayRecommendations(){
  const kind=$('#ir-kind'),symbol=$('#ir-symbol'),contract=$('#ir-contract'),status=$('#ir-status');
  let contracts=[],timer=null,autoRefresh=false,requestVersion=0;
  const refreshButton=$('#ir-auto');
- function resetPaperSignal(){
+ function resetPaperTradePlan(){
+  const facts=$('#ir-plan-facts'),reasons=$('#ir-plan-reasons');
+  facts.replaceChildren();reasons.replaceChildren();
+  addRow(facts,'Capital allocation',INR(50000));
+  addRow(facts,'Maximum research loss (1%)',INR(500));
+  addRow(facts,'Approved / live lots','0 — REAL ORDERS BLOCKED');
+  addReason(reasons,'A fresh provisional paper BUY or SELL signal is required before calculating levels.');
+ }
+ function showPaperTradePlan(plan,marginError=null){
+  const facts=$('#ir-plan-facts'),reasons=$('#ir-plan-reasons');
+  facts.replaceChildren();reasons.replaceChildren();
+  [['Capital allocation',INR(plan.capital)],['Maximum research loss (1%)',INR(plan.riskBudget)],
+    ['Paper direction',plan.direction],
+    ['Illustrative entry — NOT an order',INR(plan.entry)],
+    ['ATR stop loss (1.5×) — hypothetical',INR(plan.stopLoss)],
+    ['Target 1 (1.5R) — hypothetical',INR(plan.target1)],
+    ['Target 2 (2R) — hypothetical',INR(plan.target2)],
+    ['Exchange price tick — provisional',INR(plan.exchangeTick)],
+    ['Exchange lot size',plan.lotSize??'Not verified'],
+    ['Contract quantity multiplier',plan.qtyMultiplier??'Not verified'],
+    ['Indicative gross risk per 1 lot',INR(plan.grossLossPerLot)],
+    ['Indicative risk + 2-tick slippage reserve / lot',INR(plan.estimatedLossPerLotWithSlippage)],
+    ['Risk-budget maximum lots (brokerage excluded)',plan.preliminaryRiskBasedLots??'Not calculable'],
+    ['Broker required margin per lot (intraday)',INR(plan.brokerMarginPerLot)],
+    ['₹50k / broker margin: theoretical lot cap',plan.theoreticalBudgetMarginLots??'Not verified'],
+    ['Combined theoretical cap (NOT authorized)',plan.riskAndMarginEnvelopeLots??'Not verified'],
+    ['Actual Upstox available margin',plan.brokerAvailableMarginVerified?INR(plan.brokerAvailableMargin):'NOT VERIFIED'],
+    ['Approved / live lots','0 — REAL ORDERS BLOCKED'],
+    ['Trading strategy','NOT BACKTESTED / NOT APPROVED']]
+    .forEach(([name,value])=>addRow(facts,name,value));
+  [...new Set([...(plan.reasons||[]),...(marginError?['UPSTOX_MARGIN_QUOTE: '+marginError]:[])])]
+   .forEach(reason=>addReason(reasons,reason));
+ }
+  function resetPaperSignal(){
   const label=$('#ir-paper-direction');
   label.textContent='WAIT';label.className='ir-paper-wait';
   $('#ir-paper-facts').replaceChildren();
   $('#ir-paper-reasons').replaceChildren();
   addReason($('#ir-paper-reasons'),'Select an instrument and analyze fresh market data.');
+  resetPaperTradePlan();
  }
  function showPaperSignal(signal){
   const label=$('#ir-paper-direction');
@@ -133,6 +173,7 @@ export function mountIntradayRecommendations(){
   button.disabled=true;status.textContent='Checking read-only market data…';
   resetPaperSignal();
   $('#ir-facts').replaceChildren();$('#ir-technical').replaceChildren();$('#ir-reasons').replaceChildren();
+  resetPaperTradePlan();
   let instrument={segment:'NSE_EQ',tradingSymbol:symbol.value.trim().toUpperCase()};
   let connection='BACKEND_UNREACHABLE',dataStatus='NOT_LOADED',candles=[],quote=null,research=null,risk=null,greeks=null;
   let session=marketClockState({segment:'NSE_EQ',asOf:now});
@@ -143,7 +184,7 @@ export function mountIntradayRecommendations(){
     let key=null;
     if(kind.value==='NSE_EQ'){
      const match=await searchUpstoxEquity(instrument.tradingSymbol);
-     instrument={segment:'NSE_EQ',instrumentType:'EQ',tradingSymbol:match.tradingSymbol};key=match.instrumentKey;
+     instrument={segment:'NSE_EQ',instrumentType:'EQ',tradingSymbol:match.tradingSymbol,instrumentKey:match.instrumentKey};key=match.instrumentKey;
     }else{
      const i=Number(contract.value);
      if(contract.value===''||!Number.isInteger(i)||!contracts[i])throw new Error('SELECT_EXACT_DERIVATIVE_CONTRACT');
@@ -172,6 +213,25 @@ export function mountIntradayRecommendations(){
     spreadPercent:quote?.spreadPercent,research,risk});
   const paperSignal=deriveIntradayPaperSignal({instrument,research,quote,session,asOf:now});
   showPaperSignal(paperSignal);
+  let tradePlan=calculateIntradayPaperTradePlan({signal:paperSignal,instrument,quote,research,
+    capital:50000,riskPercent:1,asOf:now});
+  showPaperTradePlan(tradePlan);
+  if(tradePlan.status==='PAPER_LEVELS_ONLY'&&Number.isInteger(tradePlan.lotSize)&&
+      tradePlan.lotSize>0&&instrument.instrumentKey){
+    try{
+      // Upstox charge/margin is a read-only estimate even though the broker's
+      // calculation endpoint uses HTTP POST. It does not place any order.
+      const marginQuote=await getUpstoxPaperMarginQuote(instrument.instrumentKey,
+        paperSignal.direction,tradePlan.lotSize,tradePlan.entry);
+      if(version!==requestVersion){button.disabled=false;return;}
+      tradePlan=calculateIntradayPaperTradePlan({signal:paperSignal,instrument,quote,research,
+        marginQuote,capital:50000,riskPercent:1,asOf:now});
+      showPaperTradePlan(tradePlan);
+    }catch(error){
+      if(version!==requestVersion){button.disabled=false;return;}
+      showPaperTradePlan(tradePlan,String(error?.message||'MARGIN_UNAVAILABLE'));
+    }
+  }
   const facts=$('#ir-facts'),technical=$('#ir-technical'),reasonsNode=$('#ir-reasons');
   [['Decision',decision.recommendation],['Instrument',decision.kind+' • '+decision.symbol],
     ['Upstox session',connection],['Intraday candles',dataStatus],
