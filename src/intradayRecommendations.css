@@ -35,6 +35,13 @@ button:disabled{opacity:.55;cursor:wait}
 .ir-paper-wait{background:#44391c;border-color:#a16207!important;color:#fbbf24}
 .ir-paper-panel .ir-reasons{margin-bottom:0}
 .ir-paper-panel .ir-reasons li{border-left-color:#38bdf8}
+.ir-tradeplan-panel{border-color:#52657a;background:#111e33}
+.ir-tradeplan-panel h2{color:#f1f5f9}
+.ir-tradeplan-warning{color:#fcd34d;border-left:3px solid #eab308;padding:9px 12px;
+ background:#42340d33;font-size:12px;line-height:1.65;margin:0 0 18px}
+.ir-tradeplan-panel .ir-reasons li{border-left-color:#fb923c}
+.ir-tradeplan-panel .ir-fact strong{max-width:60%}
+
 
 .ir-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
 .ir-fact{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid #253550;background:#0e1a2c;border-radius:8px;padding:13px 14px;overflow-wrap:anywhere}
