@@ -45,7 +45,7 @@ const miniResearch={valid:true,snapshot:{atr14:20,close:149600}};
 const minQuote={...quote,bid:149599.5,ask:149600.5};
 const miniSignal=calculateIntradayPaperTradePlan({...base,instrument:mini,research:miniResearch,quote:minQuote});
 assert.equal(miniSignal.preliminaryRiskBasedLots,1);
-const freshMargin={instrumentKey:mini.instrumentKey,direction:'BUY',quantity:1,product:'I',
+const freshMargin={instrumentKey:mini.instrumentKey,direction:'BUY',quantity:1,product:'I',price:miniSignal.entry,
  requiredMargin:20000,asOf:now+1000,verified:true};
 const margin=calculateIntradayPaperTradePlan({...base,instrument:mini,research:miniResearch,
  quote:minQuote,marginQuote:freshMargin});
@@ -54,6 +54,7 @@ assert.equal(margin.brokerMarginPerLot,20000);
 assert.equal(margin.theoreticalBudgetMarginLots,2);
 assert.equal(margin.riskAndMarginEnvelopeLots,1);
 assert.equal(margin.approvedLots,0,'Broker margin estimate does not prove account funds');
+assert.equal(margin.contractMultiplierIndependentlyVerified,false);
 assert.ok(margin.reasons.includes('ACTUAL_UPSTOX_AVAILABLE_FUNDS_NOT_VERIFIED'));
 const notEnough=calculateIntradayPaperTradePlan({...base,instrument:mini,research:miniResearch,
  quote:minQuote,marginQuote:{...freshMargin,requiredMargin:100000}});
@@ -62,6 +63,12 @@ assert.equal(notEnough.riskAndMarginEnvelopeLots,0);
 const staleMargin=calculateIntradayPaperTradePlan({...base,instrument:mini,research:miniResearch,
  quote:minQuote,marginQuote:{...freshMargin,asOf:now-1000000}});
 assert.equal(staleMargin.marginEstimateVerified,false);
+const wrongPrice=calculateIntradayPaperTradePlan({...base,instrument:mini,research:miniResearch,
+ quote:minQuote,marginQuote:{...freshMargin,price:miniSignal.entry+100}});
+assert.equal(wrongPrice.marginEstimateVerified,false,'Margin quote must match the risk engine entry');
+const futureDatedMargin=calculateIntradayPaperTradePlan({...base,instrument:mini,research:miniResearch,
+ quote:minQuote,marginQuote:{...freshMargin,asOf:now+15000}});
+assert.equal(futureDatedMargin.marginEstimateVerified,false,'Future-dated margin quote must fail closed');
 const wrongContract=calculateIntradayPaperTradePlan({...base,instrument:mini,research:miniResearch,
  quote:minQuote,marginQuote:{...freshMargin,instrumentKey:'MCX_FO|BAD'}});
 assert.equal(wrongContract.marginEstimateVerified,false);
@@ -73,10 +80,24 @@ const verifiedFunds=calculateIntradayPaperTradePlan({...base,instrument:mini,res
  brokerAvailableMarginVerified:true});
 assert.equal(verifiedFunds.brokerFundsMathematicalLots,1);
 assert.equal(verifiedFunds.approvedLots,0,'Execution stays disabled even when funds metadata provided');
+const equity={segment:'NSE_EQ',instrumentType:'EQ',tradingSymbol:'RELIANCE',instrumentKey:'NSE_EQ|INE002A01018',tickSize:5};
+const equityQuote={...quote,lastPrice:100.02,bid:100.01,ask:100.02};
+const equityResearch={valid:true,snapshot:{atr14:1,close:100.02}};
+const equityPlan=calculateIntradayPaperTradePlan({...base,instrument:equity,quote:equityQuote,research:equityResearch});
+assert.equal(equityPlan.status,'PAPER_LEVELS_ONLY');
+assert.equal(equityPlan.exchangeTick,0.05,'NSE equity uses its own exchange tick, never a hardcoded ₹0.01');
+assert.equal(equityPlan.entry,100.05);
+assert.equal(equityPlan.lotSize,1);
+assert.equal(equityPlan.qtyMultiplier,1);
+assert.equal(equityPlan.approvedLots,0);
+const equityNoTick=calculateIntradayPaperTradePlan({...base,instrument:{...equity,tickSize:null},quote:equityQuote,research:equityResearch});
+assert.equal(equityNoTick.status,'WAIT');
+assert.ok(equityNoTick.reasons.includes('UPSTOX_EXCHANGE_TICK_REQUIRED'));
 const cases=[
  {signal:{direction:'WAIT',status:'BLOCKED'},expected:'PROVISIONAL_BUY_OR_SELL_SIGNAL_REQUIRED'},
  {research:{valid:false,snapshot:{atr14:125,close:149600}},expected:'VALID_ATR_REQUIRED'},
  {quote:{...quote,timestamp:now-200000},expected:'FRESH_VERIFIED_QUOTE_REQUIRED'},
+ {quote:{...quote,bid:149605,ask:149600},expected:'FRESH_VERIFIED_QUOTE_REQUIRED'},
  {quote:{...quote,lastTradeTime:now-200000},expected:'FRESH_VERIFIED_QUOTE_REQUIRED'},
  {instrument:{...gold,qtyMultiplier:null},expected:'LOT_SIZE_OR_QUANTITY_MULTIPLIER_UNVERIFIED'},
  {instrument:{...gold,tickSize:null},expected:'UPSTOX_EXCHANGE_TICK_REQUIRED'},

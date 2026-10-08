@@ -64,9 +64,10 @@ export function mountIntradayRecommendations(){
     ['ATR stop loss (1.5×) — hypothetical',INR(plan.stopLoss)],
     ['Target 1 (1.5R) — hypothetical',INR(plan.target1)],
     ['Target 2 (2R) — hypothetical',INR(plan.target2)],
-    ['Exchange price tick — provisional',INR(plan.exchangeTick)],
+    ['Exchange price tick (feed-derived) — provisional',INR(plan.exchangeTick)],
     ['Exchange lot size',plan.lotSize??'Not verified'],
-    ['Contract quantity multiplier',plan.qtyMultiplier??'Not verified'],
+    ['Contract quantity multiplier (Upstox metadata)',plan.qtyMultiplier??'Not verified'],
+     ['Multiplier independently exchange verified',plan.contractMultiplierIndependentlyVerified?'YES':'NO'],
     ['Indicative gross risk per 1 lot',INR(plan.grossLossPerLot)],
     ['Indicative risk + 2-tick slippage reserve / lot',INR(plan.estimatedLossPerLotWithSlippage)],
     ['Risk-budget maximum lots (brokerage excluded)',plan.preliminaryRiskBasedLots??'Not calculable'],
@@ -184,7 +185,7 @@ export function mountIntradayRecommendations(){
     let key=null;
     if(kind.value==='NSE_EQ'){
      const match=await searchUpstoxEquity(instrument.tradingSymbol);
-     instrument={segment:'NSE_EQ',instrumentType:'EQ',tradingSymbol:match.tradingSymbol,instrumentKey:match.instrumentKey};key=match.instrumentKey;
+     instrument={segment:'NSE_EQ',instrumentType:'EQ',tradingSymbol:match.tradingSymbol,instrumentKey:match.instrumentKey,tickSize:match.tickSize};key=match.instrumentKey;
     }else{
      const i=Number(contract.value);
      if(contract.value===''||!Number.isInteger(i)||!contracts[i])throw new Error('SELECT_EXACT_DERIVATIVE_CONTRACT');
