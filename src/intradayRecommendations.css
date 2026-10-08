@@ -26,6 +26,16 @@ button:disabled{opacity:.55;cursor:wait}
 .ir-status{margin:18px 0 0;font-size:13px;color:#bfdbfe;overflow-wrap:anywhere}
 .ir-decision{display:flex;align-items:center;justify-content:space-between;gap:10px}
 #ir-decision{color:#fbbf24;background:#44391c;border:1px solid #a16207;border-radius:8px;font-size:14px;font-weight:800;padding:9px 18px}
+/* Research-only directional watch. NOT an execution recommendation. */
+.ir-paper-panel{border-color:#375b76;background:linear-gradient(115deg,#122b3f,#111e33 75%)}
+.ir-paper-warning{font-size:12px;line-height:1.6;letter-spacing:.015em;color:#fcd34d;margin:0 0 16px}
+#ir-paper-direction{font-weight:800;letter-spacing:.04em;border:1px solid;border-radius:10px;padding:10px 22px;font-size:18px}
+.ir-paper-buy{background:#073b2b;border-color:#059669!important;color:#6ee7b7}
+.ir-paper-sell{background:#4a1721;border-color:#f43f5e!important;color:#fda4af}
+.ir-paper-wait{background:#44391c;border-color:#a16207!important;color:#fbbf24}
+.ir-paper-panel .ir-reasons{margin-bottom:0}
+.ir-paper-panel .ir-reasons li{border-left-color:#38bdf8}
+
 .ir-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
 .ir-fact{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid #253550;background:#0e1a2c;border-radius:8px;padding:13px 14px;overflow-wrap:anywhere}
 .ir-fact span{font-size:12px;color:#94a3b8}.ir-fact strong{font-size:12px;color:#f8fafc;text-align:right}
