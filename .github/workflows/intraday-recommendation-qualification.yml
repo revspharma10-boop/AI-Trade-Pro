@@ -15,6 +15,7 @@ jobs:
       - run: node src/intradayRecommendationQualificationRunner.js
       - run: node src/intradayInstrumentQualificationRunner.js
       - run: node src/intradayTechnicalQualificationRunner.js
+      - run: node src/intradayPerformanceQualificationRunner.js
       - run: node --check server/upstoxOAuthCallbackServer.js
       - run: node --check src/intradayRecommendationsUI.js
       - run: npm run build
