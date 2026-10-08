@@ -79,7 +79,7 @@ export async function searchUpstoxDerivatives(query,type,exchange='NSE'){
  const params=new URLSearchParams({query:q,type:kind,exchange});
  const payload=await request('/api/upstox/derivative-search?'+params.toString());
  if(!Array.isArray(payload.contracts))throw new Error('UPSTOX_DERIVATIVE_SEARCH_FAILED');
- return {contracts:payload.contracts,orderSubmissionAllowed:false};
+ return {contracts:payload.contracts,diagnostics:payload.diagnostics??null,orderSubmissionAllowed:false};
 }
 
 
