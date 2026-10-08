@@ -28,7 +28,7 @@ function json(res, status, payload) {
     'Cache-Control': 'no-store',
     'Referrer-Policy': 'no-referrer',
     'X-Content-Type-Options': 'nosniff',
-    ...(process.env.APP_ORIGIN ? { 'Access-Control-Allow-Origin': process.env.APP_ORIGIN, 'Vary': 'Origin' } : {})
+    ...( { 'Access-Control-Allow-Origin': 'https://revspharma10-boop.github.io', 'Vary': 'Origin' } )
   });
   res.end(JSON.stringify(payload));
 }
