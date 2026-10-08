@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {evaluateIntradayRecommendation} from './services/intradayRecommendationEngine.js';
+const base={instrument:{segment:'NSE_EQ',tradingSymbol:'RELIANCE'},sessionOpen:true,spreadPercent:0.1};
+const t=Date.now();const candles=Array.from({length:35},(_,i)=>({datetime:new Date(t-(34-i)*60000).toISOString(),open:100,high:101,low:99,close:100,volume:10000}));
+const result=evaluateIntradayRecommendation({...base,candles,asOf:t});
+assert.equal(result.recommendation,'WAIT');assert.equal(result.confidence,null);assert.equal(result.orderSubmissionAllowed,false);assert.equal(result.estimatedSuccessProbability,null);
+assert.ok(result.reasons.includes('STRATEGY_NOT_BACKTESTED_AND_FORWARD_VALIDATED'));
+assert.ok(evaluateIntradayRecommendation({...base,candles:[]}).reasons.includes('INSUFFICIENT_INTRADAY_CANDLES'));
+assert.ok(evaluateIntradayRecommendation({...base,candles,asOf:t+300000}).reasons.includes('STALE_OR_FUTURE_CANDLE'));
+assert.ok(evaluateIntradayRecommendation({...base,candles,spreadPercent:undefined}).reasons.includes('SPREAD_NOT_VERIFIED'));
+assert.ok(evaluateIntradayRecommendation({...base,instrument:{segment:'NSE_FO',instrumentType:'CE',tradingSymbol:'TEST',expiry:'2026-10-29',lotSize:75,strike:100},candles}).reasons.includes('DERIVATIVE_RISK_ENGINE_NOT_QUALIFIED'));
+console.log('Intraday recommendation safety qualification PASSED (7 assertions)');
