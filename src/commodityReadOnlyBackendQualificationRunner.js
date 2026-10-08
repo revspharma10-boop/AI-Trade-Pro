@@ -89,6 +89,14 @@ try{
  assert.equal(callback.body.includes(fakeToken),false,'OAuth callback must not leak token');
  const authenticated=await get('/api/upstox/status');
  assert.equal(authenticated.json.authenticated,true);
+ assert.equal(authenticated.json.authMode,'OAUTH_DAILY');
+ assert.equal(authenticated.json.tokenVerified,true);
+ assert.ok(authenticated.json.tokenExpiresAt,'Daily OAuth token must report actual expiry');
+ const expires=new Date(authenticated.json.tokenExpiresAt);
+ assert.equal(expires.getUTCHours(),22,'03:30 IST corresponds to 22:00 UTC');
+ assert.equal(expires.getUTCMinutes(),0);
+ assert.ok(expires.getTime()>Date.now()&&expires.getTime()-Date.now()<=86400000);
+
  const fut=await get('/api/upstox/derivative-search?query=GOLD&type=FUT&exchange=MCX');
  assert.equal(fut.response.status,200,JSON.stringify(fut.json));
  assert.equal(fut.json.contracts.length,1);
