@@ -143,7 +143,7 @@ async function searchIntradayDerivativeContracts(query,type,exchange='NSE'){
   url.searchParams.set('query',q);
   url.searchParams.set('exchanges',market);
   url.searchParams.set('segments','FO');
-  url.searchParams.set('instrument_types',kind);
+  if(kind==='CE'||kind==='PE')url.searchParams.set('instrument_types',kind);
   // MCX GOLD/SILVER futures can skip calendar months; current_month may return none.
   // Search eligible listed contracts and validate exact expiry downstream.
   if(market!=='MCX')url.searchParams.set('expiry','current_month');
