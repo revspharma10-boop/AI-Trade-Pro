@@ -8,12 +8,12 @@ const aligned=(value,tick,mode)=>inr((mode==='up'?Math.ceil(value/tick-1e-9):Mat
 export const AUTO_OPTION_SAFETY=Object.freeze({paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false,productionRealTradingEnabled:false});
 export function deriveAutoOptionDirection({research=null,underlyingQuote=null,underlyingSegment='',session=null,asOf=Date.now()}={}){
  const now=Number(new Date(asOf)),s=research?.snapshot,issues=[];
- if(!session?.open)issues.push('NSE_SESSION_NOT_OPEN');
+ if(!session?.open)issues.push('INDEX_SESSION_NOT_OPEN');
  if(!research?.valid||!s||research.completedBars<35)issues.push('FRESH_UNDERLYING_5M_CANDLES_REQUIRED');
  if(!underlyingQuote||!positive(underlyingQuote.lastPrice)||!ok(underlyingQuote.timestamp)||
     underlyingQuote.timestamp>now+10000||now-underlyingQuote.timestamp>120000)
    issues.push('FRESH_UNDERLYING_PRICE_REQUIRED');
- const index=underlyingSegment==='NSE_INDEX';
+ const index=['NSE_INDEX','BSE_INDEX'].includes(underlyingSegment);
  if(!index&&(!underlyingQuote?.valid||!s?.liquidityResearchPass||!positive(s?.vwap)))issues.push('UNDERLYING_LIQUIDITY_OR_VWAP_UNVERIFIED');
  if(!s||![s.close,s.ema9,s.ema21,s.atr14].every(positive)||!ok(s.rsi14)||!ok(s.macdHistogram))
    issues.push('TECHNICAL_EVIDENCE_INCOMPLETE');
@@ -32,11 +32,12 @@ export function chooseAutoOptionContract({contracts=[],underlyingKey='',spot=nul
  const now=Number(new Date(asOf)),date=todayIST(now);
  if(!['CE','PE'].includes(direction)||!positive(spot)||!underlyingKey)
   return {contract:null,reasons:['DIRECTION_OR_SPOT_UNVERIFIED']};
+ const expected=underlyingKey.startsWith('BSE_INDEX|')?'BSE_FO':'NSE_FO';
  const candidates=(Array.isArray(contracts)?contracts:[]).filter(c=>
-   c&&c.segment==='NSE_FO'&&c.underlyingKey===underlyingKey&&
+   c&&c.segment===expected&&c.underlyingKey===underlyingKey&&
    c.instrumentType===direction&&/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(c.expiry||'')&&
    c.expiry>date&&positive(c.strike)&&Number.isSafeInteger(c.lotSize)&&c.lotSize>0&&
-   positive(tickOf(c))&&/^NSE_FO\|[A-Za-z0-9_]+$/.test(c.instrumentKey||'')&&
+   positive(tickOf(c))&&(String(c.instrumentKey||'').startsWith(expected+'|')&&/^\w+$/.test(String(c.instrumentKey||'').split('|')[1]||''))&&
    typeof c.tradingSymbol==='string'&&c.tradingSymbol.length>0);
  if(!candidates.length)return {contract:null,reasons:['NO_VERIFIED_FUTURE_EXPIRY_OPTION_CONTRACT']};
  const expiry=candidates.map(c=>c.expiry).sort()[0];
@@ -56,10 +57,10 @@ export function calculateAutoOptionPaperPlan({direction='WAIT',contract=null,und
   brokerRequiredMarginPerLot:null,brokerMarginVerified:false,paperEnvelopeLots:null,approvedLots:0,
   availableBrokerFundsVerified:false,feesAndGapsIncluded:false,modelBacktested:false,
   reasons:[],...AUTO_OPTION_SAFETY};
- if(!contract||contract.underlyingKey!==underlyingKey||contract.segment!=='NSE_FO'||contract.instrumentType!==direction||
+ if(!contract||contract.underlyingKey!==underlyingKey||contract.segment!==(underlyingKey.startsWith('BSE_INDEX|')?'BSE_FO':'NSE_FO')||contract.instrumentType!==direction||
     !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(contract?.expiry??'')||contract.expiry<=todayIST(now)||
     !positive(contract.strike)||!Number.isSafeInteger(contract.lotSize)||contract.lotSize<1||
-    !/^NSE_FO\|[A-Za-z0-9_]+$/.test(contract.instrumentKey??''))
+    !/^(NSE_FO|BSE_FO)\|[A-Za-z0-9_]+$/.test(contract.instrumentKey??''))
    reasons.push('EXACT_UNEXPIRED_OPTION_CONTRACT_REQUIRED');
  if(!['CE','PE'].includes(direction))reasons.push('PROVISIONAL_CALL_OR_PUT_DIRECTION_REQUIRED');
  if(capital!==50000||riskBudget!==500)reasons.push('CAPITAL_50000_RISK_500_REQUIRED');

@@ -18,6 +18,8 @@ jobs:
       - run: node src/intradayPaperSignalQualificationRunner.js
       - run: node src/intradayPaperTradePlanQualificationRunner.js
       - run: node src/autoOptionResearchQualificationRunner.js
+      - run: node src/indexDemoJournalQualificationRunner.js
+      - run: node --check src/indexDemoSessionUI.js
       - run: node src/autoOptionBackendQualificationRunner.js
       - run: node src/mcxAutoOptionResearchQualificationRunner.js
       - run: node src/mcxWaitDiagnosticsQualificationRunner.js

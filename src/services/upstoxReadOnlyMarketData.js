@@ -86,15 +86,16 @@ export async function searchUpstoxDerivatives(query,type,exchange='NSE'){
 // Broker margin *requirement* quotation; does not read account funds or place an order.
 export async function searchUpstoxIndex(query){
  const q=String(query||'').trim().toUpperCase();
- if(!['NIFTY','BANKNIFTY','FINNIFTY'].includes(q))throw new Error('SUPPORTED_NSE_INDEX_SYMBOL_REQUIRED');
+ if(!['NIFTY','BANKNIFTY','FINNIFTY','SENSEX'].includes(q))throw new Error('SUPPORTED_INDEX_SYMBOL_REQUIRED');
  const payload=await request('/api/upstox/index-search?query='+encodeURIComponent(q));
- if(payload?.instrument?.segment!=='NSE_INDEX'||!payload.instrument.instrumentKey?.startsWith('NSE_INDEX|'))
+ const segment=q==='SENSEX'?'BSE_INDEX':'NSE_INDEX';
+ if(payload?.instrument?.segment!==segment||!payload.instrument.instrumentKey?.startsWith(segment+'|'))
   throw new Error('INDEX_INSTRUMENT_UNVERIFIED');
  return payload.instrument;
 }
 export async function getUpstoxOptionContracts(underlyingKey){
  const key=String(underlyingKey||'');
- if(!/^(NSE_EQ\|[A-Z0-9]{12}|NSE_INDEX\|[A-Za-z0-9 _-]{1,75})$/.test(key))
+ if(!/^(NSE_EQ\|[A-Z0-9]{12}|(?:NSE|BSE)_INDEX\|[A-Za-z0-9 _-]{1,75})$/.test(key))
   throw new Error('INVALID_OPTION_UNDERLYING_KEY');
  const payload=await request('/api/upstox/option-contracts?underlying_key='+encodeURIComponent(key));
  if(!Array.isArray(payload.contracts))throw new Error('UPSTOX_OPTION_CONTRACT_LOOKUP_FAILED');
@@ -103,7 +104,7 @@ export async function getUpstoxOptionContracts(underlyingKey){
 
 export async function getUpstoxPaperMarginQuote(instrumentKey,side,quantity,price){
  const key=String(instrumentKey||''),direction=String(side||'').toUpperCase();
- if(!/^(NSE_EQ|NSE_FO|MCX_FO)\|[A-Za-z0-9_]+$/.test(key)||
+ if(!/^(NSE_EQ|NSE_FO|MCX_FO|BSE_FO)\|[A-Za-z0-9_]+$/.test(key)||
     !['BUY','SELL'].includes(direction)||!Number.isInteger(quantity)||quantity<1||
     !Number.isFinite(price)||price<=0)throw new Error('INVALID_PAPER_MARGIN_REQUEST');
  const q=new URLSearchParams({instrument_key:key,side:direction,quantity:String(quantity),price:String(price)});
@@ -112,7 +113,7 @@ export async function getUpstoxPaperMarginQuote(instrumentKey,side,quantity,pric
 
 export async function getUpstoxLiveQuote(instrumentKey){
  if(!/^(NSE_EQ|NSE_FO|MCX_FO)\|[A-Za-z0-9_]+$/.test(String(instrumentKey||''))&&
-    !/^NSE_INDEX\|[A-Za-z0-9 _-]{1,75}$/.test(String(instrumentKey||'')))throw new Error('INVALID_INSTRUMENT_KEY');
+    !/^(NSE_INDEX|BSE_INDEX)\|[A-Za-z0-9 _-]{1,75}$/.test(String(instrumentKey||'')))throw new Error('INVALID_INSTRUMENT_KEY');
  const payload=await request('/api/upstox/live-quote?instrument_key='+encodeURIComponent(instrumentKey));
  if(!payload?.quote||payload.quote.instrumentKey!==instrumentKey)throw new Error('UPSTOX_LIVE_QUOTE_EMPTY');
  return {provider:'UPSTOX',mode:'READ_ONLY',...payload.quote,orderSubmissionAllowed:false};

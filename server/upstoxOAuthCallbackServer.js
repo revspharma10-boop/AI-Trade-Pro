@@ -176,31 +176,32 @@ async function searchEquityInstrument(query){
 
 
 const INDEX_ALIASES=Object.freeze({
- NIFTY:['NIFTY','NIFTY50'],BANKNIFTY:['BANKNIFTY','NIFTYBANK'],FINNIFTY:['FINNIFTY','NIFTYFINANCIALSERVICES']
+ NIFTY:['NIFTY','NIFTY50'],BANKNIFTY:['BANKNIFTY','NIFTYBANK'],FINNIFTY:['FINNIFTY','NIFTYFINANCIALSERVICES'],SENSEX:['SENSEX']
 });
 const normalizedSymbol=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 async function searchNseIndexInstrument(query){
- const alias=INDEX_ALIASES[normalizedSymbol(query)];
- if(!alias)throw new Error('SUPPORTED_NSE_INDEX_SYMBOL_REQUIRED');
+ const name=normalizedSymbol(query),alias=INDEX_ALIASES[name];
+ if(!alias)throw new Error('SUPPORTED_INDEX_SYMBOL_REQUIRED');
+ const exchange=name==='SENSEX'?'BSE':'NSE',segment=exchange+'_INDEX';
  const url=new URL('https://api.upstox.com/v2/instruments/search');
- url.searchParams.set('query',String(query).trim());url.searchParams.set('exchanges','NSE');
+ url.searchParams.set('query',String(query).trim());url.searchParams.set('exchanges',exchange);
  url.searchParams.set('segments','INDEX');url.searchParams.set('records','30');
  const response=await fetch(url,{headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()},signal:AbortSignal.timeout(12000)});
  const body=await response.json().catch(()=>({}));
  if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
  if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
  if(!response.ok||body?.status!=='success')throw new Error('UPSTOX_INDEX_SEARCH_UNAVAILABLE');
- const found=(Array.isArray(body.data)?body.data:[]).find(x=>x.segment==='NSE_INDEX'&&
-   String(x.instrument_key||'').startsWith('NSE_INDEX|')&&
+ const found=(Array.isArray(body.data)?body.data:[]).find(x=>x.segment===segment&&
+   String(x.instrument_key||'').startsWith(segment+'|')&&
    (alias.includes(normalizedSymbol(x.trading_symbol))||alias.includes(normalizedSymbol(x.name))));
  if(!found)throw new Error('EXACT_INDEX_INSTRUMENT_NOT_RETURNED');
  markUpstoxReadVerified();
- return {segment:'NSE_INDEX',tradingSymbol:found.trading_symbol||String(query).toUpperCase(),
+ return {segment,exchange,tradingSymbol:found.trading_symbol||String(query).toUpperCase(),
   instrumentKey:found.instrument_key,underlyingSymbol:normalizedSymbol(query)};
 }
 async function readOnlyNseOptionContracts(underlyingKey){
  const key=String(underlyingKey||'');
- if(!/^(NSE_EQ\|[A-Z0-9]{12}|NSE_INDEX\|[A-Za-z0-9 _-]{1,75})$/.test(key))
+ if(!/^(NSE_EQ\|[A-Z0-9]{12}|(?:NSE|BSE)_INDEX\|[A-Za-z0-9 _-]{1,75})$/.test(key))
    throw new Error('INVALID_OPTION_UNDERLYING_KEY');
  const url=new URL('https://api.upstox.com/v2/option/contract');
  url.searchParams.set('instrument_key',key);
@@ -212,14 +213,15 @@ async function readOnlyNseOptionContracts(underlyingKey){
    throw new Error('UPSTOX_OPTION_CONTRACT_LOOKUP_FAILED');
  if(body.data.length>25000)throw new Error('UPSTOX_OPTION_CONTRACT_LIST_TOO_LARGE');
  const today=new Date(Date.now()+330*60000).toISOString().slice(0,10);
- const contracts=body.data.filter(x=>x.segment==='NSE_FO'&&x.underlying_key===key&&
+ const expectedSegment=key.startsWith('BSE_INDEX|')?'BSE_FO':'NSE_FO';
+ const contracts=body.data.filter(x=>x.segment===expectedSegment&&x.underlying_key===key&&
    ['CE','PE'].includes(x.instrument_type)&&
    /^\d{4}-\d{2}-\d{2}$/.test(x.expiry||'')&&x.expiry>today&&
-   /^NSE_FO\|[A-Za-z0-9_]+$/.test(x.instrument_key||'')&&
+   (String(x.instrument_key||'').startsWith(expectedSegment+'|')&&/^\w+$/.test(String(x.instrument_key||'').split('|')[1]||''))&&
    Number.isInteger(Number(x.lot_size))&&Number(x.lot_size)>0&&
    Number(x.tick_size)>0&&Number(x.strike_price)>0&&
    typeof x.trading_symbol==='string').map(x=>({
-    segment:'NSE_FO',instrumentType:x.instrument_type,instrumentKey:x.instrument_key,
+    segment:expectedSegment,instrumentType:x.instrument_type,instrumentKey:x.instrument_key,
     tradingSymbol:x.trading_symbol,underlyingKey:key,underlyingSymbol:x.underlying_symbol,
     expiry:x.expiry,lotSize:Number(x.lot_size),tickSize:Number(x.tick_size),
     strike:Number(x.strike_price)
@@ -357,7 +359,7 @@ const marginEstimateCache=new Map();
 async function readOnlyMarginEstimate({instrumentKey,side,quantity,price}={}){
   const key=String(instrumentKey||'').trim(),direction=String(side||'').toUpperCase();
   const qty=Number(quantity),value=Number(price);
-  if(!/^(MCX_FO|NSE_FO|NSE_EQ)\|[A-Za-z0-9_]+$/.test(key)||
+  if(!/^(MCX_FO|NSE_FO|NSE_EQ|BSE_FO)\|[A-Za-z0-9_]+$/.test(key)||
      !['BUY','SELL'].includes(direction)||!Number.isInteger(qty)||qty<1||qty>100000||
      !Number.isFinite(value)||value<=0||value>100000000)
     throw new Error('INVALID_PAPER_MARGIN_REQUEST');
@@ -390,8 +392,8 @@ async function readOnlyMarginEstimate({instrumentKey,side,quantity,price}={}){
 }
 async function readOnlyFullMarketQuote(instrumentKey){
   const key=String(instrumentKey||'').trim();
-  if(!/^(NSE_EQ|NSE_FO|MCX_FO)\|[A-Za-z0-9_]+$/.test(key)&&
-    !/^NSE_INDEX\|[A-Za-z0-9 _-]{1,75}$/.test(key))throw new Error('INVALID_INSTRUMENT_KEY');
+  if(!/^(NSE_EQ|NSE_FO|MCX_FO|BSE_FO)\|[A-Za-z0-9_]+$/.test(key)&&
+    !/^(NSE_INDEX|BSE_INDEX)\|[A-Za-z0-9 _-]{1,75}$/.test(key))throw new Error('INVALID_INSTRUMENT_KEY');
   const url=new URL('https://api.upstox.com/v3/market-quote/quotes');
   url.searchParams.set('instrument_key',key);
   const response=await fetch(url,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
