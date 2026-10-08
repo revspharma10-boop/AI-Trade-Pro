@@ -23,7 +23,7 @@ export function mountIntradayRecommendations(){
  '<label>Symbol / underlying<input id="ir-symbol" value="RELIANCE" maxlength="50" autocomplete="off" spellcheck="false"></label>',
  '<label>Timeframe<select id="ir-interval"><option value="5m">5 minutes</option><option value="1m">1 minute</option><option value="15m">15 minutes</option></select></label>',
  '<button id="ir-find" class="ir-secondary" type="button" hidden>Find contracts</button></div>',
- '<label id="ir-contract-wrap" class="ir-contract" hidden>Exact NSE contract<select id="ir-contract"><option value="">Find and select a contract first</option></select></label>',
+ '<label id="ir-contract-wrap" class="ir-contract" hidden>Exact exchange contract<select id="ir-contract"><option value="">Find and select a contract first</option></select></label>',
  '<div class="ir-actions"><button id="ir-check" class="ir-primary" type="button">Analyze Intraday</button><button id="ir-auto" class="ir-secondary" type="button" aria-pressed="false">Start 30s refresh</button>',
  '<a href="https://ai-trade-pro-oauth.onrender.com/auth/upstox/start" target="_blank" rel="noopener noreferrer">Connect Upstox</a></div>',
  '<p id="ir-status" class="ir-status" role="status" aria-live="polite">Ready • No qualified intraday signal</p><p id="ir-updated" class="ir-muted">No live market refresh yet. REST polling is not tick streaming.</p></section>',
@@ -41,7 +41,13 @@ export function mountIntradayRecommendations(){
   if(timer!==null){clearInterval(timer);timer=null;}
   autoRefresh=false;requestVersion++;
   refreshButton.textContent='Start 30s refresh';refreshButton.setAttribute('aria-pressed','false');
-  if(reason){status.textContent=reason;$('#ir-decision').textContent='WAIT';$('#ir-updated').textContent='Previous evidence invalidated; refresh to analyze again.';}
+  if(reason){
+   status.textContent=reason;$('#ir-decision').textContent='WAIT';
+   $('#ir-updated').textContent='Previous evidence invalidated; refresh to analyze again.';
+   $('#ir-facts').replaceChildren();$('#ir-technical').replaceChildren();
+   $('#ir-reasons').replaceChildren();
+   addReason($('#ir-reasons'),'SELECTION_CHANGED_REANALYSIS_REQUIRED');
+  }
  }
  function resetContracts(){
   stopRefresh();
@@ -50,6 +56,9 @@ export function mountIntradayRecommendations(){
   contract.replaceChildren(new Option('Find and select a contract first',''));contracts=[];
   status.textContent=derivative?'Select an exact futures/options contract first.':'Ready • No qualified intraday signal';
   $('#ir-decision').textContent='WAIT';
+  $('#ir-facts').replaceChildren();$('#ir-technical').replaceChildren();
+  $('#ir-reasons').replaceChildren();
+  addReason($('#ir-reasons'),'SELECT_INSTRUMENT_AND_ANALYZE');
  }
  kind.addEventListener('change',resetContracts);
  $('#ir-interval').addEventListener('change',()=>stopRefresh('Timeframe changed — analyze again.'));
@@ -125,6 +134,8 @@ export function mountIntradayRecommendations(){
     ['Upstox session',connection],['Intraday candles',dataStatus],
     ['Market',session.exchange+' • '+session.group+' • '+session.reason],
     ['Quote LTP',quote?.valid?quote.lastPrice:'Not verified'],
+    ['Quote timestamp (IST)',quote?.valid?new Date(quote.timestamp).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',hour12:true}):'Not verified'],
+    ['Quote age at request',quote?.valid?Math.max(0,Math.round((now-quote.timestamp)/1000))+' seconds':'Not verified'],
     ['Open interest',quote?.openInterest??'Not verified'],
     ['Exchange close (IST)',session.closeMinutes===null?'Unknown':String(Math.floor(session.closeMinutes/60)).padStart(2,'0')+':'+String(session.closeMinutes%60).padStart(2,'0')],
     ['Lot / expiry',instrument.lotSize?instrument.lotSize+' / '+instrument.expiry:'N/A'],
