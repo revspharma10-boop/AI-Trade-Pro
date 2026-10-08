@@ -51,7 +51,7 @@ function atr(bars,period=14){
   return avg(tr);
 }
 const median=values=>{const sorted=[...values].sort((a,b)=>a-b),n=sorted.length;return n%2?sorted[(n-1)/2]:(sorted[n/2-1]+sorted[n/2])/2;};
-export function analyzeIntradayCandles(raw=[],{asOf=Date.now(),intervalMinutes=5,minBars=35}={}){
+export function analyzeIntradayCandles(raw=[],{asOf=Date.now(),intervalMinutes=5,minBars=35,session=null}={}){
   const now=Number(new Date(asOf)),reasons=[];
   if(![1,5,15].includes(intervalMinutes))reasons.push('INVALID_INTERVAL');
   if(!Number.isFinite(now))reasons.push('INVALID_CLOCK');
@@ -77,8 +77,8 @@ export function analyzeIntradayCandles(raw=[],{asOf=Date.now(),intervalMinutes=5
   if(!last)reasons.push('NO_COMPLETED_TODAY_CANDLE');
   if(completed.length<minBars)reasons.push('INSUFFICIENT_COMPLETED_TODAY_CANDLES');
   if(last&&(now-(last.timestamp+intervalMs)>intervalMs+120000))reasons.push('STALE_INTRADAY_CANDLES');
-  const state=nseSessionState(now);
-  if(!state.open)reasons.push(state.reason);
+  const state=session??nseSessionState(now);
+  if(!state.open)reasons.push(state.reason||'MARKET_SESSION_CLOSED');
   // Holiday calendars are not verified: never assert exchange holiday validation.
   if(reasons.length)return {valid:false,reasons:[...new Set(reasons)],snapshot:null,completedBars:completed.length,latestCompletedAt:last?.datetime??null,session:state};
   const closes=completed.map(b=>b.close),lastClose=closes.at(-1);
