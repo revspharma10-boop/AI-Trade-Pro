@@ -148,16 +148,30 @@ async function searchIntradayDerivativeContracts(query,type,exchange='NSE'){
   // Search eligible listed contracts and validate exact expiry downstream.
   if(market!=='MCX')url.searchParams.set('expiry','current_month');
   url.searchParams.set('records','30');
-  const response=await fetch(url,{headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
-  const body=await response.json().catch(()=>({}));
-  if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
-  if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
-  if(!response.ok)throw new Error('UPSTOX_DERIVATIVE_SEARCH_FAILED');
-  const raw=Array.isArray(body?.data)?body.data:[];
+  // Upstox's result format includes page count; scan bounded pages so futures
+  // do not disappear behind option contracts on the first search page.
+  const rows=[];
+  let totalPages=1;
+  let pagesRead=0;
+  const MAX_PAGES=12;
+  for(let page=1;page<=Math.min(totalPages,MAX_PAGES);page++){
+    url.searchParams.set('page_number',String(page));
+    const response=await fetch(url,{headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
+    const body=await response.json().catch(()=>({}));
+    if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+    if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
+    if(!response.ok)throw new Error('UPSTOX_DERIVATIVE_SEARCH_FAILED');
+    if(!Array.isArray(body?.data))throw new Error('UPSTOX_DERIVATIVE_SEARCH_BAD_PAYLOAD');
+    rows.push(...body.data);
+    pagesRead++;
+    const total=Number(body?.meta_data?.page?.total_pages);
+    if(Number.isInteger(total)&&total>=1)totalPages=total;
+  }
   const expectedSegment=market+'_FO';
-  return raw.filter(x=>x.segment===expectedSegment&&String(x.instrument_type).toUpperCase()===kind&&
+  const matches=rows.filter(x=>x?.segment===expectedSegment&&String(x.instrument_type).toUpperCase()===kind&&
      typeof x.instrument_key==='string'&&x.instrument_key.startsWith(expectedSegment+'|')&&x.trading_symbol&&
-     (market!=='MCX'||!x.underlying_type||['COM','COMMODITY'].includes(String(x.underlying_type).toUpperCase())))
+     (market!=='MCX'||!x.underlying_type||String(x.underlying_type).toUpperCase()==='COM')&&
+     (market!=='MCX'||!x.underlying_symbol||String(x.underlying_symbol).toUpperCase()===q.toUpperCase()))
     .map(x=>({instrumentKey:String(x.instrument_key),segment:expectedSegment,exchange:market,
       instrumentType:kind,tradingSymbol:String(x.trading_symbol),
       underlyingSymbol:String(x.underlying_symbol||'').toUpperCase(),
@@ -165,6 +179,10 @@ async function searchIntradayDerivativeContracts(query,type,exchange='NSE'){
       qtyMultiplier:x.qty_multiplier===undefined?null:Number(x.qty_multiplier),
       tickSize:x.tick_size===undefined?null:Number(x.tick_size),
       strike:Number(x.strike_price||0)}));
+  return {contracts:matches,diagnostics:{upstreamCount:rows.length,matchedCount:matches.length,
+    pagesRead,morePagesAvailable:totalPages>pagesRead,
+    result:matches.length?'MATCHES_FOUND':rows.length?'FILTERED_OUT':'UPSTREAM_EMPTY'}};
+
 }
 async function readOnlyFullMarketQuote(instrumentKey){
   const key=String(instrumentKey||'').trim();
@@ -297,8 +315,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/upstox/derivative-search' && req.method === 'GET') {
       try{
-        const contracts=await searchIntradayDerivativeContracts(url.searchParams.get('query'),url.searchParams.get('type'),url.searchParams.get('exchange')||'NSE');
-        return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',contracts,orderSubmissionAllowed:false});
+        const found=await searchIntradayDerivativeContracts(url.searchParams.get('query'),url.searchParams.get('type'),url.searchParams.get('exchange')||'NSE');
+        return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',contracts:found.contracts,diagnostics:found.diagnostics,orderSubmissionAllowed:false});
       }catch(error){
         const message=String(error?.message||'UPSTOX_DERIVATIVE_SEARCH_FAILED');
         return json(res,message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_DERIVATIVE_SEARCH'?400:502,
