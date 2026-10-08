@@ -33,3 +33,7 @@ MCX premium exposure uses `lot_size × qty_multiplier` from Upstox BOD metadata 
 Upstox MCX chain limitation: https://upstox.com/developer/api-documentation/get-pc-option-chain/
 
 MCX option premium-liquidity screening uses completed candle median **contract volume ≥ 10**, last-volume/median ≥ 0.3, and fresh live bid/ask with positive OI and traded volume. Raw `premium × contract volume` is *not* an exchange-certified rupee turnover figure; it does not use the NSE equity/futures ₹10 lakh turnover floor. All thresholds are provisional and require empirical validation.
+
+## WAIT reason and indicator transparency
+
+When MCX futures candles are present but no CE/PE directional signal qualifies, the screen shows the matched futures contract, completed 5-minute candle count, VWAP, EMA9/EMA21, RSI14, MACD histogram, ATR14, underlying close/quote, spread, preliminary volume gate, and explicit CALL/PUT confirmations. A partial setup remains WAIT. Before a direction qualifies, option contracts are not selected and premium entry, targets and stop-loss show **NOT CALCULATED — WAIT**, not an invented price. No changes to trade qualification or order safety.

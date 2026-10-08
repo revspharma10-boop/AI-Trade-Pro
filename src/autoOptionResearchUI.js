@@ -7,6 +7,7 @@ import {marketClockState} from './services/intradayMarketClock.js';
 import {deriveAutoOptionDirection,chooseAutoOptionContract,calculateAutoOptionPaperPlan} from './services/autoOptionResearchEngine.js';
 import {chooseMcxOptionUnderlying,deriveMcxOptionDirection,chooseMcxOptionContract,calculateMcxOptionPaperPlan} from './services/mcxAutoOptionResearchEngine.js';
 import {searchUpstoxDerivatives} from './services/upstoxReadOnlyMarketData.js';
+import {describeMcxTechnicalSetup} from './services/mcxWaitDiagnostics.js';
 
 const fmt=n=>typeof n==='number'&&Number.isFinite(n)?'₹'+n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'NOT VERIFIED';
 const time=n=>Number.isFinite(n)?new Date(n).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour12:true}):'NOT VERIFIED';
@@ -66,17 +67,52 @@ export function mountAutoOptionResearch(){
   '<div class="ir-decision ir-option-result"><h3>Option research result</h3><span class="ir-paper-wait" id="ir-auto-direction">WAIT</span></div>',
   '<p class="ir-paper-warning">Illustrative long-option premium prices, not instructions or order previews. ₹50,000 capital, ₹500 planned risk. Real trading is disabled.</p>',
   '<h3>Underlying 5-minute candle chart</h3><div class="ir-option-chart" id="ir-auto-chart">Awaiting fresh market data.</div>',
-  '<div id="ir-auto-results" class="ir-facts"></div><h3>What is not verified?</h3><ul id="ir-auto-blocks" class="ir-reasons"></ul>',
+  '<section id="ir-mcx-evidence" class="ir-mcx-evidence" hidden><h3>MCX futures technical evidence</h3><div id="ir-mcx-facts" class="ir-facts"></div><h3>CALL vs PUT confirmation checklist</h3><p class="ir-muted" id="ir-mcx-confirm-summary"></p><div id="ir-mcx-checks" class="ir-mcx-checks"></div></section>',
+  '<div id="ir-auto-results" class="ir-facts"></div><h3>Qualification and WAIT reasons</h3><ul id="ir-auto-blocks" class="ir-reasons"></ul>',
   '<button class="ir-secondary ir-advanced-toggle" id="ir-auto-advanced" type="button" aria-expanded="false">Show advanced research controls</button>'
  ].join('');
  const header=legacy.querySelector('.ir-header');header.insertAdjacentElement('afterend',panel);
  const find=id=>panel.querySelector('#'+id),type=find('ir-auto-type'),symbol=find('ir-auto-symbol');
  const button=find('ir-auto-analyze'),status=find('ir-auto-status'),result=find('ir-auto-results');
  const blocks=find('ir-auto-blocks'),label=find('ir-auto-direction'),chart=find('ir-auto-chart');
+ const mcxEvidence=find('ir-mcx-evidence'),mcxFacts=find('ir-mcx-facts');
+ const mcxChecklist=find('ir-mcx-checks'),mcxSummary=find('ir-mcx-confirm-summary');
+ function clearMcxEvidence(){
+  mcxEvidence.hidden=true;mcxFacts.replaceChildren();mcxChecklist.replaceChildren();mcxSummary.textContent='';
+ }
+ function showMcxEvidence({future,research,quote,signal,session}){
+  const data=describeMcxTechnicalSetup({future,research,quote,signal,session});
+  mcxEvidence.hidden=false;mcxFacts.replaceChildren();mcxChecklist.replaceChildren();
+  const v=n=>typeof n==='number'&&Number.isFinite(n)?String(n):'NOT VERIFIED';
+  const t=data.lastCompletedAt?Date.parse(data.lastCompletedAt):NaN;
+  [
+   ['Matched MCX futures contract',data.instrument||'NOT VERIFIED'],
+   ['Completed 5m candles',v(data.completedBars)],
+   ['Last completed candle (IST)',Number.isFinite(t)?new Date(t).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'}):'NOT VERIFIED'],
+   ['Futures last close',fmt(data.close)],['Futures live price',fmt(data.quoteLast)],
+   ['VWAP',fmt(data.vwap)],['EMA9 / EMA21',v(data.ema9)+' / '+v(data.ema21)],
+   ['RSI14',v(data.rsi14)],['MACD histogram',v(data.macdHistogram)],
+   ['ATR14',fmt(data.atr14)],['Quote spread',data.quoteValid?v(data.spreadPercent)+'%':'NOT VERIFIED'],
+   ['Preliminary volume gate',data.preliminaryLiquidity?'PASS':'NOT VERIFIED OR FAILED'],
+   ['Exchange clock',data.sessionOpen?'OPEN • holiday unverified':'CLOSED']
+  ].forEach(([k,val])=>row(mcxFacts,k,val));
+  if(!data.checks.length){mcxSummary.textContent='Completed technical evidence is unavailable. WAIT is required.';return;}
+  mcxSummary.textContent='CALL: '+data.callConfirmations+'/4 conditions; PUT: '+data.putConfirmations+
+   '/4 conditions. Four matching conditions are required; partial confirmation does not authorize a trade.';
+  for(const check of data.checks){
+   const item=element('div','','ir-mcx-check');
+   item.append(element('strong',check.name),
+    element('span','Observed: '+check.observed,'ir-mcx-observed'),
+    element('span','CALL '+(check.call?'PASS':'BLOCK'),check.call?'ir-mcx-pass':'ir-mcx-block'),
+    element('span','PUT '+(check.put?'PASS':'BLOCK'),check.put?'ir-mcx-pass':'ir-mcx-block'));
+   mcxChecklist.append(item);
+  }
+ }
+
  let version=0;
  const reset=()=>{
   version++;label.textContent='WAIT';label.className='ir-paper-wait';
-  result.replaceChildren();blocks.replaceChildren();chart.textContent='Awaiting fresh market data.';
+  result.replaceChildren();blocks.replaceChildren();chart.textContent='Awaiting fresh market data.';clearMcxEvidence();
   status.textContent='Select instrument type and symbol, then analyze.';
  };
  type.addEventListener('change',()=>{symbol.value=type.value==='INDEX'?'NIFTY':type.value==='MCX'?'GOLD':'RELIANCE';reset();});
@@ -90,16 +126,19 @@ export function mountAutoOptionResearch(){
  function showPlan(plan=null,contract=null,issues=[]){
   result.replaceChildren();blocks.replaceChildren();
   const available=plan?.status==='UNVALIDATED_PAPER_LEVELS';
+  const noDirection=issues.includes('NO_CLEAR_BUY_OR_SELL_SETUP');
+  const skipped=noDirection?'NOT CALCULATED — WAIT':'NOT VERIFIED';
+  const optionalPrice=value=>noDirection&&(value===null||value===undefined)?skipped:fmt(value);
   label.textContent=available?'BUY '+plan.optionType:'WAIT';
   label.className=available?'ir-paper-buy':'ir-paper-wait';
   [
    ['Research status',plan?.status??'WAIT'],
-   ['Exact option contract',contract?.tradingSymbol??'NOT VERIFIED'],
-   ['Option type',contract?.instrumentType??'NOT VERIFIED'],
-   ['Strike',contract?.strike??'NOT VERIFIED'],['Expiry',contract?.expiry??'NOT VERIFIED'],
-   ['Buy entry — option premium',fmt(plan?.entry)],
-   ['Stop loss — option premium',fmt(plan?.stopLoss)],
-   ['Target 1 (1.5R)',fmt(plan?.target1)],['Target 2 (2R)',fmt(plan?.target2)],
+   ['Exact option contract',contract?.tradingSymbol??skipped],
+   ['Option type',contract?.instrumentType??skipped],
+   ['Strike',contract?.strike??skipped],['Expiry',contract?.expiry??skipped],
+   ['Buy entry — option premium',optionalPrice(plan?.entry)],
+   ['Stop loss — option premium',optionalPrice(plan?.stopLoss)],
+   ['Target 1 (1.5R)',optionalPrice(plan?.target1)],['Target 2 (2R)',optionalPrice(plan?.target2)],
    ['Contract lot size',contract?.lotSize??'NOT VERIFIED'],
    ['MCX quantity multiplier',contract?.segment==='MCX_FO'?(contract?.qtyMultiplier??'NOT VERIFIED'):'N/A'],
    ['Exposure units per MCX lot',contract?.segment==='MCX_FO'?(plan?.exposureUnitsPerLot??'NOT VERIFIED'):'N/A'],
@@ -110,13 +149,18 @@ export function mountAutoOptionResearch(){
    ['Combined theoretical paper lots (NOT authorized)',plan?.paperEnvelopeLots??'NOT VERIFIED'],
    ['Actual broker funds','NOT VERIFIED'],['Approved / executable lots','0 — REAL ORDERS BLOCKED']
   ].forEach(([n,v])=>row(result,n,v));
-  [...new Set([...issues,...(plan?.reasons??[])])].forEach(x=>blocks.append(element('li',String(x))));
+  const explanations={
+   NO_CLEAR_BUY_OR_SELL_SETUP:'No clear CALL/PUT setup. EMA9/EMA21, VWAP, RSI14 and MACD must align. See the technical checklist above.',
+   FRESH_MCX_OPTION_PREMIUM_AND_VOLUME_REQUIRED:'Option premium candles or volume are insufficient.',
+   ONE_MCX_OPTION_LOT_EXCEEDS_500_RISK_BUDGET:'At least one MCX option lot exceeds the ₹500 planned loss threshold.'
+  };
+  [...new Set([...issues,...(plan?.reasons??[])])].forEach(x=>blocks.append(element('li',explanations[x]??String(x))));
  }
  button.addEventListener('click',async()=>{
   const thisRun=++version,now=Date.now(),input=symbol.value.trim().toUpperCase(),isIndex=type.value==='INDEX',isMcx=type.value==='MCX';
   const current=()=>thisRun===version;
   button.disabled=true;label.textContent='WAIT';label.className='ir-paper-wait';
-  result.replaceChildren();blocks.replaceChildren();chart.replaceChildren();status.textContent='Loading underlying market evidence...';
+  result.replaceChildren();blocks.replaceChildren();chart.replaceChildren();status.textContent='Loading underlying market evidence...';clearMcxEvidence();
   let chosen=null,plan=null,direction='WAIT';
   const issues=[];
   try{
@@ -158,7 +202,14 @@ export function mountAutoOptionResearch(){
     if(quoteResponse.status==='rejected')issues.push(String(quoteResponse.reason?.message||'MCX_FUTURE_QUOTE_UNAVAILABLE'));
     const bias=deriveMcxOptionDirection({future,research,quote,session,asOf:now});
     direction=bias.direction;issues.push(...bias.reasons);
-    if(direction==='WAIT'){showPlan(null,null,issues);status.textContent='WAIT — MCX futures technical research not qualified';return;}
+    showMcxEvidence({future,research,quote,signal:bias,session});
+    if(direction==='WAIT'){
+      showPlan(null,null,issues);
+      status.textContent=issues.includes('NO_CLEAR_BUY_OR_SELL_SETUP')?
+       'WAIT — No aligned CALL or PUT conditions. Review the technical checklist below.':
+       'WAIT — MCX futures technical research not qualified. Review the technical evidence below.';
+      return;
+    }
     const picked=chooseMcxOptionContract({options:[...calls,...puts],future,
       spot:quote.lastPrice,direction,asOf:now});
     chosen=picked.contract;issues.push(...picked.reasons);
