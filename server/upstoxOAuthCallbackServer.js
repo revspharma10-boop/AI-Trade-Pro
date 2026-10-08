@@ -1,5 +1,6 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
+import { gunzipSync } from 'node:zlib';
 import { exchangeUpstoxAuthorizationCode } from '../src/upstox/upstoxOAuth.js';
 
 const PORT = Number(process.env.PORT || 3000);
@@ -135,6 +136,45 @@ function normalizeDerivativeExpiry(raw){
   const date=new Date(ms+330*60000);
   return Number.isFinite(date.getTime())?date.toISOString().slice(0,10):'';
 }
+// Official Upstox MCX BOD JSON is used only when the search API has no matching
+// contracts. Never synthesize exchange keys or treat a stale master as live data.
+const MCX_BOD_JSON_URL='https://assets.upstox.com/market-quote/instruments/exchange/MCX.json.gz';
+let mcxBodCache={date:'',expiresAt:0,rows:null};
+async function getMcxBodRows(){
+  const date=new Date(Date.now()+330*60000).toISOString().slice(0,10);
+  if(mcxBodCache.date===date&&Date.now()<mcxBodCache.expiresAt&&mcxBodCache.rows)
+    return mcxBodCache.rows;
+  try{
+    const response=await fetch(MCX_BOD_JSON_URL,{
+      headers:{Accept:'application/gzip'},signal:AbortSignal.timeout(15000)});
+    if(!response.ok)throw new Error('BOD_HTTP_UNAVAILABLE');
+    const declaredLength=Number(response.headers.get('content-length'));
+    if(Number.isFinite(declaredLength)&&declaredLength>15*1024*1024)
+      throw new Error('BOD_COMPRESSED_OVERSIZE');
+    const chunks=[];let bytesRead=0;
+    if(!response.body)throw new Error('BOD_NO_BODY');
+    for await(const chunk of response.body){
+      bytesRead+=chunk.byteLength;
+      if(bytesRead>15*1024*1024)throw new Error('BOD_COMPRESSED_OVERSIZE');
+      chunks.push(Buffer.from(chunk));
+    }
+    const compressed=Buffer.concat(chunks);
+    if(compressed[0]!==0x1f||compressed[1]!==0x8b)
+      throw new Error('BOD_NOT_GZIP');
+    const expanded=gunzipSync(compressed,{maxOutputLength:100*1024*1024});
+    const parsed=JSON.parse(expanded.toString('utf8'));
+    if(!Array.isArray(parsed))throw new Error('BOD_NOT_ARRAY');
+    const rows=parsed.filter(x=>x?.segment==='MCX_FO'&&x?.exchange==='MCX');
+    // Refresh within the day. A failed download must never fall back to yesterday.
+    mcxBodCache={date,expiresAt:Date.now()+15*60*1000,rows};
+    return rows;
+  }catch(_error){throw new Error('UPSTOX_MCX_INSTRUMENT_MASTER_UNAVAILABLE');}
+}
+function exactMcxUnderlying(item,query){
+  const underlying=String(item?.underlying_symbol||'').toUpperCase().trim();
+  if(underlying)return underlying===query.toUpperCase();
+  return String(item?.trading_symbol||'').toUpperCase().startsWith(query.toUpperCase()+' ');
+}
 async function searchIntradayDerivativeContracts(query,type,exchange='NSE'){
   const q=String(query||'').trim(),kind=String(type||'').toUpperCase(),market=String(exchange||'NSE').toUpperCase();
   if(!q||q.length>50||!['FUT','CE','PE'].includes(kind)||!['NSE','MCX'].includes(market))
@@ -168,7 +208,7 @@ async function searchIntradayDerivativeContracts(query,type,exchange='NSE'){
     if(Number.isInteger(total)&&total>=1)totalPages=total;
   }
   const expectedSegment=market+'_FO';
-  const matches=rows.filter(x=>x?.segment===expectedSegment&&String(x.instrument_type).toUpperCase()===kind&&
+  let matches=rows.filter(x=>x?.segment===expectedSegment&&String(x.instrument_type).toUpperCase()===kind&&
      typeof x.instrument_key==='string'&&x.instrument_key.startsWith(expectedSegment+'|')&&x.trading_symbol&&
      (market!=='MCX'||!x.underlying_type||String(x.underlying_type).toUpperCase()==='COM')&&
      (market!=='MCX'||!x.underlying_symbol||String(x.underlying_symbol).toUpperCase()===q.toUpperCase()))
@@ -179,9 +219,30 @@ async function searchIntradayDerivativeContracts(query,type,exchange='NSE'){
       qtyMultiplier:x.qty_multiplier===undefined?null:Number(x.qty_multiplier),
       tickSize:x.tick_size===undefined?null:Number(x.tick_size),
       strike:Number(x.strike_price||0)}));
+  let source='INSTRUMENT_SEARCH';
+  let bodRecordCount=0;
+  if(market==='MCX'&&!matches.length){
+    const bod=await getMcxBodRows();
+    bodRecordCount=bod.length;
+    const today=new Date(Date.now()+330*60000).toISOString().slice(0,10);
+    const actual=bod.filter(x=>String(x.instrument_type).toUpperCase()===kind&&
+      typeof x.instrument_key==='string'&&x.instrument_key.startsWith('MCX_FO|')&&
+      typeof x.trading_symbol==='string'&&exactMcxUnderlying(x,q)&&
+      (!x.underlying_type||String(x.underlying_type).toUpperCase()==='COM')&&
+      normalizeDerivativeExpiry(x.expiry)>=today);
+    matches=actual.map(x=>({instrumentKey:String(x.instrument_key),segment:'MCX_FO',exchange:'MCX',
+      instrumentType:kind,tradingSymbol:String(x.trading_symbol),
+      underlyingSymbol:String(x.underlying_symbol||q).toUpperCase(),
+      expiry:normalizeDerivativeExpiry(x.expiry),lotSize:Number(x.lot_size),
+      qtyMultiplier:x.qty_multiplier===undefined?null:Number(x.qty_multiplier),
+      tickSize:x.tick_size===undefined?null:Number(x.tick_size),
+      strike:Number(x.strike_price||0)}));
+    source='MCX_BOD_JSON';
+  }
   return {contracts:matches,diagnostics:{upstreamCount:rows.length,matchedCount:matches.length,
-    pagesRead,morePagesAvailable:totalPages>pagesRead,
-    result:matches.length?'MATCHES_FOUND':rows.length?'FILTERED_OUT':'UPSTREAM_EMPTY'}};
+    pagesRead,morePagesAvailable:totalPages>pagesRead,source,bodRecordCount,
+    result:source==='MCX_BOD_JSON'?(matches.length?'BOD_FALLBACK_MATCHES':'BOD_NO_MATCHES'):
+      matches.length?'MATCHES_FOUND':rows.length?'FILTERED_OUT':'UPSTREAM_EMPTY'}};
 
 }
 async function readOnlyFullMarketQuote(instrumentKey){
