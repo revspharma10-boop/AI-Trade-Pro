@@ -13,6 +13,8 @@ jobs:
           node-version: '22'
       - run: npm ci
       - run: node src/intradayRecommendationQualificationRunner.js
+      - run: node src/intradayPaperSignalQualificationRunner.js
+      - run: node --check src/services/intradayPaperSignalEngine.js
       - run: node src/intradayInstrumentQualificationRunner.js
       - run: node src/intradayTechnicalQualificationRunner.js
       - run: node src/intradayPerformanceQualificationRunner.js
