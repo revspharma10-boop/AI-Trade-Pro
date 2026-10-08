@@ -27,7 +27,7 @@ export function runStage2RealTimePaperQualificationValidation() {
   check('Heartbeat is healthy', e.heartbeatTick().healthy === true);
   check('Source interruption is fail-safe', e.injectInterruption('VALIDATION').safe === true);
   check('Recovery remains gated until fresh tick', e.recover().gatedUntilFreshTick === true);
-  check('Recovered source accepts fresh tick', e.observe({ symbol: 'NIFTY', price: 25100, timestamp: Date.now(), volume: 1000 }).accepted === true);
+  check('Recovered source accepts fresh tick', e.observe({ symbol: 'NIFTY', price: 25100, timestamp: t + 1000, volume: 1000 }).accepted === true);
   const snap = e.snapshot();
   check('Quality metrics are exposed', snap.paper.quality && typeof snap.paper.quality.accepted === 'number' && typeof snap.paper.quality.rejected === 'number');
   check('P&L is exposed', snap.paper.realizedPnl === 100);
