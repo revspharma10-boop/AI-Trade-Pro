@@ -89,7 +89,12 @@ export function analyzeIntradayCandles(raw=[],{asOf=Date.now(),intervalMinutes=5
   const medianVolume20=median(previousVolumes);
   const lastVolumeRatio=medianVolume20>0?last.volume/medianVolume20:null;
   const averageTurnover20=avg(completed.slice(-20).map(b=>b.close*b.volume));
-  const liquidityResearchPass=medianVolume20>=1000&&averageTurnover20>=1000000&&lastVolumeRatio>=0.3;
+  // MCX commodity futures trade in contracts, not NSE share quantities.
+  // These are preliminary research floors only, not broker liquidity clearance.
+  const isMcx=session?.exchange==='MCX';
+  const minimumMedianVolume=isMcx?10:1000;
+  const liquidityResearchPass=medianVolume20>=minimumMedianVolume&&
+    averageTurnover20>=1000000&&lastVolumeRatio>=0.3;
   const bullish=lastClose>vwap&&ema9>ema21&&rsi14>=55&&macdValues.histogram>0;
   const bearish=lastClose<vwap&&ema9<ema21&&rsi14<=45&&macdValues.histogram<0;
   const bias=bullish?'BULLISH':bearish?'BEARISH':'MIXED';
