@@ -60,7 +60,7 @@ export function mountAutoOptionResearch(){
  panel.innerHTML=[
   '<h2>One-click CALL / PUT research <span class="ir-safety">PAPER ONLY</span></h2>',
   '<p class="ir-muted">Choose just the instrument type and symbol. NSE and MCX research require fresh candles and an authenticated Upstox data connection.</p>',
-  '<div class="ir-auto-controls"><label>Instrument type<select id="ir-auto-type"><option value="INDEX">NSE Index Options — Auto CE/PE</option><option value="STOCK">NSE Stock Options — Auto CE/PE</option><option value="MCX">MCX Commodity Options — Auto CE/PE</option></select></label>',
+  '<div class="ir-auto-controls"><label>Instrument type<select id="ir-auto-type"><option value="INDEX">NIFTY / BANKNIFTY / SENSEX Options — Auto CE/PE</option><option value="STOCK">NSE Stock Options — Auto CE/PE</option><option value="MCX">MCX Commodity Options — Auto CE/PE</option></select></label>',
   '<label>Symbol<input id="ir-auto-symbol" value="NIFTY" maxlength="35" autocomplete="off" spellcheck="false" placeholder="NIFTY / RELIANCE / GOLD / SILVER"></label></div>',
   '<div class="ir-actions"><button class="ir-primary" id="ir-auto-analyze" type="button">Analyze chart &amp; find CE / PE</button></div>',
   '<p id="ir-auto-status" class="ir-status" role="status" aria-live="polite">Select instrument and symbol, then analyze.</p>',
@@ -165,7 +165,7 @@ export function mountAutoOptionResearch(){
   const issues=[];
   try{
    if(!/^[A-Z0-9_-]{1,35}$/.test(input))throw Error('VALID_SYMBOL_REQUIRED');
-   const session=marketClockState({segment:isMcx?'MCX_FO':'NSE_EQ',underlyingSymbol:isMcx?input:'',asOf:now});
+   const session=marketClockState({segment:isMcx?'MCX_FO':isIndex?(input==='SENSEX'?'BSE_INDEX':'NSE_INDEX'):'NSE_EQ',underlyingSymbol:isMcx?input:'',asOf:now});
    if(!session.open)throw Error((isMcx?'MCX':'NSE')+'_MARKET_CLOCK_CLOSED_OR_UNVERIFIED');
    const auth=await getUpstoxReadOnlyStatus();
    if(!current())return;
@@ -256,7 +256,7 @@ export function mountAutoOptionResearch(){
    const quote=quoteResponse.status==='fulfilled'?
     isIndex?quoteResponse.value:extractUpstoxLiveQuoteEvidence(quoteResponse.value,key,now):null;
    const side=deriveAutoOptionDirection({research,underlyingQuote:quote,
-    underlyingSegment:isIndex?'NSE_INDEX':'NSE_EQ',session,asOf:now});
+    underlyingSegment:isIndex?underlying.segment:'NSE_EQ',session,asOf:now});
    direction=side.direction;issues.push(...side.reasons);
    if(barsResponse.status!=='fulfilled')issues.push(String(barsResponse.reason?.message??'UNDERLYING_CANDLES_UNAVAILABLE'));
    if(quoteResponse.status!=='fulfilled')issues.push(String(quoteResponse.reason?.message??'UNDERLYING_PRICE_UNAVAILABLE'));

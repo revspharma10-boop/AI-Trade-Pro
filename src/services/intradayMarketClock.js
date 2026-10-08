@@ -29,11 +29,12 @@ export function marketClockState({segment='NSE_EQ',underlyingSymbol='',asOf=Date
  const ist=new Date(time+330*60000),day=ist.getUTCDay(),date=indiaDate(time);
  const minutes=ist.getUTCHours()*60+ist.getUTCMinutes();
  const isWeekday=day>=1&&day<=5;
- if(segment==='NSE_EQ'||segment==='NSE_FO'){
+ if(['NSE_EQ','NSE_FO','NSE_INDEX','BSE_INDEX','BSE_FO'].includes(segment)){
+  const exchange=segment.startsWith('BSE')?'BSE':'NSE';
   const clockOpen=isWeekday&&minutes>=555&&minutes<930;
   const open=clockOpen&&minutes<930-exitBufferMinutes;
-  return {exchange:'NSE',date,open,clockOpen,group:'EQUITY_OR_FO',closeMinutes:930,
-   reason:!clockOpen?'NSE_CLOCK_CLOSED':!open?'NEAR_MARKET_CLOSE':'CLOCK_OPEN_HOLIDAY_UNVERIFIED',
+  return {exchange,date,open,clockOpen,group:'EQUITY_OR_FO',closeMinutes:930,
+   reason:!clockOpen?exchange+'_CLOCK_CLOSED':!open?'NEAR_MARKET_CLOSE':'CLOCK_OPEN_HOLIDAY_UNVERIFIED',
    holidayCalendarVerified:false,brokerSquareOffVerified:false};
  }
  if(segment!=='MCX_FO')return {exchange:'UNKNOWN',date,open:false,clockOpen:false,
