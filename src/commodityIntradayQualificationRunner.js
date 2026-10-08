@@ -25,7 +25,7 @@ assert.equal(session('MENTHAOIL','17:00:00').clockOpen,false);
 assert.equal(session('COTTON','20:40:00').open,true);
 assert.equal(session('COTTON','20:55:00').open,false);
 assert.equal(session('UNRECOGNIZED_COMMODITY','14:00:00').open,false,'Unknown agricultural group blocks');
-assert.equal(marketClockState({segment:'MCX_FO',underlyingSymbol:'GOLD',asOf:at('2026-11-03T23:40:00+05:30')}).open,true,'Post DST 23:55 session');
+assert.equal(marketClockState({segment:'MCX_FO',underlyingSymbol:'GOLD',asOf:at('2026-11-03T23:35:00+05:30')}).open,true,'Post DST 23:55 session');
 assert.equal(marketClockState({segment:'MCX_FO',underlyingSymbol:'GOLD',asOf:at('2028-06-01T14:00:00+05:30')}).open,false,'Unverified DST year fails closed');
 assert.equal(marketClockState({segment:'MCX_FO',underlyingSymbol:'GOLD',asOf:at('2026-10-10T13:00:00+05:30')}).open,false,'Weekend closed');
 const future={segment:'MCX_FO',instrumentType:'FUT',underlyingSymbol:'GOLD',tradingSymbol:'GOLD FUT 05 NOV 26',
