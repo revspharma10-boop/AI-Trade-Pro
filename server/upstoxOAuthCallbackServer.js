@@ -127,26 +127,81 @@ async function searchEquityInstrument(query){
   return {name:exact.name,shortName:exact.short_name,tradingSymbol:exact.trading_symbol,isin:exact.isin,instrumentKey:exact.instrument_key,exchange:exact.exchange,segment:exact.segment};
 }
 
-async function searchIntradayDerivativeContracts(query,type){
-  const q=String(query||'').trim(),kind=String(type||'').toUpperCase();
-  if(!q||q.length>50||!['FUT','CE','PE'].includes(kind))throw new Error('INVALID_DERIVATIVE_SEARCH');
+function normalizeDerivativeExpiry(raw){
+  if(typeof raw==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(raw))return raw;
+  const value=Number(raw);
+  if(!Number.isFinite(value)||value<=0)return '';
+  const ms=value<1e11?value*1000:value;
+  const date=new Date(ms+330*60000);
+  return Number.isFinite(date.getTime())?date.toISOString().slice(0,10):'';
+}
+async function searchIntradayDerivativeContracts(query,type,exchange='NSE'){
+  const q=String(query||'').trim(),kind=String(type||'').toUpperCase(),market=String(exchange||'NSE').toUpperCase();
+  if(!q||q.length>50||!['FUT','CE','PE'].includes(kind)||!['NSE','MCX'].includes(market))
+    throw new Error('INVALID_DERIVATIVE_SEARCH');
   const url=new URL('https://api.upstox.com/v2/instruments/search');
   url.searchParams.set('query',q);
-  url.searchParams.set('exchanges','NSE');
+  url.searchParams.set('exchanges',market);
   url.searchParams.set('segments','FO');
   url.searchParams.set('instrument_types',kind);
   url.searchParams.set('expiry','current_month');
-  url.searchParams.set('records','20');
+  url.searchParams.set('records','30');
   const response=await fetch(url,{headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
   const body=await response.json().catch(()=>({}));
   if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
   if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
   if(!response.ok)throw new Error('UPSTOX_DERIVATIVE_SEARCH_FAILED');
   const raw=Array.isArray(body?.data)?body.data:[];
-  return raw.filter(x=>x.segment==='NSE_FO'&&x.instrument_type===kind&&x.instrument_key&&x.trading_symbol)
-    .map(x=>({instrumentKey:String(x.instrument_key),segment:'NSE_FO',instrumentType:kind,
-      tradingSymbol:String(x.trading_symbol),expiry:String(x.expiry||''),
-      lotSize:Number(x.lot_size),strike:Number(x.strike_price||0)}));
+  const expectedSegment=market+'_FO';
+  return raw.filter(x=>x.segment===expectedSegment&&String(x.instrument_type).toUpperCase()===kind&&
+     typeof x.instrument_key==='string'&&x.instrument_key.startsWith(expectedSegment+'|')&&x.trading_symbol&&
+     (market!=='MCX'||String(x.underlying_type||'COM').toUpperCase()==='COM'))
+    .map(x=>({instrumentKey:String(x.instrument_key),segment:expectedSegment,exchange:market,
+      instrumentType:kind,tradingSymbol:String(x.trading_symbol),
+      underlyingSymbol:String(x.underlying_symbol||'').toUpperCase(),
+      expiry:normalizeDerivativeExpiry(x.expiry),lotSize:Number(x.lot_size),
+      qtyMultiplier:x.qty_multiplier===undefined?null:Number(x.qty_multiplier),
+      tickSize:x.tick_size===undefined?null:Number(x.tick_size),
+      strike:Number(x.strike_price||0)}));
+}
+async function readOnlyFullMarketQuote(instrumentKey){
+  const key=String(instrumentKey||'').trim();
+  if(!/^(NSE_EQ|NSE_FO|MCX_FO)\|[A-Za-z0-9_]+$/.test(key))throw new Error('INVALID_INSTRUMENT_KEY');
+  const url=new URL('https://api.upstox.com/v3/market-quote/quotes');
+  url.searchParams.set('instrument_key',key);
+  const response=await fetch(url,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
+  const body=await response.json().catch(()=>({}));
+  if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+  if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
+  if(!response.ok)throw new Error('UPSTOX_LIVE_QUOTE_FAILED');
+  const raw=body?.data;
+  if(!raw||typeof raw!=='object')throw new Error('UPSTOX_LIVE_QUOTE_EMPTY');
+  const quote=Object.values(raw).find(x=>x?.instrument_token===key);
+  if(!quote)throw new Error('UPSTOX_LIVE_QUOTE_INSTRUMENT_MISMATCH');
+  const bid=Number(quote?.depth?.buy?.[0]?.price),ask=Number(quote?.depth?.sell?.[0]?.price);
+  const stamp=quote?.timestamp;
+  const timestamp=typeof stamp==='number'?stamp:typeof stamp==='string'&&/^\d+$/.test(stamp)?Number(stamp):Date.parse(stamp);
+  return {instrumentKey:key,lastPrice:Number.isFinite(Number(quote.last_price))?Number(quote.last_price):null,
+    bid:Number.isFinite(bid)&&bid>0?bid:null,ask:Number.isFinite(ask)&&ask>0?ask:null,
+    timestamp:Number.isFinite(timestamp)?timestamp:null,
+    openInterest:typeof quote.oi==='number'&&Number.isFinite(quote.oi)?quote.oi:null,
+    tradedVolume:typeof quote.volume==='number'&&Number.isFinite(quote.volume)?quote.volume:null,
+    mode:'READ_ONLY'};
+}
+async function readOnlyOptionGreeks(instrumentKey){
+  const key=String(instrumentKey||'').trim();
+  if(!/^(NSE_FO|MCX_FO)\|[A-Za-z0-9_]+$/.test(key))throw new Error('INVALID_INSTRUMENT_KEY');
+  const url=new URL('https://api.upstox.com/v3/market-quote/option-greek');
+  url.searchParams.set('instrument_key',key);
+  const response=await fetch(url,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
+  const body=await response.json().catch(()=>({}));
+  if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+  if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
+  if(!response.ok)throw new Error('UPSTOX_OPTION_GREEKS_UNAVAILABLE');
+  const match=Object.values(body?.data||{}).find(x=>x?.instrument_token===key);
+  if(!match)throw new Error('UPSTOX_OPTION_GREEKS_UNAVAILABLE');
+  const numbers=['delta','gamma','theta','vega','iv'];
+  return Object.fromEntries(numbers.map(field=>[field,typeof match[field]==='number'&&Number.isFinite(match[field])?match[field]:null]));
 }
 
 function safeCookie(value) {
@@ -236,12 +291,30 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/upstox/derivative-search' && req.method === 'GET') {
       try{
-        const contracts=await searchIntradayDerivativeContracts(url.searchParams.get('query'),url.searchParams.get('type'));
+        const contracts=await searchIntradayDerivativeContracts(url.searchParams.get('query'),url.searchParams.get('type'),url.searchParams.get('exchange')||'NSE');
         return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',contracts,orderSubmissionAllowed:false});
       }catch(error){
         const message=String(error?.message||'UPSTOX_DERIVATIVE_SEARCH_FAILED');
         return json(res,message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_DERIVATIVE_SEARCH'?400:502,
           {error:message,orderSubmissionAllowed:false});
+      }
+    }
+    if (url.pathname === '/api/upstox/live-quote' && req.method === 'GET') {
+      try{
+        const quote=await readOnlyFullMarketQuote(url.searchParams.get('instrument_key'));
+        return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',quote,orderSubmissionAllowed:false});
+      }catch(error){
+        const message=String(error?.message||'UPSTOX_LIVE_QUOTE_FAILED');
+        return json(res,message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_INSTRUMENT_KEY'?400:502,{error:message,orderSubmissionAllowed:false});
+      }
+    }
+    if (url.pathname === '/api/upstox/option-greeks' && req.method === 'GET') {
+      try{
+        const greeks=await readOnlyOptionGreeks(url.searchParams.get('instrument_key'));
+        return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',greeks,orderSubmissionAllowed:false});
+      }catch(error){
+        const message=String(error?.message||'UPSTOX_OPTION_GREEKS_UNAVAILABLE');
+        return json(res,message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_INSTRUMENT_KEY'?400:502,{error:message,orderSubmissionAllowed:false});
       }
     }
     if (url.pathname === '/health') {
