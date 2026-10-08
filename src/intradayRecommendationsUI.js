@@ -81,10 +81,19 @@ export function mountIntradayRecommendations(){
    const exchange=kind.value.startsWith('MCX_')?'MCX':'NSE';
    const type=kind.value.replace('MCX_','');
    const result=await searchUpstoxDerivatives(symbol.value.trim(),type,exchange);
-   contracts=result.contracts.filter(item=>classifyIntradayInstrument(item).valid);
-   contract.replaceChildren(new Option(contracts.length?'Choose exact contract':'No matching valid contracts',''));
-   contracts.forEach((item,i)=>contract.add(new Option(item.tradingSymbol+' • '+item.expiry+' • '+(item.strike||'FUT')+' • Lot '+item.lotSize,String(i))));
-   status.textContent=contracts.length?'Select an exact contract, then analyze.':'No matching valid exchange contract returned.';
+   const returned=result.contracts;
+   const assessments=returned.map(item=>({item,classification:classifyIntradayInstrument(item)}));
+   // Show real exchange contracts even when risk metadata is incomplete; never unlock
+   // analysis qualification for an invalid contract.
+   contracts=assessments.map(x=>x.item);
+   contract.replaceChildren(new Option(contracts.length?'Choose exact contract':'No contracts returned by Upstox',''));
+   assessments.forEach(({item,classification},i)=>contract.add(new Option(
+    item.tradingSymbol+' • '+(item.expiry||'Expiry unavailable')+' • '+(item.strike||'FUT')+
+    ' • Lot '+(item.lotSize||'unknown')+(classification.valid?'':' • METADATA INCOMPLETE'),String(i))));
+   const invalid=assessments.filter(x=>!x.classification.valid);
+   status.textContent=contracts.length?
+    contracts.length+' exchange contract(s) returned; '+invalid.length+' have incomplete risk metadata. Select exact contract to inspect.':
+    'Upstox returned 0 matching contracts. Check backend search filters or expiry.';
   }catch(e){status.textContent='Contract lookup: '+String(e?.message||'ERROR');}
   finally{button.disabled=false;}
  });
