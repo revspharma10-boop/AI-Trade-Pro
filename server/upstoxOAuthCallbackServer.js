@@ -170,7 +170,8 @@ async function searchEquityInstrument(query){
   const items=Array.isArray(body?.data)?body.data:[];
   const exact=items.find(x=>String(x.trading_symbol||'').toUpperCase()===q.toUpperCase()&&x.segment==='NSE_EQ')||items.find(x=>x.segment==='NSE_EQ');
   if(!exact?.instrument_key||!exact?.isin)throw new Error('UPSTOX_EQUITY_NOT_FOUND');
-  return {name:exact.name,shortName:exact.short_name,tradingSymbol:exact.trading_symbol,isin:exact.isin,instrumentKey:exact.instrument_key,exchange:exact.exchange,segment:exact.segment};
+  return {name:exact.name,shortName:exact.short_name,tradingSymbol:exact.trading_symbol,isin:exact.isin,instrumentKey:exact.instrument_key,exchange:exact.exchange,segment:exact.segment,
+    tickSize:exact.tick_size===undefined?null:Number(exact.tick_size)};
 }
 
 function normalizeDerivativeExpiry(raw){
@@ -320,12 +321,12 @@ async function readOnlyMarginEstimate({instrumentKey,side,quantity,price}={}){
   if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
   if(!response.ok)throw new Error('UPSTOX_MARGIN_ESTIMATE_UNAVAILABLE');
   const required=Number(body?.data?.required_margin);
-  if(!Number.isFinite(required)||required<=0)
+  if(body?.status!=='success'||!Number.isFinite(required)||required<=0)
     throw new Error('UPSTOX_MARGIN_ESTIMATE_UNAVAILABLE');
   markUpstoxReadVerified();
   const result={provider:'UPSTOX',mode:'READ_ONLY_MARGIN_CALCULATION',
     instrumentKey:key,direction,quantity:qty,product:'I',price:value,
-    requiredMargin:Number(required.toFixed(2)),asOf:Date.now(),verified:true,
+    requiredMargin:Math.ceil((required-1e-9)*100)/100,asOf:Date.now(),verified:true,
     userAvailableFundsVerified:false,orderSubmissionAllowed:false};
   if(marginEstimateCache.size>=128)marginEstimateCache.clear();
   marginEstimateCache.set(cacheKey,result);

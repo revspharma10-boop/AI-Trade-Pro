@@ -36,25 +36,29 @@ export function calculateIntradayPaperTradePlan({
  if(!isEquity&&!isFuture)reasons.push('POSITION_CALCULATOR_SUPPORTS_EQUITY_AND_FUTURES_ONLY');
  if(!meta.valid)reasons.push(...meta.reasons);
  if(!riskBudget||riskBudget>500)reasons.push('FIFTY_THOUSAND_ONE_PERCENT_CAP_REQUIRED');
- if(!positive(now)||!quote?.valid||!positive(quote.lastPrice)||!positive(quote.bid)||!positive(quote.ask)||
+ if(!positive(now)||!quote?.valid||!positive(quote.lastPrice)||!positive(quote.bid)||!positive(quote.ask)||quote.ask<quote.bid||
     !finite(quote.timestamp)||!finite(quote.lastTradeTime)||
     now-quote.timestamp>120000||now-quote.lastTradeTime>120000||
     quote.timestamp>now+10000||quote.lastTradeTime>now+10000)
   reasons.push('FRESH_VERIFIED_QUOTE_REQUIRED');
  if(!research?.valid||!positive(research.snapshot?.atr14))reasons.push('VALID_ATR_REQUIRED');
  if(isFuture&&(!meta.expiry||meta.expiry<=isoDate(now)))reasons.push('FUTURE_EXPIRED_OR_EXPIRY_DAY');
- const tick=isFuture?instrumentPriceTick(instrument):0.01;
+ const tick=instrumentPriceTick(instrument); // Require the exact instrument tick for every segment.
  if(!positive(tick))reasons.push('UPSTOX_EXCHANGE_TICK_REQUIRED');
  const lotSize=isEquity?1:meta.lotSize;
  const unitMultiplier=isEquity?1:meta.segment==='MCX_FO'?meta.qtyMultiplier:1;
  if(!positive(lotSize)||!positive(unitMultiplier))reasons.push('LOT_SIZE_OR_QUANTITY_MULTIPLIER_UNVERIFIED');
+ const expectedEntry=positive(tick)&&positive(quote?.bid)&&positive(quote?.ask)&&['BUY','SELL'].includes(direction)?
+   align(direction==='BUY'?quote.ask:quote.bid,tick,direction==='BUY'?'up':'down'):null;
  const brokerRequiredMargin=Number(marginQuote?.requiredMargin);
  const marginVerified=marginQuote?.verified===true&&positive(brokerRequiredMargin)&&
    marginQuote.instrumentKey===instrument.instrumentKey&&
    marginQuote.direction===direction&&
    marginQuote.quantity===lotSize&&
    marginQuote.product==='I'&&
-   finite(marginQuote.asOf)&&Math.abs(now-marginQuote.asOf)<180000;
+   finite(marginQuote.price)&&positive(expectedEntry)&&
+   Math.abs(marginQuote.price-expectedEntry)<0.000001&&
+   finite(marginQuote.asOf)&&marginQuote.asOf<=now+10000&&now-marginQuote.asOf<180000;
  const fundsVerified=brokerAvailableMarginVerified===true&&finite(brokerAvailableMargin)&&brokerAvailableMargin>=0;
  const base={
   status:'WAIT',direction:direction==='BUY'||direction==='SELL'?direction:'WAIT',
@@ -65,6 +69,8 @@ export function calculateIntradayPaperTradePlan({
   grossLossPerLot:null,estimatedLossPerLotWithSlippage:null,
   preliminaryRiskBasedLots:null,brokerMarginPerLot:marginVerified?rup(brokerRequiredMargin):null,
   marginEstimateVerified:marginVerified,brokerAvailableMarginVerified:fundsVerified,
+  contractMultiplierSource:isFuture?'UPSTOX_INSTRUMENT_METADATA':'NSE_EQUITY_SHARE',
+  contractMultiplierIndependentlyVerified:false,
   brokerAvailableMargin:fundsVerified?rup(brokerAvailableMargin):null,
   theoreticalBudgetMarginLots:marginVerified?Math.floor(cash/brokerRequiredMargin):null,
   riskAndMarginEnvelopeLots:null,approvedLots:0,
@@ -74,7 +80,8 @@ export function calculateIntradayPaperTradePlan({
    'Entry, SL and targets are HYPOTHETICAL research levels, not executable orders.',
    'Brokerage, taxes, exchange charges, fill slippage and gaps may increase loss.',
    '₹50,000 is the declared capital ceiling, NOT verified Upstox available funds.',
-   'Price tick is normalized from Upstox raw tick_size ÷ 100 and is provisional.'
+   'Price tick is normalized from the exact Upstox instrument raw tick_size ÷ 100 and is provisional.',
+   'Contract multiplier from Upstox instrument metadata is not independently exchange-certified.'
   ]
  };
  // Keep broker-margin and cash fields visible even during WAIT.
@@ -82,7 +89,7 @@ export function calculateIntradayPaperTradePlan({
  const atr=research.snapshot.atr14;
  const buy=direction==='BUY';
  // Adverse entry rounding: BUY at ask or higher, SELL at bid or lower.
- const entry=align(buy?quote.ask:quote.bid,tick,buy?'up':'down');
+ const entry=expectedEntry;
  const stopDistance=Math.max(1.5*atr,3*tick);
  const stopLoss=align(buy?entry-stopDistance:entry+stopDistance,tick,buy?'down':'up');
  const r=Math.abs(entry-stopLoss);
@@ -120,6 +127,7 @@ export function calculateIntradayPaperTradePlan({
   reasons:[
    ...(riskLots===0?['ONE_LOT_EXCEEDS_500_RUPEE_RISK_BUDGET']:[]),
    ...(!marginVerified?['BROKER_REQUIRED_MARGIN_NOT_VERIFIED']:[]),
+   ...(isFuture?['CONTRACT_MULTIPLIER_INDEPENDENT_VERIFICATION_PENDING']:[]),
    ...(!fundsVerified?['ACTUAL_UPSTOX_AVAILABLE_FUNDS_NOT_VERIFIED']:[]),
    'BROKERAGE_AND_ALL_SLIPPAGE_NOT_VERIFIED',
    'HOLIDAY_DELIVERY_SQUAREOFF_AND_STRATEGY_NOT_QUALIFIED',

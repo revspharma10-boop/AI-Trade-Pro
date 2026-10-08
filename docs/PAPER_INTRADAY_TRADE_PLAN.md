@@ -23,18 +23,19 @@ losses to exceed the calculated amount.
   **1.5 × ATR(14)** below entry, rounded farther away; targets at **1.5R/2R** above entry.
 - SELL: entry from current bid rounded **down** to tick; SL at least **1.5 × ATR(14)**
   above entry, rounded farther away; targets at **1.5R/2R** below entry.
-- Tick displayed for MCX futures is derived from Upstox BOD `tick_size / 100`.
+- Tick displayed for MCX futures, NSE futures and NSE equities is derived from exact Upstox instrument `tick_size / 100`. Missing tick data prevent levels.
   This transformation is provisional; the broker/exchange price unit and actual
   tick must be independently confirmed before live decisions.
 - These prices are **hypothetical**; an actual fill, executable entry and SL order
   are not implied.
 
 ### Position size calculations
-- Units-per-lot = `lot_size * qty_multiplier` for MCX futures; one NSE stock
+- Units-per-lot = `lot_size * qty_multiplier` for MCX futures using Upstox instrument metadata. The multiplier is **not independently exchange-certified**; lot results remain provisional. One NSE stock
   equity share is one unit, and NSE futures use their underlying lot size.
 - Raw gross SL risk/lot = `abs(entry - stopLoss) * unitsPerLot`.
 - Illustrative 2-tick slippage reserve per lot = `2 * tick * unitsPerLot`.
 - Risk-budget theoretical lots = floor(`₹500 / (grossRiskPerLot + slippageReserve)`).
+- Broker margin must match instrument key, direction, lot quantity, requested entry price and freshness; future-dated or mismatched quotes are rejected.
 - Broker required-margin-per-lot comes from the **Upstox /v2/charges/margin**
   calculation API using exactly one exchange lot, `product=I`, and BUY/SELL.
   Despite that provider endpoint using HTTP POST, it is only a margin calculator,
@@ -42,7 +43,7 @@ losses to exceed the calculated amount.
 - Capital ceiling / required margin = indicative **budget** lots, *not actual
   buying power*. Broker-funds data are *not* available through the Analytics Token
   without additional authorized, static-IP-restricted User API setup.
-- The app displays combined theoretical lot ceiling if broker margin responds.
+- The app displays combined theoretical lot ceiling if broker margin responds. Margin is rounded **up** to the next paise to avoid understating the requirement.
 - **Approved lots = 0 always** until broker-verified available funds, full charges,
   MCX tender/holiday/square-off rules, and strategy backtest/forward verification
   become available. Even when a hypothetical smaller futures contract shows
