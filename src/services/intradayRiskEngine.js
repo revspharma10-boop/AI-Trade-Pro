@@ -18,22 +18,51 @@ export function extractUpstoxQuoteEvidence(payload,instrumentKey,asOf=Date.now()
   const spreadPercent=bid>0&&ask>=bid?100*(ask-bid)/((ask+bid)/2):null;
   return {valid:reasons.length===0,bid:bid>0?bid:null,ask:ask>0?ask:null,spreadPercent:spreadPercent===null?null:Number(spreadPercent.toFixed(4)),timestamp:Number.isFinite(timestamp)?timestamp:null,reasons};
 }
+export function extractUpstoxLiveQuoteEvidence(payload,instrumentKey,asOf=Date.now()){
+ const quote=payload?.quote??payload,now=Number(new Date(asOf));
+ const bid=quote?.bid,ask=quote?.ask,timestamp=quote?.timestamp;
+ const reasons=[];
+ if(!quote||quote.instrumentKey!==instrumentKey)reasons.push('QUOTE_INSTRUMENT_MISMATCH');
+ if(!(valid(bid)&&bid>0&&valid(ask)&&ask>=bid))reasons.push('BID_ASK_DEPTH_UNAVAILABLE');
+ if(!valid(timestamp)||!valid(now)||timestamp>now+10000||now-timestamp>120000)reasons.push('QUOTE_STALE_OR_UNDATED');
+ const spreadPercent=valid(bid)&&bid>0&&valid(ask)&&ask>=bid?
+  Number((100*(ask-bid)/((ask+bid)/2)).toFixed(4)):null;
+ const lastPrice=valid(quote?.lastPrice)&&quote.lastPrice>0?quote.lastPrice:null;
+ if(lastPrice===null)reasons.push('LAST_TRADED_PRICE_UNAVAILABLE');
+ return {valid:reasons.length===0,bid,ask,lastPrice,spreadPercent,timestamp,
+  openInterest:valid(quote?.openInterest)?quote.openInterest:null,
+  tradedVolume:valid(quote?.tradedVolume)?quote.tradedVolume:null,
+  reasons:[...new Set(reasons)]};
+}
 export function assessIntradayInstrumentRisk({instrument={},quote={},research=null,asOf=Date.now(),
-  openInterest=null,greeks=null,impliedVolatility=null,marginVerified=false,strategyDirection='LONG'}={}){
+  openInterest=null,greeks=null,impliedVolatility=null,marginVerified=false,strategyDirection='LONG',deliveryRiskVerified=false,session=null}={}){
   const meta=classifyIntradayInstrument(instrument),reasons=[...meta.reasons];
   const now=Number(new Date(asOf));
   const spread=quote?.spreadPercent;
   if(!quote?.valid||!valid(spread))reasons.push('VERIFIED_LIVE_SPREAD_REQUIRED');
-  const maxSpread=meta.kind==='EQUITY'?0.25:meta.kind==='FUTURE'?0.35:1.5;
+  const isCommodity=meta.segment==='MCX_FO';
+  const isFuture=meta.kind==='FUTURE'||meta.kind==='COMMODITY_FUTURE';
+  const maxSpread=meta.kind==='EQUITY'?0.25:isFuture?(isCommodity?0.5:0.35):(isCommodity?2:1.5);
   if(valid(spread)&&spread>maxSpread)reasons.push('EXCESSIVE_BID_ASK_SPREAD');
   if(!research?.valid)reasons.push('VALID_INTRADAY_RESEARCH_REQUIRED');
   if(research?.valid&&!research.snapshot?.liquidityResearchPass)reasons.push('INADEQUATE_RECENT_VOLUME_OR_TURNOVER');
   if(meta.kind!=='EQUITY'&&meta.kind!=='UNSUPPORTED'){
     const expiry=Date.parse(meta.expiry+'T15:30:00+05:30');
-    if(!Number.isFinite(expiry)||!Number.isFinite(now)||expiry<=now)reasons.push('CONTRACT_EXPIRED');
+    const today=Number.isFinite(now)?new Date(now+330*60000).toISOString().slice(0,10):'';
+    if(!meta.expiry||meta.expiry<today||(!isCommodity&&expiry<=now))reasons.push('CONTRACT_EXPIRED');
+    if(isCommodity&&meta.expiry===today)reasons.push('MCX_EXPIRY_DAY_DELIVERY_RISK');
+
     if(!positive(openInterest))reasons.push('OPEN_INTEREST_NOT_VERIFIED');
   }
-  if(meta.kind==='FUTURE'&&!marginVerified)reasons.push('FUTURES_MARGIN_NOT_VERIFIED');
+  if(isFuture&&!marginVerified)reasons.push('FUTURES_MARGIN_NOT_VERIFIED');
+  if(isCommodity){
+    if(!(meta.tickSize>0))reasons.push('MCX_TICK_SIZE_REQUIRED');
+    if(!(meta.qtyMultiplier>0))reasons.push('MCX_QTY_MULTIPLIER_NOT_VERIFIED');
+    if(!deliveryRiskVerified)reasons.push('MCX_DELIVERY_AND_TENDER_PERIOD_NOT_VERIFIED');
+    if(!session||session.exchange!=='MCX'||!session.open)reasons.push('MCX_SESSION_NOT_VERIFIED_OPEN');
+    if(session&&!session.holidayCalendarVerified)reasons.push('MCX_HOLIDAY_CALENDAR_NOT_VERIFIED');
+    if(session&&!session.brokerSquareOffVerified)reasons.push('MCX_BROKER_SQUARE_OFF_NOT_VERIFIED');
+  }
   if(meta.kind.includes('OPTION')){
     if(strategyDirection!=='LONG')reasons.push('UNCOVERED_OPTION_SHORT_NOT_SUPPORTED');
     if(!positive(impliedVolatility))reasons.push('OPTION_IV_NOT_VERIFIED');
