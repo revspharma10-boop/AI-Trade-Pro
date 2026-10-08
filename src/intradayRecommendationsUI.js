@@ -1,5 +1,6 @@
 import './intradayRecommendations.css';
 import {evaluateIntradayRecommendation} from './services/intradayRecommendationEngine.js';
+import {deriveIntradayPaperSignal} from './services/intradayPaperSignalEngine.js';
 import {analyzeIntradayCandles} from './services/intradayTechnicalEngine.js';
 import {marketClockState} from './services/intradayMarketClock.js';
 import {assessIntradayInstrumentRisk,extractUpstoxLiveQuoteEvidence} from './services/intradayRiskEngine.js';
@@ -27,16 +28,41 @@ export function mountIntradayRecommendations(){
  '<div class="ir-actions"><button id="ir-check" class="ir-primary" type="button">Analyze Intraday</button><button id="ir-auto" class="ir-secondary" type="button" aria-pressed="false">Start 30s refresh</button>',
  '<a href="https://ai-trade-pro-oauth.onrender.com/auth/upstox/start" target="_blank" rel="noopener noreferrer">Connect Upstox</a></div>',
  '<p id="ir-status" class="ir-status" role="status" aria-live="polite">Ready • No qualified intraday signal</p><p id="ir-updated" class="ir-muted">No live market refresh yet. REST polling is not tick streaming.</p></section>',
+ '<section class="ir-panel ir-paper-panel" aria-label="Research-only directional signals"><div class="ir-decision"><h2>Paper Research Signal</h2><span id="ir-paper-direction" class="ir-paper-wait">WAIT</span></div>',
+ '<p class="ir-paper-warning">PROVISIONAL &amp; UNVALIDATED. A BUY/SELL here is a research watch signal, NOT a qualified trade, an order or an instruction to trade. Full risk gate remains WAIT.</p>',
+ '<div id="ir-paper-facts" class="ir-facts"></div><ul id="ir-paper-reasons" class="ir-reasons"></ul></section>',
  '<section class="ir-panel"><div class="ir-decision"><h2>AI Decision</h2><span id="ir-decision">WAIT</span></div>',
  '<div id="ir-facts" class="ir-facts"></div><h3>Intraday technical evidence</h3><div id="ir-technical" class="ir-facts"></div>',
  '<h3>Qualification reasons</h3><ul id="ir-reasons" class="ir-reasons"><li>Run analysis to see evidence.</li></ul>',
- '<p class="ir-note">90% success is a research target, not an achieved result. No buy/sell or entry/stop/target values without strategy and out-of-sample qualification.</p></section>',
+ '<p class="ir-note">90% success remains an unverified research target, not a prediction. Paper BUY/SELL research signals are unvalidated and NOT trade-authorized. No executable entry, stop, target or order without validated strategy and complete risk controls.</p></section>',
  '<footer>Upstox read-only market data. No automated orders or real trading.</footer></main>'
  ].join('');
  const $=id=>root.querySelector(id);
  const kind=$('#ir-kind'),symbol=$('#ir-symbol'),contract=$('#ir-contract'),status=$('#ir-status');
  let contracts=[],timer=null,autoRefresh=false,requestVersion=0;
  const refreshButton=$('#ir-auto');
+ function resetPaperSignal(){
+  const label=$('#ir-paper-direction');
+  label.textContent='WAIT';label.className='ir-paper-wait';
+  $('#ir-paper-facts').replaceChildren();
+  $('#ir-paper-reasons').replaceChildren();
+  addReason($('#ir-paper-reasons'),'Select an instrument and analyze fresh market data.');
+ }
+ function showPaperSignal(signal){
+  const label=$('#ir-paper-direction');
+  label.textContent=signal.direction;
+  label.className=signal.direction==='BUY'?'ir-paper-buy':signal.direction==='SELL'?'ir-paper-sell':'ir-paper-wait';
+  const facts=$('#ir-paper-facts'), reasons=$('#ir-paper-reasons');
+  facts.replaceChildren();reasons.replaceChildren();
+  [['Research level',signal.status],['Live observed price — NOT entry',signal.observedLastPrice],
+    ['Observed at (IST)',signal.observedAt?new Date(signal.observedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'}):'Unavailable'],
+    ['Backtest/forward validation','NOT VERIFIED'],
+    ['Trade execution','BLOCKED — PAPER ONLY']]
+    .forEach(([k,v])=>addRow(facts,k,v));
+  if(signal.direction==='WAIT')signal.blocks.forEach(x=>addReason(reasons,x));
+  else signal.conditions.forEach(x=>addReason(reasons,x));
+ }
+
  function stopRefresh(reason=''){
   if(timer!==null){clearInterval(timer);timer=null;}
   autoRefresh=false;requestVersion++;
@@ -45,6 +71,7 @@ export function mountIntradayRecommendations(){
    status.textContent=reason;$('#ir-decision').textContent='WAIT';
    $('#ir-updated').textContent='Previous evidence invalidated; refresh to analyze again.';
    $('#ir-facts').replaceChildren();$('#ir-technical').replaceChildren();
+   resetPaperSignal();
    $('#ir-reasons').replaceChildren();
    addReason($('#ir-reasons'),'SELECTION_CHANGED_REANALYSIS_REQUIRED');
   }
@@ -56,6 +83,7 @@ export function mountIntradayRecommendations(){
   contract.replaceChildren(new Option('Find and select a contract first',''));contracts=[];
   status.textContent=derivative?'Select an exact futures/options contract first.':'Ready • No qualified intraday signal';
   $('#ir-decision').textContent='WAIT';
+  resetPaperSignal();
   $('#ir-facts').replaceChildren();$('#ir-technical').replaceChildren();
   $('#ir-reasons').replaceChildren();
   addReason($('#ir-reasons'),'SELECT_INSTRUMENT_AND_ANALYZE');
@@ -103,6 +131,7 @@ export function mountIntradayRecommendations(){
  $('#ir-check').addEventListener('click',async()=>{
   const button=$('#ir-check'),now=Date.now(),interval=$('#ir-interval').value,version=requestVersion;
   button.disabled=true;status.textContent='Checking read-only market data…';
+  resetPaperSignal();
   $('#ir-facts').replaceChildren();$('#ir-technical').replaceChildren();$('#ir-reasons').replaceChildren();
   let instrument={segment:'NSE_EQ',tradingSymbol:symbol.value.trim().toUpperCase()};
   let connection='BACKEND_UNREACHABLE',dataStatus='NOT_LOADED',candles=[],quote=null,research=null,risk=null,greeks=null;
@@ -141,6 +170,8 @@ export function mountIntradayRecommendations(){
   if(version!==requestVersion){button.disabled=false;return;}
   const decision=evaluateIntradayRecommendation({instrument,candles,asOf:now,sessionOpen:session.open,
     spreadPercent:quote?.spreadPercent,research,risk});
+  const paperSignal=deriveIntradayPaperSignal({instrument,research,quote,session,asOf:now});
+  showPaperSignal(paperSignal);
   const facts=$('#ir-facts'),technical=$('#ir-technical'),reasonsNode=$('#ir-reasons');
   [['Decision',decision.recommendation],['Instrument',decision.kind+' • '+decision.symbol],
     ['Upstox session',connection],['Intraday candles',dataStatus],
@@ -173,7 +204,7 @@ export function mountIntradayRecommendations(){
   $('#ir-decision').textContent='WAIT';
   const timestamp=new Date().toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour12:true});
   $('#ir-updated').textContent='Last request finished '+timestamp+' IST • '+(autoRefresh?'30s polling active':'Manual refresh')+' • Prices are not a WebSocket tick stream.';
-  status.textContent='Analysis complete • '+reasons.length+' qualification issue(s) • No trade';
+  status.textContent='Paper signal '+paperSignal.direction+' ('+paperSignal.status+') • '+reasons.length+' trade qualification issue(s) • Real orders blocked';
   button.disabled=false;
  });
 }
