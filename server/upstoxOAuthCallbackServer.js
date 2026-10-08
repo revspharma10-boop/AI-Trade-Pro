@@ -11,17 +11,60 @@ const COOKIE = 'ai_trade_pro_oauth_state';
 const PROFILE_URL = 'https://api.upstox.com/v2/user/profile';
 const QUOTE_URL = 'https://api.upstox.com/v2/market-quote/quotes';
 const HISTORICAL_V3_URL = 'https://api.upstox.com/v3/historical-candle';
+// The Analytics Token is a provider-issued, read-only credential, valid for up
+// to one year. Configure it in Render's secret environment settings, never Git.
+// Unlike the daily OAuth token, the env-backed token survives restarts/deploys.
+const ANALYTICS_TOKEN = String(process.env.UPSTOX_ANALYTICS_TOKEN || '').trim();
+let analyticsRejected = false;
+let analyticsVerified = false;
 let productionAccessToken = '';
 let tokenReceivedAt = 0;
-const TOKEN_SESSION_MAX_MS = 20 * 60 * 60 * 1000;
-
+let oauthExpiresAt = 0;
+const IST_OFFSET_MS = 330 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+function nextUpstoxOAuthExpiry(receivedAt) {
+  // Upstox ends standard OAuth validity at the next 03:30 IST.
+  const istNow = receivedAt + IST_OFFSET_MS;
+  const dayStart = Math.floor(istNow / DAY_MS) * DAY_MS;
+  let expiry = dayStart + (3 * 60 + 30) * 60 * 1000 - IST_OFFSET_MS;
+  if (expiry <= receivedAt) expiry += DAY_MS;
+  return expiry;
+}
 function activeToken() {
-  if (!productionAccessToken || Date.now() - tokenReceivedAt > TOKEN_SESSION_MAX_MS) {
+  if (ANALYTICS_TOKEN) {
+    if (analyticsRejected) throw new Error('UPSTOX_ANALYTICS_TOKEN_INVALID_OR_EXPIRED');
+    return ANALYTICS_TOKEN;
+  }
+  if (!productionAccessToken || !oauthExpiresAt || Date.now() >= oauthExpiresAt) {
     productionAccessToken = '';
     tokenReceivedAt = 0;
+    oauthExpiresAt = 0;
     throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');
   }
   return productionAccessToken;
+}
+function onUpstoxUnauthorized(status) {
+  // 403 on an Analytics Token can mean that a particular endpoint is not
+  // supported; it must not silently revoke access to every other GET API.
+  if (ANALYTICS_TOKEN) {
+    if (status === 403) throw new Error('UPSTOX_ANALYTICS_PERMISSION_DENIED');
+    analyticsRejected = true;
+    analyticsVerified = false;
+    throw new Error('UPSTOX_ANALYTICS_TOKEN_INVALID_OR_EXPIRED');
+  }
+  productionAccessToken = '';
+  tokenReceivedAt = 0;
+  oauthExpiresAt = 0;
+  throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');
+}
+function markUpstoxReadVerified() {
+  if (ANALYTICS_TOKEN && !analyticsRejected) analyticsVerified = true;
+}
+function authErrorHttpStatus(message) {
+  if (message === 'UPSTOX_REAUTHENTICATION_REQUIRED' ||
+      message === 'UPSTOX_ANALYTICS_TOKEN_INVALID_OR_EXPIRED') return 401;
+  if (message === 'UPSTOX_ANALYTICS_PERMISSION_DENIED') return 403;
+  return null;
 }
 function json(res, status, payload) {
   res.writeHead(status, {
@@ -43,10 +86,7 @@ async function readOnlyQuote(instrumentKey) {
     headers: { Accept: 'application/json', Authorization: 'Bearer ' + activeToken() }
   });
   const body = await response.json().catch(() => ({}));
-  if (response.status === 401 || response.status === 403) {
-    productionAccessToken = ''; tokenReceivedAt = 0;
-    throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');
-  }
+  if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
   if (response.status === 429) throw new Error('UPSTOX_RATE_LIMITED');
   if (response.status >= 500) throw new Error('UPSTOX_MARKET_DATA_UNAVAILABLE');
   if (!response.ok) throw new Error('UPSTOX_MARKET_DATA_REQUEST_FAILED');
@@ -65,7 +105,7 @@ async function readOnlyHistoricalDaily(instrumentKey, fromDate, toDate) {
   const endpoint = HISTORICAL_V3_URL + '/' + encodeURIComponent(key) + '/days/1/' + to + '/' + from;
   const response = await fetch(endpoint, { method:'GET', headers:{ Accept:'application/json', Authorization:'Bearer '+activeToken() } });
   const body = await response.json().catch(() => ({}));
-  if (response.status === 401 || response.status === 403) { productionAccessToken=''; tokenReceivedAt=0; throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED'); }
+  if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
   if (response.status === 429) throw new Error('UPSTOX_RATE_LIMITED');
   if (response.status >= 500) throw new Error('UPSTOX_MARKET_DATA_UNAVAILABLE');
   if (!response.ok) throw new Error('UPSTOX_HISTORICAL_DATA_REQUEST_FAILED');
@@ -86,7 +126,7 @@ async function readOnlyIntradayCandles(instrumentKey, interval){
  const url='https://api.upstox.com/v3/historical-candle/intraday/'+encodeURIComponent(key)+'/minutes/'+allowed[interval];
  const response=await fetch(url,{headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
  const body=await response.json().catch(()=>({}));
- if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+ if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
  if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
  if(!response.ok)throw new Error('UPSTOX_INTRADAY_REQUEST_FAILED');
  const raw=body?.data?.candles;
@@ -104,7 +144,7 @@ async function readOnlyFundamentals(isin){
   const entries=await Promise.all(Object.entries(endpoints).map(async([name,path])=>{
     const response=await fetch('https://api.upstox.com/v2/fundamentals/'+encodeURIComponent(id)+'/'+path,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
     const body=await response.json().catch(()=>({}));
-    if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+    if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
     if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
     if(!response.ok)throw new Error('UPSTOX_FUNDAMENTALS_REQUEST_FAILED');
     return [name,body?.data??body];
@@ -119,7 +159,7 @@ async function searchEquityInstrument(query){
   url.searchParams.set('query',q); url.searchParams.set('exchanges','NSE'); url.searchParams.set('segments','EQ');
   const response=await fetch(url,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
   const body=await response.json().catch(()=>({}));
-  if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+  if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
   if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
   if(!response.ok)throw new Error('UPSTOX_INSTRUMENT_SEARCH_FAILED');
   const items=Array.isArray(body?.data)?body.data:[];
@@ -198,7 +238,7 @@ async function searchIntradayDerivativeContracts(query,type,exchange='NSE'){
     url.searchParams.set('page_number',String(page));
     const response=await fetch(url,{headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
     const body=await response.json().catch(()=>({}));
-    if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+    if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
     if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
     if(!response.ok)throw new Error('UPSTOX_DERIVATIVE_SEARCH_FAILED');
     if(!Array.isArray(body?.data))throw new Error('UPSTOX_DERIVATIVE_SEARCH_BAD_PAYLOAD');
@@ -252,7 +292,7 @@ async function readOnlyFullMarketQuote(instrumentKey){
   url.searchParams.set('instrument_key',key);
   const response=await fetch(url,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
   const body=await response.json().catch(()=>({}));
-  if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+  if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
   if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
   if(!response.ok)throw new Error('UPSTOX_LIVE_QUOTE_FAILED');
   const raw=body?.data;
@@ -280,7 +320,7 @@ async function readOnlyOptionGreeks(instrumentKey){
   url.searchParams.set('instrument_key',key);
   const response=await fetch(url,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
   const body=await response.json().catch(()=>({}));
-  if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+  if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
   if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
   if(!response.ok)throw new Error('UPSTOX_OPTION_GREEKS_UNAVAILABLE');
   const match=Object.values(body?.data||{}).find(x=>x?.instrument_token===key);
@@ -321,7 +361,13 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/upstox/status') {
       return json(res, 200, {
         provider: 'UPSTOX',
-        authenticated: Boolean(productionAccessToken && Date.now() - tokenReceivedAt <= TOKEN_SESSION_MAX_MS),
+        authenticated: ANALYTICS_TOKEN ? !analyticsRejected : Boolean(productionAccessToken && oauthExpiresAt && Date.now() < oauthExpiresAt),
+        authMode: ANALYTICS_TOKEN ? 'ANALYTICS_TOKEN' : 'OAUTH_DAILY',
+        tokenVerified: ANALYTICS_TOKEN ? analyticsVerified : Boolean(productionAccessToken && oauthExpiresAt && Date.now() < oauthExpiresAt),
+        tokenExpiresAt: ANALYTICS_TOKEN ? null : (oauthExpiresAt ? new Date(oauthExpiresAt).toISOString() : null),
+        credentialStatus: ANALYTICS_TOKEN ?
+          (analyticsRejected ? 'INVALID_OR_EXPIRED' : analyticsVerified ? 'VERIFIED' : 'CONFIGURED_UNVERIFIED') :
+          (productionAccessToken && oauthExpiresAt && Date.now() < oauthExpiresAt ? 'ACTIVE' : 'LOGIN_REQUIRED'),
         marketDataMode: 'READ_ONLY',
         executionMode: 'PAPER_ONLY',
         orderSubmissionAllowed: false,
@@ -340,7 +386,7 @@ const server = http.createServer(async (req, res) => {
         });
       } catch (error) {
         const message = String(error?.message || 'MARKET_DATA_ERROR');
-        const status = message === 'UPSTOX_REAUTHENTICATION_REQUIRED' ? 401 : message === 'UPSTOX_RATE_LIMITED' ? 429 : 502;
+        const status = authErrorHttpStatus(message) ?? message === 'UPSTOX_RATE_LIMITED' ? 429 : 502;
         const safeError = ['UPSTOX_REAUTHENTICATION_REQUIRED','UPSTOX_RATE_LIMITED','UPSTOX_MARKET_DATA_UNAVAILABLE','UPSTOX_MARKET_DATA_REQUEST_FAILED','UPSTOX_MARKET_DATA_EMPTY','INVALID_INSTRUMENT_KEY'].includes(message) ? message : 'UPSTOX_MARKET_DATA_UNAVAILABLE';
         return json(res, status, { error: safeError, orderSubmissionAllowed: false });
       }
@@ -351,14 +397,14 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { provider:'UPSTOX', mode:'READ_ONLY', interval:'1day', candles, orderSubmissionAllowed:false });
       } catch (error) {
         const message=String(error?.message||'MARKET_DATA_ERROR');
-        const status=message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_DATE_RANGE'||message==='INVALID_INSTRUMENT_KEY'?400:502;
+        const status=authErrorHttpStatus(message)??message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_DATE_RANGE'||message==='INVALID_INSTRUMENT_KEY'?400:502;
         const allowed=['UPSTOX_REAUTHENTICATION_REQUIRED','UPSTOX_RATE_LIMITED','UPSTOX_MARKET_DATA_UNAVAILABLE','UPSTOX_HISTORICAL_DATA_REQUEST_FAILED','UPSTOX_HISTORICAL_DATA_EMPTY','INVALID_INSTRUMENT_KEY','INVALID_DATE_RANGE'];
         return json(res,status,{error:allowed.includes(message)?message:'UPSTOX_MARKET_DATA_UNAVAILABLE',orderSubmissionAllowed:false});
       }
     }
     if (url.pathname === '/api/upstox/intraday' && req.method === 'GET') {
       try { const interval=url.searchParams.get('interval');const instrumentKey=url.searchParams.get('instrument_key');const candles=await readOnlyIntradayCandles(instrumentKey,interval);return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',interval,candles,orderSubmissionAllowed:false}); }
-      catch(error){const message=String(error?.message||'UPSTOX_INTRADAY_UNAVAILABLE');return json(res,message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message.startsWith('INVALID_')?400:502,{error:message,orderSubmissionAllowed:false});}
+      catch(error){const message=String(error?.message||'UPSTOX_INTRADAY_UNAVAILABLE');return json(res,authErrorHttpStatus(message)??message==='UPSTOX_RATE_LIMITED'?429:message.startsWith('INVALID_')?400:502,{error:message,orderSubmissionAllowed:false});}
     }
     if (url.pathname === '/api/upstox/fundamentals' && req.method === 'GET') {
       try {
@@ -366,13 +412,13 @@ const server = http.createServer(async (req, res) => {
         return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',data,orderSubmissionAllowed:false});
       } catch(error) {
         const message=String(error?.message||'FUNDAMENTALS_ERROR');
-        const status=message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_ISIN'?400:502;
+        const status=authErrorHttpStatus(message)??message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_ISIN'?400:502;
         return json(res,status,{error:['UPSTOX_REAUTHENTICATION_REQUIRED','UPSTOX_RATE_LIMITED','UPSTOX_FUNDAMENTALS_REQUEST_FAILED','INVALID_ISIN'].includes(message)?message:'UPSTOX_FUNDAMENTALS_UNAVAILABLE',orderSubmissionAllowed:false});
       }
     }
     if (url.pathname === '/api/upstox/instrument-search' && req.method === 'GET') {
       try { const data=await searchEquityInstrument(url.searchParams.get('query')); return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',data,orderSubmissionAllowed:false}); }
-      catch(error){ const message=String(error?.message||'INSTRUMENT_SEARCH_ERROR'); const status=message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_INSTRUMENT_QUERY'||message==='UPSTOX_EQUITY_NOT_FOUND'?400:502; return json(res,status,{error:message,orderSubmissionAllowed:false}); }
+      catch(error){ const message=String(error?.message||'INSTRUMENT_SEARCH_ERROR'); const status=authErrorHttpStatus(message)??message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_INSTRUMENT_QUERY'||message==='UPSTOX_EQUITY_NOT_FOUND'?400:502; return json(res,status,{error:message,orderSubmissionAllowed:false}); }
     }
     if (url.pathname === '/api/upstox/derivative-search' && req.method === 'GET') {
       try{
@@ -380,7 +426,7 @@ const server = http.createServer(async (req, res) => {
         return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',contracts:found.contracts,diagnostics:found.diagnostics,orderSubmissionAllowed:false});
       }catch(error){
         const message=String(error?.message||'UPSTOX_DERIVATIVE_SEARCH_FAILED');
-        return json(res,message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_DERIVATIVE_SEARCH'?400:502,
+        return json(res,authErrorHttpStatus(message)??message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_DERIVATIVE_SEARCH'?400:502,
           {error:message,orderSubmissionAllowed:false});
       }
     }
@@ -390,7 +436,7 @@ const server = http.createServer(async (req, res) => {
         return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',quote,orderSubmissionAllowed:false});
       }catch(error){
         const message=String(error?.message||'UPSTOX_LIVE_QUOTE_FAILED');
-        return json(res,message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_INSTRUMENT_KEY'?400:502,{error:message,orderSubmissionAllowed:false});
+        return json(res,authErrorHttpStatus(message)??message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_INSTRUMENT_KEY'?400:502,{error:message,orderSubmissionAllowed:false});
       }
     }
     if (url.pathname === '/api/upstox/option-greeks' && req.method === 'GET') {
@@ -399,7 +445,7 @@ const server = http.createServer(async (req, res) => {
         return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',greeks,orderSubmissionAllowed:false});
       }catch(error){
         const message=String(error?.message||'UPSTOX_OPTION_GREEKS_UNAVAILABLE');
-        return json(res,message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_INSTRUMENT_KEY'?400:502,{error:message,orderSubmissionAllowed:false});
+        return json(res,authErrorHttpStatus(message)??message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_INSTRUMENT_KEY'?400:502,{error:message,orderSubmissionAllowed:false});
       }
     }
     if (url.pathname === '/health') {
@@ -432,6 +478,7 @@ const server = http.createServer(async (req, res) => {
       await verifyProductionProfile(token.access_token);
       productionAccessToken = token.access_token;
       tokenReceivedAt = Date.now();
+      oauthExpiresAt = nextUpstoxOAuthExpiry(tokenReceivedAt);
 
       return send(res, 200,
         'UPSTOX_OAUTH_AUTHENTICATION_PASSED\n' +
@@ -439,6 +486,8 @@ const server = http.createServer(async (req, res) => {
         'UPSTOX_PRODUCTION_CONNECTIVITY_PASSED\n' +
         'TOKEN_RECEIVED_SERVER_SIDE=true\n' +
         'TOKEN_PERSISTED=false\n' +
+        'OAUTH_TOKEN_VALID_UNTIL_IST_NEXT_0330=true\n' +
+        'ANALYTICS_TOKEN_CONFIGURED=' + Boolean(ANALYTICS_TOKEN) + '\n' +
         'TOKEN_EXPOSED_TO_BROWSER=false\n' +
         'order_submission_allowed=false\n' +
         'PAPER_ONLY=true\n' +
