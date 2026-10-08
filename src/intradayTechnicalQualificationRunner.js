@@ -1,0 +1,56 @@
+import assert from 'node:assert/strict';
+import {analyzeIntradayCandles,nseSessionState} from './services/intradayTechnicalEngine.js';
+import {assessIntradayInstrumentRisk,extractUpstoxQuoteEvidence} from './services/intradayRiskEngine.js';
+import {classifyIntradayInstrument} from './services/intradayInstrumentContract.js';
+import {evaluateIntradayRecommendation} from './services/intradayRecommendationEngine.js';
+
+const asOf=Date.parse('2026-10-08T12:36:00+05:30');
+const first=Date.parse('2026-10-08T09:15:00+05:30');
+const candles=Array.from({length:41},(_,i)=>{
+ const open=100+i*0.15;
+ return {datetime:new Date(first+i*5*60000).toISOString(),
+   open,high:open+0.3,low:open-0.2,close:open+0.1,volume:20000};
+});
+const approved=analyzeIntradayCandles(candles,{asOf,intervalMinutes:5});
+assert.equal(approved.valid,true,'Only completed valid candles can become research evidence');
+assert.equal(approved.completedBars,40,'Current incomplete 5-minute candle must be excluded');
+assert.ok(Number.isFinite(approved.snapshot.ema9));
+assert.ok(Number.isFinite(approved.snapshot.ema21));
+assert.ok(Number.isFinite(approved.snapshot.rsi14));
+assert.ok(Number.isFinite(approved.snapshot.macdHistogram));
+assert.ok(Number.isFinite(approved.snapshot.vwap));
+assert.ok(Number.isFinite(approved.snapshot.atr14));
+assert.ok(approved.snapshot.liquidityResearchPass,'Synthetic liquid volumes pass preliminary research floor');
+assert.equal(nseSessionState(asOf).open,true);
+assert.equal(nseSessionState('2026-10-10T12:00:00+05:30').open,false,'Weekend is closed');
+assert.equal(nseSessionState('2026-10-08T08:30:00+05:30').open,false,'Premarket is closed');
+assert.ok(analyzeIntradayCandles(candles,{asOf:Date.parse('2026-10-08T13:30:00+05:30')}).reasons.includes('STALE_INTRADAY_CANDLES'));
+assert.ok(analyzeIntradayCandles(candles,{asOf,intervalMinutes:15}).reasons.includes('INSUFFICIENT_COMPLETED_TODAY_CANDLES'));
+assert.ok(analyzeIntradayCandles([...candles,candles[40]],{asOf}).reasons.includes('DUPLICATE_CANDLE_TIMESTAMP'));
+assert.ok(analyzeIntradayCandles(candles.map((x,i)=>i===2?{...x,volume:-1}:x),{asOf}).reasons.includes('INVALID_OHLCV'));
+assert.ok(analyzeIntradayCandles(candles,{asOf:Date.parse('2026-10-08T16:00:00+05:30')}).reasons.includes('SESSION_CLOCK_CLOSED'));
+const key='NSE_EQ|INE002A01018';
+const payload={data:{'NSE_EQ:RELIANCE':{instrument_token:key,depth:{buy:[{price:101}],sell:[{price:101.05}]},timestamp:new Date(asOf).toISOString()}}};
+const quote=extractUpstoxQuoteEvidence(payload,key,asOf);
+assert.equal(quote.valid,true);
+assert.ok(quote.spreadPercent<0.25);
+assert.ok(extractUpstoxQuoteEvidence(payload,key,asOf+240000).reasons.includes('QUOTE_STALE_OR_UNDATED'));
+assert.ok(extractUpstoxQuoteEvidence(payload,'NSE_EQ|wrong',asOf).reasons.includes('QUOTE_FOR_INSTRUMENT_UNAVAILABLE'));
+const equity={segment:'NSE_EQ',instrumentType:'EQ',tradingSymbol:'RELIANCE'};
+assert.equal(assessIntradayInstrumentRisk({instrument:equity,quote,research:approved,asOf}).valid,true);
+assert.ok(assessIntradayInstrumentRisk({instrument:equity,quote:{valid:false},research:approved,asOf}).reasons.includes('VERIFIED_LIVE_SPREAD_REQUIRED'));
+const future={segment:'NSE_FO',instrumentType:'FUT',tradingSymbol:'RELIANCE FUT',expiry:'2026-10-29',lotSize:500};
+const call={segment:'NSE_FO',instrumentType:'CE',tradingSymbol:'RELIANCE CE',expiry:'2026-10-29',lotSize:500,strike:1400};
+assert.equal(classifyIntradayInstrument(future).valid,true,'Correct date regex accepts NSE expiry');
+assert.equal(classifyIntradayInstrument(call).valid,true,'Option strike and expiry are required');
+assert.equal(classifyIntradayInstrument({...call,expiry:'bad'}).valid,false);
+assert.ok(assessIntradayInstrumentRisk({instrument:future,quote,research:approved,asOf}).reasons.includes('FUTURES_MARGIN_NOT_VERIFIED'));
+assert.ok(assessIntradayInstrumentRisk({instrument:call,quote,research:approved,asOf}).reasons.includes('OPTION_GREEKS_NOT_VERIFIED'));
+assert.ok(assessIntradayInstrumentRisk({instrument:call,quote,research:approved,asOf,strategyDirection:'SHORT'}).reasons.includes('UNCOVERED_OPTION_SHORT_NOT_SUPPORTED'));
+const result=evaluateIntradayRecommendation({instrument:equity,candles,sessionOpen:true,asOf,spreadPercent:quote.spreadPercent,
+ research:approved,risk:assessIntradayInstrumentRisk({instrument:equity,quote,research:approved,asOf})});
+assert.equal(result.recommendation,'WAIT','Research score must never bypass unvalidated strategy gate');
+assert.equal(result.estimatedSuccessProbability,null,'Never claim an unproven 90% probability');
+assert.equal(result.orderSubmissionAllowed,false);
+assert.ok(result.researchBias!=='UNAVAILABLE');
+console.log('INTRADAY TECHNICAL/RISK QUALIFICATION: PASSED (28 safety and indicator assertions)');
