@@ -16,7 +16,7 @@ export function classifyIntradayInstrument(input={}){
   if(!symbol)reasons.push('SYMBOL_REQUIRED');
   if(kind==='UNSUPPORTED')reasons.push('UNSUPPORTED_INSTRUMENT');
   if(kind!=='EQUITY'&&kind!=='UNSUPPORTED'){
-    if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(expiry))reasons.push('VALID_EXPIRY_REQUIRED');
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(expiry))reasons.push('VALID_EXPIRY_REQUIRED');
     if(!Number.isInteger(lotSize)||lotSize<1)reasons.push('VALID_LOT_SIZE_REQUIRED');
     if(kind.includes('OPTION')&&!(strike>0))reasons.push('VALID_STRIKE_REQUIRED');
   }
