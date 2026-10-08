@@ -80,3 +80,12 @@ button:disabled{opacity:.55;cursor:wait}
 .ir-mcx-pass{color:#86efac;font-weight:700}
 .ir-mcx-block{color:#fda4af;font-weight:700}
 @media(max-width:760px){.ir-mcx-checks{grid-template-columns:1fr}}
+
+.ir-demo-panel{border-color:#465c81}
+.ir-demo-panel h2{margin-bottom:12px}
+.ir-demo-recent{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ir-demo-item{border:1px solid #2b405d;padding:12px;border-radius:8px;display:flex;flex-direction:column;gap:6px;background:#0d1b2d;font-size:12px}
+.ir-demo-item strong{font-size:12px;color:#e2e8f0}
+.ir-demo-item span{color:#a6b6ca;overflow-wrap:anywhere}
+.ir-demo-panel .ir-actions{flex-wrap:wrap;gap:8px}
+@media(max-width:760px){.ir-demo-recent{grid-template-columns:1fr}}
