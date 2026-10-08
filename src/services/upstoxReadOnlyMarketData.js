@@ -76,3 +76,12 @@ export async function getUpstoxIntradayCandles(instrumentKey,interval='5m'){
  if(!Array.isArray(payload.candles))throw new Error('UPSTOX_INTRADAY_DATA_EMPTY');
  return {provider:'UPSTOX',mode:'READ_ONLY',interval,candles:payload.candles,orderSubmissionAllowed:false};
 }
+
+export async function searchUpstoxDerivatives(query,type){
+ const q=String(query||'').trim(),kind=String(type||'').toUpperCase();
+ if(!q||!['FUT','CE','PE'].includes(kind))throw new Error('INVALID_DERIVATIVE_SEARCH');
+ const params=new URLSearchParams({query:q,type:kind});
+ const payload=await request('/api/upstox/derivative-search?'+params.toString());
+ if(!Array.isArray(payload.contracts))throw new Error('UPSTOX_DERIVATIVE_SEARCH_FAILED');
+ return {contracts:payload.contracts,orderSubmissionAllowed:false};
+}
