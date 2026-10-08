@@ -1,6 +1,7 @@
 // Isolated backend integration test with fake Upstox HTTP responses.
 // Never contacts a broker and never uses a real token.
 import assert from 'node:assert/strict';
+import { gzipSync } from 'node:zlib';
 const nativeFetch=globalThis.fetch;
 const records=[];
 const reply=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json'}});
@@ -12,6 +13,15 @@ const call={...future,instrument_type:'CE',instrument_key:'MCX_FO|12346',
  trading_symbol:'GOLD 100000 CE 05 NOV 26',strike_price:100000};
 globalThis.fetch=async(url,options={})=>{
  const u=new URL(typeof url==='string'?url:url.toString());
+ if(u.hostname==='assets.upstox.com'&&u.pathname==='/market-quote/instruments/exchange/MCX.json.gz'){
+   // Actual official instrument-master response is gzip-compressed JSON.
+   // Include expired and unrelated instruments to assert fail-closed filtering.
+   const rows=[future,{...future,instrument_key:'MCX_FO|99991',expiry:'2025-01-01'},
+     {...future,instrument_key:'MCX_FO|99992',underlying_symbol:'GOLDM',trading_symbol:'GOLDM FUT 05 NOV 26'},
+     {...future,instrument_key:'MCX_FO|99993',exchange:'NSE'},call];
+   return new Response(gzipSync(Buffer.from(JSON.stringify(rows))),{
+     status:200,headers:{'content-type':'application/gzip'}});
+ }
  if(u.hostname!=='api.upstox.com')return nativeFetch(url,options);
  records.push({pathname:u.pathname,params:Object.fromEntries(u.searchParams),method:options.method||'GET'});
  if(u.pathname==='/v2/login/authorization/token')return reply({access_token:fakeToken,token_type:'Bearer'});
@@ -22,16 +32,19 @@ globalThis.fetch=async(url,options={})=>{
    assert.equal(u.searchParams.get('segments'),'FO');
    assert.equal(u.searchParams.get('records'),'30');
    const kind=u.searchParams.get('instrument_types');
-   if(u.searchParams.get('query')==='NOTLISTED'){
-     return reply({status:'success',data:[],meta_data:{page:{total_pages:1,page_number:1}}});
-   }
    if(kind==='CE')return reply({status:'success',data:[call],meta_data:{page:{total_pages:1,page_number:1}}});
    assert.equal(kind,null,'Futures lookup must not use CE/PE-only filtering');
-   // Simulate Upstox returning an option on page 1 and GOLD future on page 2.
-   const page=Number(u.searchParams.get('page_number'));
-   if(page===1)return reply({status:'success',data:[call],meta_data:{page:{total_pages:2,page_number:1}}});
-   if(page===2)return reply({status:'success',data:[future],meta_data:{page:{total_pages:2,page_number:2}}});
-   throw new Error('Unexpected search page');
+   const query=u.searchParams.get('query');
+   if(query==='GOLD'||query==='NOTLISTED')
+     return reply({status:'success',data:[],meta_data:{page:{total_pages:1,page_number:1}}});
+   if(query==='GOLDPAGE'){
+     const page=Number(u.searchParams.get('page_number'));
+     const pageCall={...call,underlying_symbol:'GOLDPAGE'};
+     const pageFuture={...future,underlying_symbol:'GOLDPAGE',trading_symbol:'GOLDPAGE FUT 05 NOV 26'};
+     if(page===1)return reply({status:'success',data:[pageCall],meta_data:{page:{total_pages:2,page_number:1}}});
+     if(page===2)return reply({status:'success',data:[pageFuture],meta_data:{page:{total_pages:2,page_number:2}}});
+   }
+   throw new Error('Unexpected search query/page');
  }
  if(u.pathname==='/v3/market-quote/quotes'){
    return reply({status:'success',data:{'MCX_FO:GOLD':{
@@ -82,17 +95,25 @@ try{
  assert.equal(fut.json.contracts[0].segment,'MCX_FO');
  assert.equal(fut.json.contracts[0].underlyingSymbol,'GOLD');
  assert.equal(fut.json.contracts[0].qtyMultiplier,1);
- assert.equal(fut.json.diagnostics.upstreamCount,2);
+ assert.equal(fut.json.diagnostics.upstreamCount,0);
  assert.equal(fut.json.diagnostics.matchedCount,1);
- assert.equal(fut.json.diagnostics.pagesRead,2);
- assert.equal(fut.json.diagnostics.result,'MATCHES_FOUND');
+ assert.equal(fut.json.diagnostics.pagesRead,1);
+ assert.equal(fut.json.diagnostics.bodRecordCount,4);
+ assert.equal(fut.json.diagnostics.source,'MCX_BOD_JSON');
+ assert.equal(fut.json.diagnostics.result,'BOD_FALLBACK_MATCHES');
+ const paginated=await get('/api/upstox/derivative-search?query=GOLDPAGE&type=FUT&exchange=MCX');
+ assert.equal(paginated.json.contracts.length,1);
+ assert.equal(paginated.json.contracts[0].underlyingSymbol,'GOLDPAGE');
+ assert.equal(paginated.json.diagnostics.pagesRead,2);
+ assert.equal(paginated.json.diagnostics.source,'INSTRUMENT_SEARCH');
  assert.equal(fut.json.orderSubmissionAllowed,false);
  const opt=await get('/api/upstox/derivative-search?query=GOLD&type=CE&exchange=MCX');
  assert.equal(opt.json.contracts.length,1);
  assert.equal(opt.json.contracts[0].strike,100000);
  const empty=await get('/api/upstox/derivative-search?query=NOTLISTED&type=FUT&exchange=MCX');
  assert.equal(empty.json.contracts.length,0);
- assert.equal(empty.json.diagnostics.result,'UPSTREAM_EMPTY');
+ assert.equal(empty.json.diagnostics.result,'BOD_NO_MATCHES');
+ assert.equal(empty.json.diagnostics.source,'MCX_BOD_JSON');
  assert.equal(empty.json.orderSubmissionAllowed,false);
  const invalid=await get('/api/upstox/derivative-search?query=GOLD&type=INVALID&exchange=MCX');
  assert.equal(invalid.response.status,400);
