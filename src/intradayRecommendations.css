@@ -70,3 +70,13 @@ button:disabled{opacity:.55;cursor:wait}
 .ir-option-chart p{margin:8px 0 0}
 .ir-advanced-toggle{margin-top:22px}
 @media(max-width:760px){.ir-auto-controls{grid-template-columns:1fr}.ir-auto-option-panel>h2{flex-wrap:wrap}}
+
+.ir-mcx-evidence{margin:18px 0;padding:16px;border:1px solid #344863;border-radius:12px;background:#0b1929}
+.ir-mcx-evidence .ir-muted{margin-bottom:12px}
+.ir-mcx-checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ir-mcx-check{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-radius:9px;padding:12px;border:1px solid #304560;background:#11233a;font-size:12px}
+.ir-mcx-check strong,.ir-mcx-observed{width:100%}
+.ir-mcx-observed{color:#cbd5e1}
+.ir-mcx-pass{color:#86efac;font-weight:700}
+.ir-mcx-block{color:#fda4af;font-weight:700}
+@media(max-width:760px){.ir-mcx-checks{grid-template-columns:1fr}}

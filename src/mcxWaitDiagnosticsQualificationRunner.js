@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {describeMcxTechnicalSetup} from './services/mcxWaitDiagnostics.js';
+const future={tradingSymbol:'GOLD FUT 2026'};
+const quote={valid:true,lastPrice:149018,spreadPercent:0.05};
+const bullish={valid:true,completedBars:60,snapshot:{close:149018,vwap:149000,ema9:149030,
+ ema21:149010,rsi14:60,macdHistogram:6,atr14:110,liquidityResearchPass:true,lastCompletedAt:'2026-10-08T21:40:00+05:30'}};
+const good=describeMcxTechnicalSetup({future,quote,research:bullish,signal:{direction:'CE'},session:{open:true}});
+assert.equal(good.instrument,'GOLD FUT 2026');
+assert.equal(good.completedBars,60);
+assert.equal(good.callConfirmations,4);
+assert.equal(good.putConfirmations,0);
+assert.equal(good.checks.length,4);
+assert.equal(good.orderSubmissionAllowed,false);
+const mixed={...bullish,snapshot:{...bullish.snapshot,ema9:149000,ema21:149020,rsi14:49,macdHistogram:-3}};
+const wait=describeMcxTechnicalSetup({future,quote,research:mixed,signal:{direction:'WAIT'}});
+assert.equal(wait.direction,'WAIT');
+assert.ok(wait.callConfirmations<4&&wait.putConfirmations<4);
+assert.equal(wait.quoteLast,149018);
+const noData=describeMcxTechnicalSetup({future,research:{valid:false,completedBars:60},quote});
+assert.deepEqual(noData.checks,[]);
+assert.equal(noData.callConfirmations,0);
+assert.equal(noData.putConfirmations,0);
+assert.equal(noData.vwap,null);
+console.log('MCX WAIT DIAGNOSTICS PASSED: real indicators, mixed setup, invalid snapshot, no trade authorization');
