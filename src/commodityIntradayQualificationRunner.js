@@ -51,11 +51,17 @@ assert.equal(research.valid,true);
 assert.equal(research.session.exchange,'MCX');
 assert.ok(research.completedBars>=35);
 const key='MCX_FO|12345';
-const quote=extractUpstoxLiveQuoteEvidence({instrumentKey:key,bid:50000,ask:50001,lastPrice:50000.5,timestamp:now,openInterest:1000,tradedVolume:12000},key,now);
+const quote=extractUpstoxLiveQuoteEvidence({instrumentKey:key,bid:50000,ask:50001,lastPrice:50000.5,timestamp:now,lastTradeTime:now,openInterest:1000,tradedVolume:12000},key,now);
 assert.equal(quote.valid,true);
 assert.ok(quote.spreadPercent<0.5);
-assert.equal(extractUpstoxLiveQuoteEvidence({instrumentKey:key,bid:50000,ask:50001,lastPrice:50000,timestamp:now-300000},key,now).valid,false);
-assert.equal(extractUpstoxLiveQuoteEvidence({instrumentKey:'MCX_FO|999',bid:50000,ask:50001,lastPrice:50000,timestamp:now},key,now).valid,false);
+const staleTrade=extractUpstoxLiveQuoteEvidence({instrumentKey:key,bid:50000,ask:50001,lastPrice:50000.5,
+ timestamp:now,lastTradeTime:now-5*60000,openInterest:1000},key,now);
+assert.equal(staleTrade.valid,false,'A fresh response must not conceal an old last trade');
+assert.ok(staleTrade.reasons.includes('LAST_TRADE_STALE_OR_UNDATED'));
+assert.equal(extractUpstoxLiveQuoteEvidence({instrumentKey:key,bid:50000,ask:50001,lastPrice:50000.5,
+ timestamp:now,openInterest:1000},key,now).valid,false,'Missing actual last trade fails closed');
+assert.equal(extractUpstoxLiveQuoteEvidence({instrumentKey:key,bid:50000,ask:50001,lastPrice:50000,timestamp:now-300000,lastTradeTime:now},key,now).valid,false);
+assert.equal(extractUpstoxLiveQuoteEvidence({instrumentKey:'MCX_FO|999',bid:50000,ask:50001,lastPrice:50000,timestamp:now,lastTradeTime:now},key,now).valid,false);
 const risk=assessIntradayInstrumentRisk({instrument:future,quote,research,asOf:now,
  openInterest:quote.openInterest,marginVerified:true,deliveryRiskVerified:true,session:mcx});
 assert.equal(risk.valid,false,'Exchange holiday and broker cutoff validation is not yet integrated');
