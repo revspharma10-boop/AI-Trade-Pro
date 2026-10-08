@@ -1,10 +1,12 @@
-// Dedicated two-input NSE long-options research UI, deliberately separate from legacy controls.
+// Dedicated two-field NSE and MCX long-options paper research.
 import {getUpstoxReadOnlyStatus,searchUpstoxIndex,searchUpstoxEquity,getUpstoxIntradayCandles,
  getUpstoxLiveQuote,getUpstoxOptionContracts,getUpstoxPaperMarginQuote} from './services/upstoxReadOnlyMarketData.js';
 import {extractUpstoxLiveQuoteEvidence} from './services/intradayRiskEngine.js';
 import {analyzeIntradayCandles} from './services/intradayTechnicalEngine.js';
 import {marketClockState} from './services/intradayMarketClock.js';
 import {deriveAutoOptionDirection,chooseAutoOptionContract,calculateAutoOptionPaperPlan} from './services/autoOptionResearchEngine.js';
+import {chooseMcxOptionUnderlying,deriveMcxOptionDirection,chooseMcxOptionContract,calculateMcxOptionPaperPlan} from './services/mcxAutoOptionResearchEngine.js';
+import {searchUpstoxDerivatives} from './services/upstoxReadOnlyMarketData.js';
 
 const fmt=n=>typeof n==='number'&&Number.isFinite(n)?'₹'+n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'NOT VERIFIED';
 const time=n=>Number.isFinite(n)?new Date(n).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour12:true}):'NOT VERIFIED';
@@ -56,9 +58,9 @@ export function mountAutoOptionResearch(){
  const panel=document.createElement('section');panel.className='ir-panel ir-auto-option-panel';
  panel.innerHTML=[
   '<h2>One-click CALL / PUT research <span class="ir-safety">PAPER ONLY</span></h2>',
-  '<p class="ir-muted">Choose just the instrument type and symbol. Live NSE research requires fresh candles and an authenticated Upstox data connection.</p>',
-  '<div class="ir-auto-controls"><label>Instrument type<select id="ir-auto-type"><option value="INDEX">NSE Index Options — Auto CE/PE</option><option value="STOCK">NSE Stock Options — Auto CE/PE</option></select></label>',
-  '<label>Symbol<input id="ir-auto-symbol" value="NIFTY" maxlength="35" autocomplete="off" spellcheck="false" placeholder="NIFTY / BANKNIFTY / RELIANCE"></label></div>',
+  '<p class="ir-muted">Choose just the instrument type and symbol. NSE and MCX research require fresh candles and an authenticated Upstox data connection.</p>',
+  '<div class="ir-auto-controls"><label>Instrument type<select id="ir-auto-type"><option value="INDEX">NSE Index Options — Auto CE/PE</option><option value="STOCK">NSE Stock Options — Auto CE/PE</option><option value="MCX">MCX Commodity Options — Auto CE/PE</option></select></label>',
+  '<label>Symbol<input id="ir-auto-symbol" value="NIFTY" maxlength="35" autocomplete="off" spellcheck="false" placeholder="NIFTY / RELIANCE / GOLD / SILVER"></label></div>',
   '<div class="ir-actions"><button class="ir-primary" id="ir-auto-analyze" type="button">Analyze chart &amp; find CE / PE</button></div>',
   '<p id="ir-auto-status" class="ir-status" role="status" aria-live="polite">Select instrument and symbol, then analyze.</p>',
   '<div class="ir-decision ir-option-result"><h3>Option research result</h3><span class="ir-paper-wait" id="ir-auto-direction">WAIT</span></div>',
@@ -77,7 +79,7 @@ export function mountAutoOptionResearch(){
   result.replaceChildren();blocks.replaceChildren();chart.textContent='Awaiting fresh market data.';
   status.textContent='Select instrument type and symbol, then analyze.';
  };
- type.addEventListener('change',()=>{symbol.value=type.value==='INDEX'?'NIFTY':'RELIANCE';reset();});
+ type.addEventListener('change',()=>{symbol.value=type.value==='INDEX'?'NIFTY':type.value==='MCX'?'GOLD':'RELIANCE';reset();});
  symbol.addEventListener('input',reset);
  find('ir-auto-advanced').addEventListener('click',()=>{
   const visible=oldPanels[0]?.hidden!==false;
@@ -99,6 +101,9 @@ export function mountAutoOptionResearch(){
    ['Stop loss — option premium',fmt(plan?.stopLoss)],
    ['Target 1 (1.5R)',fmt(plan?.target1)],['Target 2 (2R)',fmt(plan?.target2)],
    ['Contract lot size',contract?.lotSize??'NOT VERIFIED'],
+   ['MCX quantity multiplier',contract?.segment==='MCX_FO'?(contract?.qtyMultiplier??'NOT VERIFIED'):'N/A'],
+   ['Exposure units per MCX lot',contract?.segment==='MCX_FO'?(plan?.exposureUnitsPerLot??'NOT VERIFIED'):'N/A'],
+   ['Gross risk + 2 ticks per lot',fmt(plan?.riskPerLot)],
    ['₹500 risk: theoretical lots',plan?.preliminaryRiskLots??'NOT VERIFIED'],
    ['Required premium/lot',fmt(plan?.optionPremiumCostPerLot)],
    ['Broker required margin/lot',fmt(plan?.brokerRequiredMarginPerLot)],
@@ -108,7 +113,7 @@ export function mountAutoOptionResearch(){
   [...new Set([...issues,...(plan?.reasons??[])])].forEach(x=>blocks.append(element('li',String(x))));
  }
  button.addEventListener('click',async()=>{
-  const thisRun=++version,now=Date.now(),input=symbol.value.trim().toUpperCase(),isIndex=type.value==='INDEX';
+  const thisRun=++version,now=Date.now(),input=symbol.value.trim().toUpperCase(),isIndex=type.value==='INDEX',isMcx=type.value==='MCX';
   const current=()=>thisRun===version;
   button.disabled=true;label.textContent='WAIT';label.className='ir-paper-wait';
   result.replaceChildren();blocks.replaceChildren();chart.replaceChildren();status.textContent='Loading underlying market evidence...';
@@ -116,11 +121,75 @@ export function mountAutoOptionResearch(){
   const issues=[];
   try{
    if(!/^[A-Z0-9_-]{1,35}$/.test(input))throw Error('VALID_SYMBOL_REQUIRED');
-   const session=marketClockState({segment:'NSE_EQ',asOf:now});
-   if(!session.open)throw Error('NSE_MARKET_CLOCK_CLOSED_OR_NEAR_CLOSE');
+   const session=marketClockState({segment:isMcx?'MCX_FO':'NSE_EQ',underlyingSymbol:isMcx?input:'',asOf:now});
+   if(!session.open)throw Error((isMcx?'MCX':'NSE')+'_MARKET_CLOCK_CLOSED_OR_UNVERIFIED');
    const auth=await getUpstoxReadOnlyStatus();
    if(!current())return;
    if(!auth.authenticated)throw Error('UPSTOX_REAUTHENTICATION_REQUIRED');
+
+   if(isMcx){
+    status.textContent='Reading MCX futures and CE/PE exchange contracts...';
+    const [futureResponse,callResponse,putResponse]=await Promise.allSettled([
+      searchUpstoxDerivatives(input,'FUT','MCX'),
+      searchUpstoxDerivatives(input,'CE','MCX'),
+      searchUpstoxDerivatives(input,'PE','MCX')
+    ]);
+    if(!current())return;
+    const futures=futureResponse.status==='fulfilled'?futureResponse.value.contracts:[];
+    const calls=callResponse.status==='fulfilled'?callResponse.value.contracts:[];
+    const puts=putResponse.status==='fulfilled'?putResponse.value.contracts:[];
+    for(const x of [futureResponse,callResponse,putResponse])
+      if(x.status==='rejected')issues.push(String(x.reason?.message||'MCX_LOOKUP_UNAVAILABLE'));
+    const linked=chooseMcxOptionUnderlying({futures,options:[...calls,...puts],symbol:input,asOf:now});
+    issues.push(...linked.reasons);
+    if(!linked.future){showPlan(null,null,issues);status.textContent='WAIT — MCX futures/option underlying link not verified';return;}
+    const future=linked.future;
+    const [barsResponse,quoteResponse]=await Promise.allSettled([
+      getUpstoxIntradayCandles(future.instrumentKey,'5m'),
+      getUpstoxLiveQuote(future.instrumentKey)
+    ]);
+    if(!current())return;
+    const candles=barsResponse.status==='fulfilled'?barsResponse.value.candles:[];
+    candlesChart(chart,candles,now);
+    const research=analyzeIntradayCandles(candles,{asOf:now,intervalMinutes:5,session});
+    const quote=quoteResponse.status==='fulfilled'?
+      extractUpstoxLiveQuoteEvidence(quoteResponse.value,future.instrumentKey,now):null;
+    if(barsResponse.status==='rejected')issues.push(String(barsResponse.reason?.message||'MCX_FUTURE_CANDLES_UNAVAILABLE'));
+    if(quoteResponse.status==='rejected')issues.push(String(quoteResponse.reason?.message||'MCX_FUTURE_QUOTE_UNAVAILABLE'));
+    const bias=deriveMcxOptionDirection({future,research,quote,session,asOf:now});
+    direction=bias.direction;issues.push(...bias.reasons);
+    if(direction==='WAIT'){showPlan(null,null,issues);status.textContent='WAIT — MCX futures technical research not qualified';return;}
+    const picked=chooseMcxOptionContract({options:[...calls,...puts],future,
+      spot:quote.lastPrice,direction,asOf:now});
+    chosen=picked.contract;issues.push(...picked.reasons);
+    if(!chosen){showPlan(null,null,issues);status.textContent='WAIT — exact MCX '+direction+' contract not verified';return;}
+    const [optionBars,optionQuote]=await Promise.allSettled([
+      getUpstoxIntradayCandles(chosen.instrumentKey,'5m'),
+      getUpstoxLiveQuote(chosen.instrumentKey)
+    ]);
+    if(!current())return;
+    const premiumResearch=optionBars.status==='fulfilled'?
+      analyzeIntradayCandles(optionBars.value.candles,{asOf:now,intervalMinutes:5,session}):null;
+    const premiumQuote=optionQuote.status==='fulfilled'?
+      extractUpstoxLiveQuoteEvidence(optionQuote.value,chosen.instrumentKey,now):null;
+    if(optionBars.status==='rejected')issues.push(String(optionBars.reason?.message||'MCX_OPTION_CANDLES_UNAVAILABLE'));
+    if(optionQuote.status==='rejected')issues.push(String(optionQuote.reason?.message||'MCX_OPTION_QUOTE_UNAVAILABLE'));
+    const inputs={future,contract:chosen,direction,quote:premiumQuote,research:premiumResearch,asOf:now};
+    plan=calculateMcxOptionPaperPlan(inputs);
+    if(plan.status==='UNVALIDATED_PAPER_LEVELS'){
+      try{
+        const margin=await getUpstoxPaperMarginQuote(chosen.instrumentKey,'BUY',chosen.lotSize,plan.entry);
+        if(!current())return;
+        plan=calculateMcxOptionPaperPlan({...inputs,marginQuote:margin});
+      }catch(e){issues.push('MCX_BROKER_MARGIN_UNAVAILABLE: '+String(e?.message??'UNKNOWN'));}
+    }
+    if(!current())return;
+    showPlan(plan,chosen,issues);
+    status.textContent=plan.status==='UNVALIDATED_PAPER_LEVELS'?
+      'MCX provisional BUY '+direction+' premium paper research — NOT executable':
+      'WAIT — MCX option contract or risk qualification incomplete';
+    return;
+   }
    const underlying=isIndex?await searchUpstoxIndex(input):await searchUpstoxEquity(input);
    if(!current())return;
    if(!isIndex&&String(underlying.tradingSymbol||'').toUpperCase()!==input)
