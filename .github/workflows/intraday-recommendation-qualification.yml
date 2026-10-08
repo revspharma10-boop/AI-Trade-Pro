@@ -18,6 +18,8 @@ jobs:
       - run: node src/intradayPaperSignalQualificationRunner.js
       - run: node src/intradayPaperTradePlanQualificationRunner.js
       - run: node src/marketQuoteRefreshQualificationRunner.js
+      - run: node src/frozenResearchQualificationRunner.js
+      - run: node --check src/services/frozenResearchPolicy.js
       - run: node --check src/services/marketQuoteRefreshPolicy.js
       - run: node src/autoOptionResearchQualificationRunner.js
       - run: node src/indexDemoJournalQualificationRunner.js
