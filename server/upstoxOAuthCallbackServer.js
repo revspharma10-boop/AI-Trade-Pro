@@ -144,7 +144,9 @@ async function searchIntradayDerivativeContracts(query,type,exchange='NSE'){
   url.searchParams.set('exchanges',market);
   url.searchParams.set('segments','FO');
   url.searchParams.set('instrument_types',kind);
-  url.searchParams.set('expiry','current_month');
+  // MCX GOLD/SILVER futures can skip calendar months; current_month may return none.
+  // Search eligible listed contracts and validate exact expiry downstream.
+  if(market!=='MCX')url.searchParams.set('expiry','current_month');
   url.searchParams.set('records','30');
   const response=await fetch(url,{headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
   const body=await response.json().catch(()=>({}));
@@ -155,7 +157,7 @@ async function searchIntradayDerivativeContracts(query,type,exchange='NSE'){
   const expectedSegment=market+'_FO';
   return raw.filter(x=>x.segment===expectedSegment&&String(x.instrument_type).toUpperCase()===kind&&
      typeof x.instrument_key==='string'&&x.instrument_key.startsWith(expectedSegment+'|')&&x.trading_symbol&&
-     (market!=='MCX'||String(x.underlying_type||'COM').toUpperCase()==='COM'))
+     (market!=='MCX'||!x.underlying_type||['COM','COMMODITY'].includes(String(x.underlying_type).toUpperCase())))
     .map(x=>({instrumentKey:String(x.instrument_key),segment:expectedSegment,exchange:market,
       instrumentType:kind,tradingSymbol:String(x.trading_symbol),
       underlyingSymbol:String(x.underlying_symbol||'').toUpperCase(),
