@@ -49,3 +49,21 @@ assert.equal(calculateAutoOptionPaperPlan({...args,optionResearch:{...optionRese
 assert.equal(calculateAutoOptionPaperPlan({...args,capital:100000}).status,'WAIT');
 assert.deepEqual(AUTO_OPTION_SAFETY,{paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false,productionRealTradingEnabled:false});
 console.log('AUTO CE/PE PAPER OPTION QUALIFICATION PASSED: expiry/ATM, directional candles, ₹500 risk, premium, quotes, broker margin, fail-closed, 0 orders');
+
+
+const bseKey='BSE_INDEX|SENSEX';
+const bseContract={...call,segment:'BSE_FO',underlyingKey:bseKey,instrumentKey:'BSE_FO|1234',
+ tradingSymbol:'SENSEX 75000 CE',strike:75000,lotSize:20};
+const bseQuote={...underlyingQuote,instrumentKey:bseKey,lastPrice:75000};
+const bseResearch={...research,snapshot:{...research.snapshot,close:75000,ema9:75010,ema21:74990,atr14:90}};
+assert.equal(deriveAutoOptionDirection({research:bseResearch,underlyingQuote:bseQuote,
+ underlyingSegment:'BSE_INDEX',session:{open:true},asOf:now}).direction,'CE');
+assert.equal(chooseAutoOptionContract({contracts:[call,bseContract],underlyingKey:bseKey,spot:75001,
+ direction:'CE',asOf:now}).contract.instrumentKey,bseContract.instrumentKey);
+assert.equal(chooseAutoOptionContract({contracts:[call],underlyingKey:bseKey,spot:75001,
+ direction:'CE',asOf:now}).contract,null,'NSE instruments must not substitute for BSE');
+const bsePlan=calculateAutoOptionPaperPlan({direction:'CE',contract:bseContract,underlyingKey:bseKey,
+ optionQuote:quote,optionResearch,asOf:now});
+assert.equal(bsePlan.status,'UNVALIDATED_PAPER_LEVELS');
+assert.equal(bsePlan.approvedLots,0);
+console.log('BSE SENSEX PAPER RESEARCH QUALIFICATION PASSED');
