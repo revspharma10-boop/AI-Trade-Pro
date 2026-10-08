@@ -127,6 +127,28 @@ async function searchEquityInstrument(query){
   return {name:exact.name,shortName:exact.short_name,tradingSymbol:exact.trading_symbol,isin:exact.isin,instrumentKey:exact.instrument_key,exchange:exact.exchange,segment:exact.segment};
 }
 
+async function searchIntradayDerivativeContracts(query,type){
+  const q=String(query||'').trim(),kind=String(type||'').toUpperCase();
+  if(!q||q.length>50||!['FUT','CE','PE'].includes(kind))throw new Error('INVALID_DERIVATIVE_SEARCH');
+  const url=new URL('https://api.upstox.com/v2/instruments/search');
+  url.searchParams.set('query',q);
+  url.searchParams.set('exchanges','NSE');
+  url.searchParams.set('segments','FO');
+  url.searchParams.set('instrument_types',kind);
+  url.searchParams.set('expiry','current_month');
+  url.searchParams.set('records','20');
+  const response=await fetch(url,{headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
+  const body=await response.json().catch(()=>({}));
+  if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+  if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
+  if(!response.ok)throw new Error('UPSTOX_DERIVATIVE_SEARCH_FAILED');
+  const raw=Array.isArray(body?.data)?body.data:[];
+  return raw.filter(x=>x.segment==='NSE_FO'&&x.instrument_type===kind&&x.instrument_key&&x.trading_symbol)
+    .map(x=>({instrumentKey:String(x.instrument_key),segment:'NSE_FO',instrumentType:kind,
+      tradingSymbol:String(x.trading_symbol),expiry:String(x.expiry||''),
+      lotSize:Number(x.lot_size),strike:Number(x.strike_price||0)}));
+}
+
 function safeCookie(value) {
   return `${COOKIE}=${encodeURIComponent(value)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=600`;
 }
@@ -211,6 +233,16 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/upstox/instrument-search' && req.method === 'GET') {
       try { const data=await searchEquityInstrument(url.searchParams.get('query')); return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',data,orderSubmissionAllowed:false}); }
       catch(error){ const message=String(error?.message||'INSTRUMENT_SEARCH_ERROR'); const status=message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_INSTRUMENT_QUERY'||message==='UPSTOX_EQUITY_NOT_FOUND'?400:502; return json(res,status,{error:message,orderSubmissionAllowed:false}); }
+    }
+    if (url.pathname === '/api/upstox/derivative-search' && req.method === 'GET') {
+      try{
+        const contracts=await searchIntradayDerivativeContracts(url.searchParams.get('query'),url.searchParams.get('type'));
+        return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',contracts,orderSubmissionAllowed:false});
+      }catch(error){
+        const message=String(error?.message||'UPSTOX_DERIVATIVE_SEARCH_FAILED');
+        return json(res,message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message==='INVALID_DERIVATIVE_SEARCH'?400:502,
+          {error:message,orderSubmissionAllowed:false});
+      }
     }
     if (url.pathname === '/health') {
       return send(res, 200, 'AI_TRADE_PRO_OAUTH_CALLBACK_HEALTHY\nPAPER_ONLY=true\nPRODUCTION_REAL_TRADING_ENABLED=false');
