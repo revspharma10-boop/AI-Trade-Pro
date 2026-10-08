@@ -18,3 +18,7 @@ NIFTY 50 (NSE_INDEX / NSE_FO), BANKNIFTY (NSE_INDEX / NSE_FO), SENSEX (BSE_INDEX
 
 ## Safety
 PAPER_ONLY=true; REAL_ORDER_PLACED=false; PRODUCTION_REAL_TRADING_ENABLED=false; approvedRealLots=0. Capital ₹50,000, nominal risk ₹500 per hypothetical option trade, broker available funds unverified. No trades are authorized, no real orders placed.
+
+## Broker quote polling (30 seconds)
+
+The visible Automatic CE/PE research panel polls read-only Upstox quote endpoints for the selected underlying (and verified option contract, if resolved) approximately every 30 seconds. It begins after Analyze resolves an instrument, works only while the browser tab is visible, the exchange clock is open, and the backend is available. Quotes older than 120 seconds, mismatched instrument keys and unverified option bid/ask or last-trade timestamps display NOT CURRENT, never a fabricated live price. It is HTTP polling, not WebSocket ticks. Completed 5-minute technical candles and provisional CALL/PUT research are **not** recalculated by quote polling. The user must press Analyze again to recalculate. Old displayed provisional paper levels are invalidated after two minutes to prevent using them as current entries. The separate armed Oct 9 three-index demo journal retains its 5-minute research snapshot schedule.
