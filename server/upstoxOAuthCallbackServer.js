@@ -77,6 +77,24 @@ async function readOnlyHistoricalDaily(instrumentKey, fromDate, toDate) {
   return candles;
 }
 
+async function readOnlyIntradayCandles(instrumentKey, interval){
+ const key=String(instrumentKey||'').trim();
+ const allowed={ '1m':'1','5m':'5','15m':'15' };
+ if(!key||key.length>120||/order/i.test(key))throw new Error('INVALID_INSTRUMENT_KEY');
+ if(!Object.hasOwn(allowed,interval))throw new Error('INVALID_INTRADAY_INTERVAL');
+ const url='https://api.upstox.com/v3/historical-candle/intraday/'+encodeURIComponent(key)+'/minutes/'+allowed[interval];
+ const response=await fetch(url,{headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
+ const body=await response.json().catch(()=>({}));
+ if(response.status===401||response.status===403){productionAccessToken='';tokenReceivedAt=0;throw new Error('UPSTOX_REAUTHENTICATION_REQUIRED');}
+ if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
+ if(!response.ok)throw new Error('UPSTOX_INTRADAY_REQUEST_FAILED');
+ const raw=body?.data?.candles;
+ if(!Array.isArray(raw)||!raw.length)throw new Error('UPSTOX_INTRADAY_DATA_EMPTY');
+ const candles=raw.map(x=>({datetime:String(x?.[0]||''),open:Number(x?.[1]),high:Number(x?.[2]),low:Number(x?.[3]),close:Number(x?.[4]),volume:Number(x?.[5])})).filter(x=>Number.isFinite(Date.parse(x.datetime))&&[x.open,x.high,x.low,x.close,x.volume].every(Number.isFinite)&&x.volume>=0&&x.low>0&&x.high>=x.low).sort((a,b)=>Date.parse(a.datetime)-Date.parse(b.datetime));
+ if(!candles.length)throw new Error('UPSTOX_INTRADAY_DATA_EMPTY');
+ return candles;
+}
+
 function validIsin(value){return /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(value||'').toUpperCase());}
 async function readOnlyFundamentals(isin){
   const id=String(isin||'').trim().toUpperCase();
@@ -175,6 +193,10 @@ const server = http.createServer(async (req, res) => {
         const allowed=['UPSTOX_REAUTHENTICATION_REQUIRED','UPSTOX_RATE_LIMITED','UPSTOX_MARKET_DATA_UNAVAILABLE','UPSTOX_HISTORICAL_DATA_REQUEST_FAILED','UPSTOX_HISTORICAL_DATA_EMPTY','INVALID_INSTRUMENT_KEY','INVALID_DATE_RANGE'];
         return json(res,status,{error:allowed.includes(message)?message:'UPSTOX_MARKET_DATA_UNAVAILABLE',orderSubmissionAllowed:false});
       }
+    }
+    if (url.pathname === '/api/upstox/intraday' && req.method === 'GET') {
+      try { const interval=url.searchParams.get('interval');const instrumentKey=url.searchParams.get('instrument_key');const candles=await readOnlyIntradayCandles(instrumentKey,interval);return json(res,200,{provider:'UPSTOX',mode:'READ_ONLY',interval,candles,orderSubmissionAllowed:false}); }
+      catch(error){const message=String(error?.message||'UPSTOX_INTRADAY_UNAVAILABLE');return json(res,message==='UPSTOX_REAUTHENTICATION_REQUIRED'?401:message==='UPSTOX_RATE_LIMITED'?429:message.startsWith('INVALID_')?400:502,{error:message,orderSubmissionAllowed:false});}
     }
     if (url.pathname === '/api/upstox/fundamentals' && req.method === 'GET') {
       try {
