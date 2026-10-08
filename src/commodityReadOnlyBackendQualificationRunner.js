@@ -20,7 +20,18 @@ globalThis.fetch=async(url,options={})=>{
  if(u.pathname==='/v2/instruments/search'){
    assert.equal(u.searchParams.get('exchanges'),'MCX');
    assert.equal(u.searchParams.get('segments'),'FO');
-   return reply({status:'success',data:[future,call]});
+   assert.equal(u.searchParams.get('records'),'30');
+   const kind=u.searchParams.get('instrument_types');
+   if(u.searchParams.get('query')==='NOTLISTED'){
+     return reply({status:'success',data:[],meta_data:{page:{total_pages:1,page_number:1}}});
+   }
+   if(kind==='CE')return reply({status:'success',data:[call],meta_data:{page:{total_pages:1,page_number:1}}});
+   assert.equal(kind,null,'Futures lookup must not use CE/PE-only filtering');
+   // Simulate Upstox returning an option on page 1 and GOLD future on page 2.
+   const page=Number(u.searchParams.get('page_number'));
+   if(page===1)return reply({status:'success',data:[call],meta_data:{page:{total_pages:2,page_number:1}}});
+   if(page===2)return reply({status:'success',data:[future],meta_data:{page:{total_pages:2,page_number:2}}});
+   throw new Error('Unexpected search page');
  }
  if(u.pathname==='/v3/market-quote/quotes'){
    return reply({status:'success',data:{'MCX_FO:GOLD':{
@@ -71,10 +82,18 @@ try{
  assert.equal(fut.json.contracts[0].segment,'MCX_FO');
  assert.equal(fut.json.contracts[0].underlyingSymbol,'GOLD');
  assert.equal(fut.json.contracts[0].qtyMultiplier,1);
+ assert.equal(fut.json.diagnostics.upstreamCount,2);
+ assert.equal(fut.json.diagnostics.matchedCount,1);
+ assert.equal(fut.json.diagnostics.pagesRead,2);
+ assert.equal(fut.json.diagnostics.result,'MATCHES_FOUND');
  assert.equal(fut.json.orderSubmissionAllowed,false);
  const opt=await get('/api/upstox/derivative-search?query=GOLD&type=CE&exchange=MCX');
  assert.equal(opt.json.contracts.length,1);
  assert.equal(opt.json.contracts[0].strike,100000);
+ const empty=await get('/api/upstox/derivative-search?query=NOTLISTED&type=FUT&exchange=MCX');
+ assert.equal(empty.json.contracts.length,0);
+ assert.equal(empty.json.diagnostics.result,'UPSTREAM_EMPTY');
+ assert.equal(empty.json.orderSubmissionAllowed,false);
  const invalid=await get('/api/upstox/derivative-search?query=GOLD&type=INVALID&exchange=MCX');
  assert.equal(invalid.response.status,400);
  const quote=await get('/api/upstox/live-quote?instrument_key=MCX_FO%7C12345');
