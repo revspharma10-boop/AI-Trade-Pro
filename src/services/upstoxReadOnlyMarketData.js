@@ -83,6 +83,16 @@ export async function searchUpstoxDerivatives(query,type,exchange='NSE'){
 }
 
 
+// Broker margin *requirement* quotation; does not read account funds or place an order.
+export async function getUpstoxPaperMarginQuote(instrumentKey,side,quantity,price){
+ const key=String(instrumentKey||''),direction=String(side||'').toUpperCase();
+ if(!/^(NSE_EQ|NSE_FO|MCX_FO)\|[A-Za-z0-9_]+$/.test(key)||
+    !['BUY','SELL'].includes(direction)||!Number.isInteger(quantity)||quantity<1||
+    !Number.isFinite(price)||price<=0)throw new Error('INVALID_PAPER_MARGIN_REQUEST');
+ const q=new URLSearchParams({instrument_key:key,side:direction,quantity:String(quantity),price:String(price)});
+ return request('/api/upstox/paper-margin?'+q);
+}
+
 export async function getUpstoxLiveQuote(instrumentKey){
  if(!/^(NSE_EQ|NSE_FO|MCX_FO)\|[A-Za-z0-9_]+$/.test(String(instrumentKey||'')))throw new Error('INVALID_INSTRUMENT_KEY');
  const payload=await request('/api/upstox/live-quote?instrument_key='+encodeURIComponent(instrumentKey));
