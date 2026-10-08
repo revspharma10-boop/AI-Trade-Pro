@@ -77,11 +77,24 @@ export async function getUpstoxIntradayCandles(instrumentKey,interval='5m'){
  return {provider:'UPSTOX',mode:'READ_ONLY',interval,candles:payload.candles,orderSubmissionAllowed:false};
 }
 
-export async function searchUpstoxDerivatives(query,type){
+export async function searchUpstoxDerivatives(query,type,exchange='NSE'){
  const q=String(query||'').trim(),kind=String(type||'').toUpperCase();
- if(!q||!['FUT','CE','PE'].includes(kind))throw new Error('INVALID_DERIVATIVE_SEARCH');
- const params=new URLSearchParams({query:q,type:kind});
+ if(!q||!['FUT','CE','PE'].includes(kind)||!['MCX','NSE'].includes(exchange))throw new Error('INVALID_DERIVATIVE_SEARCH');
+ const params=new URLSearchParams({query:q,type:kind,exchange});
  const payload=await request('/api/upstox/derivative-search?'+params.toString());
  if(!Array.isArray(payload.contracts))throw new Error('UPSTOX_DERIVATIVE_SEARCH_FAILED');
  return {contracts:payload.contracts,orderSubmissionAllowed:false};
+}
+
+
+export async function getUpstoxLiveQuote(instrumentKey){
+ if(!/^(NSE_EQ|NSE_FO|MCX_FO)\|[A-Za-z0-9_]+$/.test(String(instrumentKey||'')))throw new Error('INVALID_INSTRUMENT_KEY');
+ const payload=await request('/api/upstox/live-quote?instrument_key='+encodeURIComponent(instrumentKey));
+ if(!payload?.quote||payload.quote.instrumentKey!==instrumentKey)throw new Error('UPSTOX_LIVE_QUOTE_EMPTY');
+ return {provider:'UPSTOX',mode:'READ_ONLY',...payload.quote,orderSubmissionAllowed:false};
+}
+export async function getUpstoxOptionGreeks(instrumentKey){
+ if(!/^(NSE_FO|MCX_FO)\|[A-Za-z0-9_]+$/.test(String(instrumentKey||'')))throw new Error('INVALID_INSTRUMENT_KEY');
+ const payload=await request('/api/upstox/option-greeks?instrument_key='+encodeURIComponent(instrumentKey));
+ return {provider:'UPSTOX',mode:'READ_ONLY',greeks:payload.greeks??null,orderSubmissionAllowed:false};
 }
