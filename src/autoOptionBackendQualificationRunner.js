@@ -32,7 +32,7 @@ process.env.PORT=String(30000+Math.floor(Math.random()*10000));
 process.env.UPSTOX_ANALYTICS_TOKEN='TEST_FAKE_READONLY_TOKEN';
 await import('../server/upstoxOAuthCallbackServer.js');
 const base='http://127.0.0.1:'+process.env.PORT;
-const get=async path=>{const response=await nativeFetch(base+path);return {status:response.status,body:await response.json()};};
+const get=async path=>{const response=await nativeFetch(base+path);const raw=await response.text();let body;try{body=JSON.parse(raw);}catch{body=raw;}return {status:response.status,body};};
 try{
  const index=await get('/api/upstox/index-search?query=NIFTY');
  assert.equal(index.status,200);
