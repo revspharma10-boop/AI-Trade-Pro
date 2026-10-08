@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {frozenResearchWindow,frozenResearchState,RESEARCH_FREEZE_MS,
+ RESEARCH_SETTLE_DELAY_MS,RESEARCH_FREEZE_SAFETY} from './services/frozenResearchPolicy.js';
+const date=time=>Date.parse('2026-10-09T'+time+'+05:30');
+const w=frozenResearchWindow(date('09:20:12'));
+assert.equal(RESEARCH_FREEZE_MS,300000);
+assert.equal(RESEARCH_SETTLE_DELAY_MS,12000);
+assert.equal(w.slotReadyAt,date('09:20:12'));
+assert.equal(w.nextRefreshAt,date('09:25:12'));
+assert.equal(frozenResearchWindow(date('09:25:11')).slot,w.slot,'Do not update on incomplete current candle');
+assert.equal(frozenResearchWindow(date('09:25:12')).slot,w.slot+1);
+const base={hasSelection:true,capturedSlot:w.slot,session:{open:true},visible:true};
+assert.equal(frozenResearchState({...base,asOf:date('09:23:50')}).status,'FROZEN');
+assert.equal(frozenResearchState({...base,asOf:date('09:24:59')}).shouldRefresh,false);
+assert.equal(frozenResearchState({...base,asOf:date('09:25:11')}).shouldRefresh,false);
+assert.equal(frozenResearchState({...base,asOf:date('09:25:12')}).shouldRefresh,true);
+assert.equal(frozenResearchState({...base,asOf:date('09:25:12'),running:true}).shouldRefresh,false);
+assert.equal(frozenResearchState({...base,asOf:date('09:25:12'),visible:false}).shouldRefresh,false);
+assert.equal(frozenResearchState({...base,asOf:date('09:25:12'),session:{open:false}}).shouldRefresh,false);
+assert.equal(frozenResearchState({asOf:date('09:25:12'),capturedSlot:w.slot,hasSelection:false,session:{open:true}}).shouldRefresh,false);
+assert.equal(frozenResearchState({...base,asOf:date('09:25:12'),capturedSlot:w.slot+1}).status,'FROZEN');
+assert.equal(frozenResearchState({...base,asOf:NaN}).status,'INVALID_CLOCK');
+assert.equal(RESEARCH_FREEZE_SAFETY.orderSubmissionAllowed,false);
+console.log('FROZEN FIVE-MINUTE RESEARCH QUALIFICATION PASSED: settled candle boundaries, visibility, session, no orders');
