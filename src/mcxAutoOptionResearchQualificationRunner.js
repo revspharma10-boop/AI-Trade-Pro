@@ -39,7 +39,7 @@ assert.equal(chooseMcxOptionContract({options:options.map(x=>({...x,underlyingKe
 assert.equal(chooseMcxOptionContract({options,future,spot:100009,direction:'SELL',asOf:now}).contract,null);
 const optionQuote={valid:true,bid:20,ask:20.05,lastPrice:20.03,spreadPercent:0.25,
  openInterest:2000,tradedVolume:3000,timestamp:now-1000,lastTradeTime:now-1500};
-const premiumResearch={valid:true,completedBars:67,snapshot:{atr14:1,liquidityResearchPass:true}};
+const premiumResearch={valid:true,completedBars:67,snapshot:{atr14:1,medianVolume20:60,lastVolumeRatio:0.8,liquidityResearchPass:false}};
 const input={contract:call,future,direction:'CE',quote:optionQuote,research:premiumResearch,asOf:now};
 const plan=calculateMcxOptionPaperPlan(input);
 assert.equal(plan.status,'UNVALIDATED_PAPER_LEVELS');
@@ -74,6 +74,7 @@ assert.equal(wrongFuture.status,'WAIT');
 assert.equal(calculateMcxOptionPaperPlan({...input,contract:{...call,expiry:'2026-10-08'}}).status,'WAIT');
 assert.equal(calculateMcxOptionPaperPlan({...input,quote:{...optionQuote,timestamp:now-400000}}).status,'WAIT');
 assert.equal(calculateMcxOptionPaperPlan({...input,research:{...premiumResearch,valid:false}}).status,'WAIT');
+assert.equal(calculateMcxOptionPaperPlan({...input,research:{...premiumResearch,snapshot:{...premiumResearch.snapshot,medianVolume20:2}}}).status,'WAIT');
 assert.equal(calculateMcxOptionPaperPlan({...input,capital:60000}).status,'WAIT');
 assert.equal(calculateMcxOptionPaperPlan({...input,quote:{...optionQuote,spreadPercent:5}}).status,'WAIT');
 assert.deepEqual(MCX_OPTION_SAFETY,{paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false,productionRealTradingEnabled:false});

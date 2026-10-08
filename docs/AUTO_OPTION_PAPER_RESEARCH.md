@@ -31,3 +31,5 @@ MCX premium exposure uses `lot_size × qty_multiplier` from Upstox BOD metadata 
 **PAPER_ONLY=true. REAL_ORDER_PLACED=false. PRODUCTION_REAL_TRADING_ENABLED=false. Approved real lots always 0.**
 
 Upstox MCX chain limitation: https://upstox.com/developer/api-documentation/get-pc-option-chain/
+
+MCX option premium-liquidity screening uses completed candle median **contract volume ≥ 10**, last-volume/median ≥ 0.3, and fresh live bid/ask with positive OI and traded volume. Raw `premium × contract volume` is *not* an exchange-certified rupee turnover figure; it does not use the NSE equity/futures ₹10 lakh turnover floor. All thresholds are provisional and require empirical validation.

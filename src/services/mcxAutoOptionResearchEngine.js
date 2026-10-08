@@ -82,9 +82,14 @@ export function calculateMcxOptionPaperPlan({contract=null,future=null,direction
   reasons.push('MCX_OPTION_SPREAD_UNVERIFIED_OR_WIDE');
  if(!positive(quote?.openInterest)||!positive(quote?.tradedVolume))
   reasons.push('MCX_OPTION_OPEN_INTEREST_OR_VOLUME_NOT_VERIFIED');
- if(!research?.valid||research.completedBars<35||!positive(research?.snapshot?.atr14)||
-   !research.snapshot?.liquidityResearchPass)
-  reasons.push('FRESH_LIQUID_MCX_OPTION_CANDLES_REQUIRED');
+ // MCX options are quoted in premiums; multiplying raw candle price by traded
+ // contract count is NOT verified rupee turnover. Do not reuse the
+ // equity/futures ₹10-lakh turnover test for option-premium candles.
+ const s=research?.snapshot;
+ if(!research?.valid||research.completedBars<35||!positive(s?.atr14)||
+    !valid(s?.medianVolume20)||s.medianVolume20<10||
+    !valid(s?.lastVolumeRatio)||s.lastVolumeRatio<0.3)
+  reasons.push('FRESH_MCX_OPTION_PREMIUM_AND_VOLUME_REQUIRED');
  if(reasons.length){base.reasons=[...new Set(reasons)];return base;}
  const entry=aligned(quote.ask,tick,'up');
  const stopLoss=aligned(entry-Math.max(1.5*research.snapshot.atr14,3*tick),tick,'down');
