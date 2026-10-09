@@ -1,0 +1,48 @@
+name: AI Trade Pro 2.0 Phase 0 Architecture Qualification
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/phase0ArchitectureAuditQualificationRunner.js'
+      - 'docs/AI_TRADE_PRO_2_PHASE0_AUDIT.md'
+      - 'docs/AI_TRADE_PRO_2_EXECUTION_GATES.md'
+      - 'server/paperRecommendationFeed.js'
+      - 'src/services/openingRangeResearch.js'
+      - 'src/services/autoOptionResearchEngine.js'
+      - 'src/services/intradayTechnicalEngine.js'
+      - '.github/workflows/phase0-architecture-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  baseline-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install repository dependencies
+        run: npm ci
+      - name: Audit source parses correctly
+        run: |
+          node --check src/phase0ArchitectureAuditQualificationRunner.js
+          node --check server/paperRecommendationFeed.js
+      - name: Reproduce early-bias-to-WAIT gap and enforce risk locks
+        run: node src/phase0ArchitectureAuditQualificationRunner.js
+      - name: Re-run existing paper recommendation qualification
+        run: |
+          node server/paperRecommendationFeedQualificationRunner.js
+          node server/recommendationWaitDiagnosticsQualificationRunner.js
+          node src/openingRangeQualificationRunner.js
+          node src/autoOptionResearchQualificationRunner.js
+          node server/readOnlyCorsPolicyQualificationRunner.js
+      - name: Check audit and execution docs exist
+        run: |
+          test -s docs/AI_TRADE_PRO_2_PHASE0_AUDIT.md
+          test -s docs/AI_TRADE_PRO_2_EXECUTION_GATES.md
+          grep -q 'paid infrastructure' docs/AI_TRADE_PRO_2_EXECUTION_GATES.md
+      - name: Verify unaffected responsive web build
+        run: npm run build
