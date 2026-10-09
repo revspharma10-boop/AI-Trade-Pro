@@ -38,6 +38,17 @@ assert.equal(mixedUp.signalBasis,'COMPLETED_5M_UPSIDE_RANGE_BREAKOUT');
 assert.equal(mixedUp.breakoutConfirmedByCompletedCandle,true);
 assert.equal(mixedUp.lastCompletedAt,firstBreak[0].datetime,'Journal timestamp must advance after 09:30');
 assert.equal(mixedUp.orderSubmissionAllowed,false);
+assert.equal(mixedUp.breakoutDiagnostics.candleAt,firstBreak[0].datetime);
+assert.deepEqual(mixedUp.breakoutDiagnostics.candleOHLC,{open:25010,high:25070,low:25003,close:25062});
+assert.equal(mixedUp.breakoutDiagnostics.upsideCloseThreshold,25042.25);
+assert.equal(mixedUp.breakoutDiagnostics.checks.bullishCloseBeyondBuffer,true);
+assert.equal(mixedUp.breakoutDiagnostics.checks.bullishCandleBody,true);
+assert.equal(mixedUp.breakoutDiagnostics.checks.bullishQuoteAboveRange,true);
+assert.equal(mixedUp.breakoutDiagnostics.checks.bearishCloseBeyondBuffer,false);
+assert.equal(mixedUp.breakoutDiagnostics.quoteAgeSeconds,1);
+assert.equal(mixedUp.breakoutDiagnostics.candleAgeAfterCompletionSeconds,16);
+assert.equal(mixedUp.optionPlanQualified,false);
+
 const stalePost=test([...mixed,...firstBreak],q(25065,ist('09:55:14')),'09:55:16');
 assert.equal(stalePost.direction,'WAIT','Never reuse a 09:30 completed breakout candle at 09:55');
 assert.ok(stalePost.reasons.includes('POST_OPENING_CANDLE_STALE'));
@@ -55,6 +66,12 @@ assert.notEqual(secondBreak.lastCompletedAt,mixedUp.lastCompletedAt,
  'The next 5m snapshot must have a unique completed candle timestamp');
 const quoteOnly=test(mixed,q(25090,ist('09:40:15')),'09:40:16');
 assert.equal(quoteOnly.direction,'WAIT','A quote above range without completed breakout is not confirmation');
+assert.equal(quoteOnly.breakoutDiagnostics.checks.postOpeningCompletedCandleAvailable,false);
+assert.equal(quoteOnly.breakoutDiagnostics.checks.bullishQuoteAboveRange,true);
+assert.equal(quoteOnly.breakoutDiagnostics.checks.bullishCloseBeyondBuffer,false);
+assert.equal(quoteOnly.breakoutDiagnostics.candleOHLC,null);
+assert.equal(quoteOnly.orderSubmissionAllowed,false);
+
 const mixedDownCandle=sample([['09:30:00',25010,25011,24938,24941]]);
 const mixedDown=test([...mixed,...mixedDownCandle],q(24940,ist('09:35:15')),'09:35:16');
 assert.equal(mixedDown.direction,'PE');
