@@ -8,6 +8,24 @@ const positive=x=>finite(x)&&x>0;
 const round=x=>Number(x.toFixed(3));
 const dateIST=ms=>new Date(ms+330*60000).toISOString().slice(0,10);
 const minIST=ms=>{const d=new Date(ms+330*60000);return d.getUTCHours()*60+d.getUTCMinutes();};
+// Opening range acquisition progress for the UI. No forecast before 09:30 IST.
+export function openingRangeProgress({candles=[],asOf=Date.now()}={}){
+ const now=Number(new Date(asOf));
+ const defaults={required:3,completed:0,rangeFinished:false,expectedAtIST:'09:30',
+  readyAfterIST:'09:30:12',paperOnly:true,orderSubmissionAllowed:false};
+ if(!finite(now)||!Array.isArray(candles))return {...defaults,status:'CANDLE_DATA_NOT_AVAILABLE'};
+ const minute=minIST(now),day=dateIST(now);
+ const relevant=candles.map(x=>({...x,at:Date.parse(x?.datetime)})).filter(c=>
+  finite(c.at)&&dateIST(c.at)===day&&[555,560,565].includes(minIST(c.at))&&
+  c.at+5*60000+12000<=now&&[c.open,c.high,c.low,c.close].every(positive)&&
+  c.high>=c.low&&c.open>=c.low&&c.open<=c.high&&c.close>=c.low&&c.close<=c.high);
+ const distinct=new Set(relevant.map(c=>minIST(c.at)));
+ const completed=distinct.size;
+ return {...defaults,completed,rangeFinished:minute>=570,
+  status:minute<555?'AWAITING_MARKET_OPEN':
+    minute<570?'COLLECTING_OPENING_RANGE':
+    completed===3?'OPENING_RANGE_CANDLES_READY':'OPENING_RANGE_DATA_MISSING'};
+}
 export function deriveOpeningRangeBias({candles=[],quote=null,session=null,asOf=Date.now()}={}){
  const now=Number(new Date(asOf)),base={valid:false,direction:'WAIT',status:'OPENING_RANGE_WAIT',
  strategy:'OPENING_RANGE_15M',range:null,openingOHLC:null,lastCompletedAt:null,

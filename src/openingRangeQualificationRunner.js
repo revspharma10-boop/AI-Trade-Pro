@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {deriveOpeningRangeBias,OPENING_RANGE_SAFETY} from './services/openingRangeResearch.js';
+import {deriveOpeningRangeBias,openingRangeProgress,OPENING_RANGE_SAFETY} from './services/openingRangeResearch.js';
 const today='2026-10-09',ist=t=>Date.parse(today+'T'+t+'+05:30');
 const sample=(ohlc)=>ohlc.map(([time,open,high,low,close])=>({
  datetime:new Date(ist(time)).toISOString(),open,high,low,close,volume:0}));
@@ -36,5 +36,14 @@ assert.equal(test(rising.slice(1),q(25085)).direction,'WAIT');
 assert.equal(test([...rising,rising[0]],q(25085)).direction,'WAIT','Duplicate opening candles must fail closed');
 const otherDay=sample([['09:15:00',25000,25030,24990,25025]]).map(x=>({...x,datetime:'2026-10-08T03:45:00.000Z'}));
 assert.equal(test(otherDay,q(25085)).direction,'WAIT','No prior day opening data');
+assert.equal(openingRangeProgress({candles:[],asOf:ist('09:15:38')}).completed,0);
+assert.equal(openingRangeProgress({candles:[],asOf:ist('09:15:38')}).status,'COLLECTING_OPENING_RANGE');
+assert.equal(openingRangeProgress({candles:rising,asOf:ist('09:15:38')}).completed,0,'No active unfinished candle counts');
+assert.equal(openingRangeProgress({candles:rising,asOf:ist('09:20:12')}).completed,1);
+assert.equal(openingRangeProgress({candles:rising,asOf:ist('09:25:12')}).completed,2);
+assert.equal(openingRangeProgress({candles:rising,asOf:ist('09:30:12')}).completed,3);
+assert.equal(openingRangeProgress({candles:rising,asOf:ist('09:30:12')}).status,'OPENING_RANGE_CANDLES_READY');
+assert.equal(openingRangeProgress({candles:[],asOf:ist('09:30:20')}).status,'OPENING_RANGE_DATA_MISSING');
+assert.equal(openingRangeProgress({candles:rising,asOf:ist('09:30:20')}).orderSubmissionAllowed,false);
 assert.equal(OPENING_RANGE_SAFETY.realOrderPlaced,false);
 console.log('OPENING RANGE 09:30 QUALIFICATION PASSED: 3 completed OHLC candles, CE/PE/WAIT, quote freshness, no orders');

@@ -10,7 +10,7 @@ import {searchUpstoxDerivatives} from './services/upstoxReadOnlyMarketData.js';
 import {describeMcxTechnicalSetup} from './services/mcxWaitDiagnostics.js';
 import {MARKET_QUOTE_POLL_MS,assessMarketQuote,mayPollMarketQuote} from './services/marketQuoteRefreshPolicy.js';
 import {frozenResearchWindow,frozenResearchState} from './services/frozenResearchPolicy.js';
-import {deriveOpeningRangeBias} from './services/openingRangeResearch.js';
+import {deriveOpeningRangeBias,openingRangeProgress} from './services/openingRangeResearch.js';
 
 const fmt=n=>typeof n==='number'&&Number.isFinite(n)?'₹'+n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'NOT VERIFIED';
 const time=n=>Number.isFinite(n)?new Date(n).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour12:true}):'NOT VERIFIED';
@@ -434,8 +434,22 @@ export function mountAutoOptionResearch(){
    if(direction==='WAIT'){
     showPlan(null,null,issues);
     if(isIndex){
-     const early=deriveOpeningRangeBias({candles,quote,session,asOf:now});
      const clock=new Date(now+330*60000),minutes=clock.getUTCHours()*60+clock.getUTCMinutes();
+     if(minutes>=555&&minutes<570){
+      const progress=openingRangeProgress({candles,asOf:now});
+      openingEvidence.hidden=false;openingFacts.replaceChildren();
+      [
+       ['09:15–09:30 opening candles',progress.completed+' / '+progress.required+' completed'],
+       ['Opening OHLC', 'BUILDING — NOT YET VERIFIED'],
+       ['First possible early bias','After 09:30:12 IST'],
+       ['Current action','WAIT — collecting opening range']
+      ].forEach(([name,value])=>row(openingFacts,name,value));
+      openingNotes.textContent='An empty 5-minute candle feed immediately after 09:15 is expected while the first bar forms. Auto-retry follows the next completed 5-minute candle while the tab stays visible. After 09:30, three verified candles are required.';
+      status.textContent='WAIT — Collecting the 09:15–09:30 opening range ('+
+       progress.completed+'/3 completed 5-minute candles). First provisional CE/PE/WAIT research after 09:30:12 IST.';
+      return;
+     }
+     const early=deriveOpeningRangeBias({candles,quote,session,asOf:now});
      if(minutes>=570&&research.completedBars<35){
       showOpeningRange(early);
       if(early.direction==='CE'||early.direction==='PE'){
