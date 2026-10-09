@@ -1,0 +1,43 @@
+name: AI Trade Pro Phase 1B Free Tier Qualification
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/cloudflare/free-tier-bot/**'
+      - '.github/workflows/phase1b-free-tier-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  free-shadow-pipeline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install existing dependencies
+        run: npm ci
+      - name: Parse free-tier Worker and tests
+        run: |
+          node --check infra/cloudflare/free-tier-bot/worker.js
+          node --check infra/cloudflare/free-tier-bot/qualificationRunner.js
+      - name: Qualify synthetic market replay and D1 event rules
+        run: node infra/cloudflare/free-tier-bot/qualificationRunner.js
+      - name: Retain phase 0 and 1A paper-only gates
+        run: |
+          node server/phase1LocalPipelineQualificationRunner.js
+          node src/phase0ArchitectureAuditQualificationRunner.js
+          node server/paperRecommendationFeedQualificationRunner.js
+          node server/recommendationWaitDiagnosticsQualificationRunner.js
+          node server/readOnlyCorsPolicyQualificationRunner.js
+          node src/openingRangeQualificationRunner.js
+          node src/autoOptionResearchQualificationRunner.js
+      - name: Ensure Cloudflare requires its own account provisioning
+        run: |
+          grep -q 'REPLACE_WITH_REAL_D1_DATABASE_ID' infra/cloudflare/free-tier-bot/wrangler.toml
+          test -s infra/cloudflare/free-tier-bot/README.md
+      - name: Verify existing browser build
+        run: npm run build
