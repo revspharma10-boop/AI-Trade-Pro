@@ -140,13 +140,19 @@ export function mountAutoOptionResearch(){
     n=>typeof n==='number'&&Number.isFinite(n)&&n>0)&&
    plan.stopLoss<plan.entry&&plan.entry<plan.target1&&plan.target1<plan.target2&&plan.target2<plan.target3;
   const early=earlyBias==='CE'||earlyBias==='PE';
+  const verifiedContract=contract&&['CE','PE'].includes(contract.instrumentType)&&
+   typeof contract.tradingSymbol==='string'&&contract.tradingSymbol.length>0&&
+   Number.isFinite(contract.strike)&&contract.strike>0&&
+   typeof contract.expiry==='string'&&Number.isSafeInteger(contract.lotSize)&&contract.lotSize>0;
+  const riskEligible=full&&Number.isInteger(plan.preliminaryRiskLots)&&plan.preliminaryRiskLots>=1;
   colorCard.className='ir-color-option-card '+(full?
    plan.optionType==='CE'?'ir-card-call':'ir-card-put':early?'ir-card-early':'ir-card-wait');
-  find('ir-card-contract').textContent=full?String(contract.tradingSymbol):
+  find('ir-card-contract').textContent=verifiedContract?String(contract.tradingSymbol):
    early?'EARLY '+(earlyBias==='CE'?'CALL':'PUT')+' INDEX BIAS':'NO VERIFIED OPTION CONTRACT';
-  find('ir-card-state').textContent=full?'PAPER BUY '+plan.optionType:early?'UNVALIDATED '+earlyBias:'WAIT';
-  find('ir-card-expiry').textContent=full?
-   'Strike '+contract.strike+' • '+plan.optionType+' • Expiry '+contract.expiry+' • Lot '+contract.lotSize:
+  find('ir-card-state').textContent=full?(riskEligible?'PAPER BUY '+plan.optionType:'NO RISK-ELIGIBLE LOT'):
+   early?'UNVALIDATED '+earlyBias:'WAIT';
+  find('ir-card-expiry').textContent=verifiedContract?
+   'Strike '+contract.strike+' • '+contract.instrumentType+' • Expiry '+contract.expiry+' • Lot '+contract.lotSize:
    early?'Opening-range directional hypothesis only — no option contract or premium levels':
     'Strike / expiry not verified';
   for(const [id,n] of [
@@ -157,9 +163,10 @@ export function mountAutoOptionResearch(){
    'Theoretical paper lots: '+(plan.paperEnvelopeLots??'NOT VERIFIED')+' • Approved: 0':
    'Theoretical lots: NOT VERIFIED • Approved: 0';
   find('ir-card-warning').textContent=full?
-   'Provisional premium research, not a verified trade or order instruction. Targets 1.5R / 2R / 3R are hypothetical; fees, gaps, slippage and actual funds are unverified.':
+   (riskEligible?'Provisional premium research, not an order instruction. Targets 1.5R / 2R / 3R are hypothetical; fees, gaps, slippage and actual funds are unverified.':
+   'RISK BLOCKED: One lot exceeds the ₹500 risk budget. Prices are illustrative paper levels only; no option purchase is authorized.'):
    early?'EARLY BIAS ONLY — Full option-price and risk checks have not passed. Do not treat this as an option purchase.':
-   'WAIT — Premium, stop, targets and contract require verified broker evidence. No option order is authorized.';
+   'WAIT — Exact option premiums and targets are not verified; no option order is authorized.';
  }
 
  let quoteSelection=null,refreshInProgress=false,lastResearchAt=null;
