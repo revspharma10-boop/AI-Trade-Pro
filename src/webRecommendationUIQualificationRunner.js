@@ -11,14 +11,16 @@ const ui=read('./androidBottomNavigation.js');
 const css=read('./androidBottomNavigation.css');
 const html=read('../index.html');
 
-assert.match(entry,/VITE_WEB_RECOMMENDATION_UI==='true'/,
- 'A browser-specific flag must enable the same minimalist interface');
+assert.match(entry,/VITE_ANDROID_APP!=='true'/,
+ 'Default page must use browser safe areas, not Android APK system insets');
+assert.doesNotMatch(entry,/autoOptionResearchUI\.js/,
+ 'Detailed technical dashboard must not be imported into the production browser bundle');
 assert.match(entry,/mountAndroidBottomNavigation\(\)/,
  'Browser site must mount the same four tabs used on Android');
 assert.match(entry,/web-recommendation-shell/,
  'Web layout must distinguish browser chrome from Android status-bar insets');
-assert.match(pageWorkflow,/VITE_WEB_RECOMMENDATION_UI: 'true'/,
- 'Public GitHub Pages must use the recommendation UI');
+assert.doesNotMatch(pageWorkflow,/VITE_ANDROID_APP: 'true'/,
+ 'Browser pages must not be built with native Android status-bar handling');
 assert.match(pageWorkflow,/node src\/webRecommendationUIQualificationRunner\.js/,
  'GitHub Pages deploy must gate on web qualification tests');
 assert.match(pageWorkflow,/node server\/paperRecommendationFeedQualificationRunner\.js/,
