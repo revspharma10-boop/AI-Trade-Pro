@@ -38,6 +38,10 @@ assert.equal(mixedUp.signalBasis,'COMPLETED_5M_UPSIDE_RANGE_BREAKOUT');
 assert.equal(mixedUp.breakoutConfirmedByCompletedCandle,true);
 assert.equal(mixedUp.lastCompletedAt,firstBreak[0].datetime,'Journal timestamp must advance after 09:30');
 assert.equal(mixedUp.orderSubmissionAllowed,false);
+const stalePost=test([...mixed,...firstBreak],q(25065,ist('09:55:14')),'09:55:16');
+assert.equal(stalePost.direction,'WAIT','Never reuse a 09:30 completed breakout candle at 09:55');
+assert.ok(stalePost.reasons.includes('POST_OPENING_CANDLE_STALE'));
+
 assert.equal(test([...mixed,...firstBreak],q(25065,ist('09:34:50')),'09:34:59').direction,'WAIT',
  'Never look ahead to a still-in-progress breakout candle');
 assert.equal(test([...mixed,...firstBreak],q(25025,ist('09:35:15')),'09:35:16').direction,'WAIT',
