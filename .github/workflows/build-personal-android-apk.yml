@@ -8,6 +8,9 @@ on:
       - '.github/workflows/build-personal-android-apk.yml'
       - 'index.html'
       - 'src/**'
+      - 'server/readOnlyCorsPolicy.js'
+      - 'server/readOnlyCorsPolicyQualificationRunner.js'
+      - 'server/upstoxOAuthCallbackServer.js'
       - 'package.json'
       - 'package-lock.json'
 permissions:
@@ -44,6 +47,7 @@ jobs:
         run: |
           node --check src/androidBottomNavigation.js
           node src/androidBottomNavigationQualificationRunner.js
+          node server/readOnlyCorsPolicyQualificationRunner.js
           node src/openingRangeQualificationRunner.js
           node src/autoOptionResearchQualificationRunner.js
       - name: Build Android web assets with relative base path
