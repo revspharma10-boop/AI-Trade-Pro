@@ -7,7 +7,7 @@ import {readFileSync} from 'node:fs';
 const asOf=Date.parse('2026-10-09T12:30:18+05:30');
 const contract={underlyingSymbol:'NIFTY',segment:'NSE_FO',instrumentType:'CE',
  strike:25000,expiry:'2026-10-15',lotSize:65,tradingSymbol:'NIFTY OCT 25000 CE'};
-const plan={status:'UNVALIDATED_PAPER_LEVELS',brokerMarginVerified:true,
+const plan={status:'UNVALIDATED_PAPER_LEVELS',optionType:'CE',direction:'CE',brokerMarginVerified:true,
  paperEnvelopeLots:1,entry:59,stopLoss:52,target1:70,target2:74,target3:80,
  riskPerLot:455,orderSubmissionAllowed:false,realOrderPlaced:false};
 assert.deepEqual(Object.keys(RECOMMENDATION_MARKETS),['nifty','sensex','options','commodity']);
@@ -31,13 +31,15 @@ const blocked=[
  {...plan,entry:0},
  {...plan,stopLoss:59},
  {...plan,target1:58},
- {...plan,status:'WAIT'}
+ {...plan,status:'WAIT'},
+ {...plan,direction:'PE'},
+ {...plan,optionType:'PE'}
 ];
 for(const p of blocked)
  assert.equal(qualifyPaperRecommendation(p,contract,asOf),null);
 assert.equal(qualifyPaperRecommendation(plan,{...contract,expiry:'2026-10-09'},asOf),null);
 assert.equal(qualifyPaperRecommendation(plan,{...contract,lotSize:0},asOf),null);
-assert.equal(qualifyPaperRecommendation(plan,{...contract,instrumentType:'PE'},asOf)?.optionType,'PE');
+assert.equal(qualifyPaperRecommendation(plan,{...contract,instrumentType:'PE'},asOf),null);
 const mcx={...contract,segment:'MCX_FO'};
 assert.equal(qualifyPaperRecommendation({...plan,independentlyVerifiedContractMultiplier:false},mcx,asOf),null);
 
