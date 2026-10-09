@@ -143,3 +143,18 @@ button:disabled{opacity:.55;cursor:wait}
 .ir-card-early .ir-price-tile{background:#172238;border-color:#34445b;color:#94a3b8}
 @media(max-width:520px){.ir-color-option-card{padding:13px}.ir-card-prices{grid-template-columns:1fr}
  .ir-price-t3{grid-column:auto}.ir-price-tile{min-height:88px}.ir-card-heading h3{font-size:19px}}
+
+
+/* Read-only qualification gates: make missing data distinguishable from no directional setup */
+.ir-signal-gate-panel{border:1px solid #3f536e;border-radius:12px;padding:14px;margin:12px 0 18px;background:#11243a}
+.ir-signal-gate-panel h3{margin:0 0 8px;color:#e2e8f0;font-size:16px}
+.ir-signal-gate-panel>.ir-muted{font-size:12px;margin:0 0 12px;line-height:1.5}
+.ir-gate-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px}
+.ir-gate-item{border:1px solid #334861;border-radius:10px;background:#0c1d32;padding:12px;display:flex;
+ flex-direction:column;align-items:flex-start;gap:8px}
+.ir-gate-item strong{font-size:12px;color:#f1f5f9}
+.ir-gate-item p{margin:0;font-size:11px;line-height:1.55;color:#cbd5e1}
+.ir-gate-status{display:inline-block;border-radius:99px;font-size:10px;padding:4px 8px;font-weight:850}
+.ir-gate-ok{color:#a7f3d0;background:#065f46}
+.ir-gate-fail{color:#fecaca;background:#7f1d1d}
+.ir-gate-pending{color:#fde68a;background:#78350f}
