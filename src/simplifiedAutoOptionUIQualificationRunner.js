@@ -31,7 +31,7 @@ assert.match(form,/REAL ORDERS BLOCKED/);
 assert.match(form,/MCX Commodity Options/);
 assert.match(form,/NIFTY \/ BANKNIFTY \/ SENSEX/);
 assert.doesNotMatch(form,/ir-auto-advanced|Show advanced research controls|oldPanels/);
-assert.match(demo,/Arm tomorrow.s paper demo/);
+assert.match(demo,/Arm today.s paper demo/);
 assert.match(demo,/Export CSV/);
 assert.match(backend,/\/api\/upstox\/derivative-search/);
 assert.match(backend,/\/api\/upstox\/option-contracts/);
