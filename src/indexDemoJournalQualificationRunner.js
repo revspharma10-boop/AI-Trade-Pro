@@ -48,6 +48,36 @@ assert.ok(demoCsv([entry]).includes('NOT_BACKTESTED'));
 assert.ok(demoCsv(label).includes('WRONG_DIRECTION'));
 assert.ok(demoCsv(label).includes('NOT_VERIFIED'));
 assert.equal(label[0].recordedAt,entry.recordedAt,'Initial evidence must remain immutable');
+
+const earliest=Date.parse('2026-10-09T09:30:16+05:30');
+const openingRange={valid:true,strategy:'OPENING_RANGE_15M',direction:'CE',
+ lastCompletedAt:new Date(Date.parse('2026-10-09T09:25:00+05:30')).toISOString(),
+ openingOHLC:{open:25000,high:25090,low:24990,close:25083},
+ openingRangeHigh:25090,openingRangeLow:24990,range:100,
+ breakoutConfirmedByQuote:false,evidence:['09:15–09:30 OHLC verified'],
+ reasons:['EARLY_UNVALIDATED_15M_BIAS_NO_OPTION_TRADE']};
+const earlyPrediction=createDemoObservation({symbol:'NIFTY',asOf:earliest,
+ underlyingKey:'NSE_INDEX|Nifty 50',openingRange,quote:{lastPrice:25085,timestamp:earliest-1000},
+ signal:{direction:'CE',reasons:openingRange.reasons},session:{open:true}});
+assert.equal(earlyPrediction.direction,'CE','Must allow strict opening range signals without 35 candles');
+assert.equal(earlyPrediction.predictionType,'EARLY_OPENING_RANGE_15M');
+assert.equal(earlyPrediction.atr14,null,'Never disguise 15-minute range as ATR');
+assert.equal(earlyPrediction.optionBuyEntry,null,'No early fake premium');
+assert.equal(earlyPrediction.approvedRealLots,0);
+assert.equal(earlyPrediction.openingOHLC.high,25090);
+const earlyFuture=new Date(earliest+30*60*1000).toISOString();
+const evaluatedEarly=evaluateDemoObservations([earlyPrediction],'NIFTY',
+ [{datetime:earlyFuture,close:25160}],earliest+38*60*1000)[0];
+assert.equal(evaluatedEarly.outcome.verdict,'CORRECT_DIRECTION');
+assert.equal(evaluatedEarly.review.technical.status,'OPENING_RANGE_ENDPOINT_VERIFIED');
+assert.match(evaluatedEarly.review.technical.conclusion,/above the opening high/);
+assert.equal(evaluatedEarly.review.fundamental.status,'NOT_VERIFIED');
+assert.equal(evaluatedEarly.review.optionTargetHitVerified,false);
+assert.equal(evaluatedEarly.review.orderSubmissionAllowed,false);
+assert.equal(evaluateDemoObservations([earlyPrediction],'NIFTY',[
+ {datetime:new Date(earliest+25*60*1000).toISOString(),close:24000}],earliest+38*60*1000)[0].outcome,null);
+assert.ok(demoCsv([earlyPrediction]).includes('openingOHLC.high'));
+
 assert.deepEqual(DEMO_SYMBOLS,['NIFTY','BANKNIFTY','SENSEX']);
 assert.equal(DEMO_SAFETY.autoStrategyUpdates,false);
 console.log('INDEX DEMO JOURNAL QUALIFICATION PASSED: immutable snapshots, delayed outcome, WAIT, diagnostics, CSV and 0 orders');
