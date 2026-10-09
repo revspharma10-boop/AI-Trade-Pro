@@ -1,0 +1,277 @@
+/* Native-style UI is opt-in via the Android packaging flag only. Web remains unchanged. */
+body.android-native-shell{
+ background:linear-gradient(180deg,#101b2d 0,#0b1221 280px,#090f1a 100%);
+ color:#eef3ff;
+ -webkit-tap-highlight-color:transparent;
+}
+body.android-native-shell .ir-app{
+ max-width:660px;
+ padding:calc(13px + env(safe-area-inset-top,0px)) 14px
+  calc(118px + env(safe-area-inset-bottom,0px));
+}
+body.android-native-shell .android-brand-header{
+ border:0;
+ padding:5px 2px 16px;
+ margin:0;
+ gap:10px;
+ align-items:center;
+}
+body.android-native-shell .android-brand-header .ir-logo{
+ display:grid;
+ place-items:center;
+ width:42px;
+ height:42px;
+ border-radius:13px;
+ background:linear-gradient(135deg,#39bff8,#4978f3);
+ color:#06162b;
+ font-size:27px;
+ font-weight:900;
+ box-shadow:0 7px 20px #2256c055;
+}
+body.android-native-shell .android-brand-header h1{
+ font-size:18px;
+ font-weight:850;
+ letter-spacing:.055em;
+}
+body.android-native-shell .android-brand-header p{
+ margin:3px 0 0;
+ color:#9db2d2;
+ font-size:10px;
+ letter-spacing:.16em;
+}
+body.android-native-shell .android-brand-header .ir-safety{
+ margin-left:auto;
+ font-size:9px;
+ font-weight:750;
+ max-width:124px;
+ padding:7px 9px;
+ letter-spacing:.03em;
+ border-color:#345575;
+ background:#112438;
+ color:#99e7ce;
+}
+body.android-native-shell .android-market-summary{
+ border:1px solid #29466c;
+ border-radius:22px;
+ background:linear-gradient(125deg,#1a3760 0,#152841 53%,#101d32 100%);
+ box-shadow:0 12px 30px #03091680;
+ padding:19px 17px 15px;
+ margin:0 0 17px;
+}
+body.android-native-shell .android-market-kicker{
+ display:flex;
+ align-items:center;
+ gap:7px;
+ font-size:10px;
+ font-weight:800;
+ letter-spacing:.11em;
+ color:#9fd6ff;
+}
+body.android-native-shell .android-market-kicker:before{
+ content:'';
+ width:7px;
+ height:7px;
+ border-radius:50%;
+ background:#68b7e9;
+ box-shadow:0 0 0 4px #3b92c71a;
+}
+body.android-native-shell .android-market-title{
+ font-size:clamp(27px,7vw,33px);
+ letter-spacing:-.025em;
+ font-weight:820;
+ line-height:1.1;
+ margin:18px 0 5px;
+ color:#fff;
+}
+body.android-native-shell .android-market-caption{
+ color:#b5c7df;
+ font-size:12px;
+ margin:0 0 20px;
+}
+body.android-native-shell .android-mini-grid{
+ display:grid;
+ grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:9px;
+}
+body.android-native-shell .android-mini-stat{
+ border:1px solid #406184;
+ background:#0a1b2c9a;
+ border-radius:13px;
+ padding:11px;
+ min-height:76px;
+ display:flex;
+ flex-direction:column;
+ gap:9px;
+ min-width:0;
+}
+body.android-native-shell .android-mini-stat span{
+ font-size:10px;
+ font-weight:780;
+ letter-spacing:.05em;
+ color:#9cb4d5;
+}
+body.android-native-shell .android-mini-stat strong{
+ font-size:12px;
+ line-height:1.35;
+ font-weight:760;
+ color:#f6faff;
+ overflow-wrap:anywhere;
+}
+body.android-native-shell .android-market-note{
+ display:flex;
+ align-items:center;
+ gap:6px;
+ color:#90e2c7;
+ margin:14px 0 0;
+ font-size:11px;
+}
+body.android-native-shell .android-market-note:before{content:'●';font-size:9px}
+body.android-native-shell .ir-panel{
+ background:#101d30;
+ border:1px solid #223957;
+ border-radius:18px;
+ margin:0 0 16px;
+ padding:16px 13px;
+ box-shadow:none;
+}
+body.android-native-shell .ir-auto-option-panel>h2{
+ font-size:16px;
+ line-height:1.4;
+ align-items:center;
+}
+body.android-native-shell .ir-auto-option-panel>h2 .ir-safety{
+ padding:7px 9px;
+ font-size:9px;
+}
+body.android-native-shell .ir-auto-controls{
+ grid-template-columns:1fr;
+ gap:12px;
+}
+body.android-native-shell .ir-auto-controls :is(input,select){
+ min-height:49px;
+ border-radius:11px;
+ font-size:15px;
+}
+body.android-native-shell .ir-actions{
+ display:flex;
+ flex-wrap:wrap;
+ gap:12px;
+ margin-top:17px;
+}
+body.android-native-shell .ir-actions .ir-primary{
+ width:100%;
+ min-height:50px;
+ border-radius:13px;
+ color:#052035;
+ background:linear-gradient(110deg,#37c7fa,#62a7ff);
+ box-shadow:0 8px 24px #0369a122;
+}
+body.android-native-shell .ir-actions a{
+ padding:10px 3px 2px;
+ min-height:32px;
+ font-weight:700;
+}
+body.android-native-shell .ir-facts,
+body.android-native-shell .ir-reasons,
+body.android-native-shell .ir-card-prices,
+body.android-native-shell .ir-gate-rows{
+ grid-template-columns:1fr;
+}
+body.android-native-shell .ir-fact{
+ align-items:flex-start;
+ gap:14px;
+ padding:12px;
+}
+body.android-native-shell .ir-fact strong{
+ max-width:60%;
+}
+body.android-native-shell .ir-card-heading h3{font-size:19px}
+body.android-native-shell .ir-price-t3{grid-column:auto}
+body.android-native-shell .ir-option-chart{
+ padding:8px;
+ overflow:hidden;
+}
+body.android-native-shell .ir-freeze-panel,
+body.android-native-shell .ir-live-panel,
+body.android-native-shell .ir-opening-evidence,
+body.android-native-shell .ir-signal-gate-panel{
+ border-radius:14px;
+}
+body.android-native-shell .ir-demo-panel .ir-actions .ir-primary{
+ width:100%;
+}
+body.android-native-shell .ir-demo-panel .ir-actions .ir-secondary{
+ flex:1 1 42%;
+}
+body.android-native-shell .ir-app footer{
+ padding-bottom:6px;
+ color:#8ca1c0;
+}
+/* Fixed bottom navigation; safe-area reserve for gesture navigation phones. */
+body.android-native-shell .android-bottom-tabs{
+ position:fixed;
+ bottom:0;
+ left:0;
+ right:0;
+ z-index:100;
+ display:grid;
+ grid-template-columns:repeat(4,minmax(0,1fr));
+ gap:2px;
+ padding:9px max(9px,env(safe-area-inset-right,0px))
+  calc(9px + env(safe-area-inset-bottom,0px))
+  max(9px,env(safe-area-inset-left,0px));
+ background:#0e1a2bf5;
+ border-top:1px solid #334d6d;
+ box-shadow:0 -10px 32px #02061780;
+ backdrop-filter:blur(20px);
+ -webkit-backdrop-filter:blur(20px);
+}
+body.android-native-shell .android-tab{
+ appearance:none;
+ border:none;
+ background:transparent;
+ border-radius:14px;
+ padding:10px 2px 9px;
+ color:#9eb1ce;
+ display:flex;
+ flex-direction:column;
+ align-items:center;
+ justify-content:center;
+ gap:5px;
+ min-height:57px;
+ cursor:pointer;
+ min-width:0;
+}
+body.android-native-shell .android-tab span{
+ font-size:10px;
+ font-weight:720;
+ line-height:1.15;
+ white-space:nowrap;
+}
+body.android-native-shell .android-tab svg{
+ flex:0 0 auto;
+}
+body.android-native-shell .android-tab.is-active{
+ color:#92ddff;
+ background:linear-gradient(180deg,#1a3e5d,#17304d);
+ box-shadow:inset 0 0 0 1px #2e6287;
+}
+body.android-native-shell .android-tab:focus-visible{
+ outline:2px solid #7dd3fc;
+ outline-offset:-2px;
+}
+body.android-native-shell[data-android-tab="nifty"] .ir-auto-controls,
+body.android-native-shell[data-android-tab="sensex"] .ir-auto-controls{
+ display:none;
+}
+body.android-native-shell[data-android-tab="commodity"] .ir-auto-controls label:first-child{
+ display:none;
+}
+body.android-native-shell:not([data-android-tab="options"]) .ir-demo-panel{
+ display:none;
+}
+@media(max-width:370px){
+ body.android-native-shell .ir-app{padding-left:10px;padding-right:10px}
+ body.android-native-shell .android-tab span{font-size:9px}
+ body.android-native-shell .android-brand-header .ir-safety{max-width:104px;font-size:8px}
+}
