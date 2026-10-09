@@ -1,21 +1,13 @@
-// One responsive recommendation surface for the deployed browser site and
-// (optionally) the legacy Android APK. Research runs on the Render backend.
-// Detailed local research stays available only in development builds without
-// either recommendation UI flag; it is not displayed on the public web app.
+// Responsive web-first AI Trade Pro. The same verified, minimal paper card
+// appears on any browser; no native Android APK is required.
+// All OHLC, technical, option-chain, premium and risk checks remain on Render.
 import './intradayRecommendations.css';
 import './androidBottomNavigation.css';
 import {mountAndroidBottomNavigation} from './androidBottomNavigation.js';
 
-if(import.meta.env.VITE_ANDROID_APP==='true'||import.meta.env.VITE_WEB_RECOMMENDATION_UI==='true'){
- if(import.meta.env.VITE_WEB_RECOMMENDATION_UI==='true'&&
-    import.meta.env.VITE_ANDROID_APP!=='true'){
-  document.body.classList.add('web-recommendation-shell');
- }
- mountAndroidBottomNavigation();
-}else{
- // Keep the web-based research interface and browser-local demo for web users.
- import('./autoOptionResearchUI.js').then(({mountAutoOptionResearch})=>{
-  mountAutoOptionResearch();
-  return import('./indexDemoSessionUI.js');
- }).then(({mountIndexDemoJournal})=>mountIndexDemoJournal());
+// Browser chrome (including the phone status bar) manages its own insets.
+// Keep the Capacitor-only spacing for legacy, manually built Android clients.
+if(import.meta.env.VITE_ANDROID_APP!=='true'){
+ document.body.classList.add('web-recommendation-shell');
 }
+mountAndroidBottomNavigation();
