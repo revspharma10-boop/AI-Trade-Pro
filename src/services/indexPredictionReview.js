@@ -73,11 +73,21 @@ export function buildIndexPredictionReview({prediction=null,postTechnical=null,f
   verdict==='WRONG_DIRECTION'?
   'The index moved opposite to the frozen forecast over the measured horizon. Diagnose technical changes and data quality; the exact cause is not established.':
   'The move was below the preregistered volatility/noise threshold. This is inconclusive, not a win or a loss.';
+ const range=p.predictionType==='EARLY_OPENING_RANGE_15M'&&
+  finite(p.openingRangeHigh)&&finite(p.openingRangeLow)&&p.openingRangeHigh>p.openingRangeLow?
+   {high:p.openingRangeHigh,low:p.openingRangeLow,open:p.openingOHLC?.open??null,
+    close:p.openingOHLC?.close??null,breakoutAtCapture:p.openingBreakoutByQuote===true}:null;
+ const rangeAssessment=range&&finite(outcome.observedClose)?
+   'Opening 09:15–09:30 H '+text(range.high)+' / L '+text(range.low)+
+   '; observed index close '+text(outcome.observedClose)+' was '+
+   (outcome.observedClose>range.high?'above the opening high':
+     outcome.observedClose<range.low?'below the opening low':'inside the opening range')+
+   '. This is an endpoint observation, not proof of an intraperiod breakout or an option trade fill.':null;
  const technicalConclusion=availableFuture?
   reversals.length?
    'Observed changes against the forecast: '+reversals.join(', ')+'. These are associated diagnostics, not proven causes.':
    'No tested trend/momentum reversal was detected at the measured horizon; inspect market regime and other evidence rather than assuming a cause.':
-  'Outcome-time technical indicators could not be reconstructed from sufficient timestamped OHLCV; do not invent a crossover or RSI value.';
+  rangeAssessment??'Outcome-time technical indicators could not be reconstructed from sufficient timestamped OHLCV; do not invent a crossover or RSI value.';
  const fundamental=verifyFundamentalContext(fundamentalContext,p);
  const suggestions=verdict==='WRONG_DIRECTION'?[
   'Check the timing of the original signal against the first contrary completed 5-minute candle.',
@@ -102,8 +112,8 @@ export function buildIndexPredictionReview({prediction=null,postTechnical=null,f
    macdHistogram:p.macdHistogram??null,vwap:p.vwap??null,atr14:p.atr14??null},
   observed:{asOf:outcome.observedCandleAt,close:outcome.observedClose,
    directionalMove:outcome.signedDirectionalMove,noiseThreshold:outcome.noiseThreshold},
-  technical:{status:availableFuture?'PREDICTION_VS_OUTCOME_VERIFIED':'OUTCOME_INDICATORS_NOT_VERIFIED',
-   checks:technicalChecks,conclusion:technicalConclusion,postIndicators:availableFuture?{
+  technical:{status:availableFuture?'PREDICTION_VS_OUTCOME_VERIFIED':rangeAssessment?'OPENING_RANGE_ENDPOINT_VERIFIED':'OUTCOME_INDICATORS_NOT_VERIFIED',
+   checks:technicalChecks,openingRangeAssessment:rangeAssessment,conclusion:technicalConclusion,postIndicators:availableFuture?{
     ema9:postTechnical.ema9,ema21:postTechnical.ema21,rsi14:postTechnical.rsi14,
     macdHistogram:postTechnical.macdHistogram,vwap:finite(postTechnical.vwap)?postTechnical.vwap:null}:null},
   fundamental,improvementCandidates:suggestions,backtested:false,automaticallyTrained:false,
