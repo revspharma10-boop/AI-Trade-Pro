@@ -7,11 +7,15 @@ for(const origin of approved){
  assert.equal(allowedReadOnlyClientOrigin(origin),origin);
  assert.deepEqual(readOnlyCorsHeaders(origin),{'Access-Control-Allow-Origin':origin,'Vary':'Origin'});
 }
-for(const origin of [null,undefined,'','null','http://localhost','http://127.0.0.1','https://localhost.evil.example',
+for(const origin of [null,'','null','http://localhost','http://127.0.0.1','https://localhost.evil.example',
  'https://evil.example','https://revspharma10-boop.github.io.evil.example','https://revspharma10-boop.github.io/']){
  assert.equal(allowedReadOnlyClientOrigin(origin),null);
  assert.deepEqual(readOnlyCorsHeaders(origin),{'Vary':'Origin'});
 }
+assert.equal(allowedReadOnlyClientOrigin(undefined),null);
+assert.deepEqual(readOnlyCorsHeaders(undefined),{
+ 'Access-Control-Allow-Origin':'https://revspharma10-boop.github.io','Vary':'Origin'
+},'Preserve original header for non-browser GET callers with no Origin');
 assert.ok(!Object.values(readOnlyCorsHeaders('https://localhost')).includes('*'),'No wildcard CORS');
 assert.equal('Access-Control-Allow-Credentials' in readOnlyCorsHeaders('https://localhost'),false);
 const source=readFileSync(new URL('./upstoxOAuthCallbackServer.js',import.meta.url),'utf8');
