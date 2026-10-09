@@ -18,10 +18,10 @@ export function androidSelectionForTab(id,savedOptions={instrumentType:'INDEX',s
  savedCommodity='GOLD'){
  const tab=androidTabById(id);
  if(tab.id==='options'){
-  const instrumentType=['INDEX','STOCK'].includes(savedOptions?.instrumentType)?
+  const instrumentType=['INDEX','STOCK','MCX'].includes(savedOptions?.instrumentType)?
    savedOptions.instrumentType:'INDEX';
   const symbol=typeof savedOptions?.symbol==='string'&&/^[A-Z0-9_-]{1,35}$/.test(savedOptions.symbol)?
-   savedOptions.symbol:instrumentType==='STOCK'?'RELIANCE':'NIFTY';
+   savedOptions.symbol:instrumentType==='STOCK'?'RELIANCE':instrumentType==='MCX'?'GOLD':'NIFTY';
   return {instrumentType,symbol};
  }
  if(tab.id==='commodity'){
