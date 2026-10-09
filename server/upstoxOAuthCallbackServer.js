@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { exchangeUpstoxAuthorizationCode } from '../src/upstox/upstoxOAuth.js';
 import {readOnlyCorsHeaders} from './readOnlyCorsPolicy.js';
+import {createPaperRecommendationFeed,RECOMMENDATION_MARKETS} from './paperRecommendationFeed.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const CLIENT_ID = process.env.UPSTOX_CLIENT_ID || '';
@@ -464,9 +465,33 @@ async function verifyProductionProfile(accessToken) {
   return true;
 }
 
+// The Android UI consumes this read-only result; analysis and research decisions run here.
+const latestPaperRecommendations=createPaperRecommendationFeed({
+ searchIndex:searchNseIndexInstrument,
+ searchEquity:searchEquityInstrument,
+ searchDerivatives:searchIntradayDerivativeContracts,
+ getContracts:readOnlyNseOptionContracts,
+ getCandles:async(key,interval)=>({candles:await readOnlyIntradayCandles(key,interval)}),
+ getQuote:readOnlyFullMarketQuote,
+ getMargin:readOnlyMarginEstimate
+});
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'https://oauth.invalid');
+    if (url.pathname === '/api/paper-recommendations/latest' && req.method === 'GET') {
+      const tab=url.searchParams.get('tab');
+      if(!Object.hasOwn(RECOMMENDATION_MARKETS,tab||''))
+        return json(res,400,{error:'UNSUPPORTED_RECOMMENDATION_TAB',
+          orderSubmissionAllowed:false,realOrderPlaced:false});
+      try{
+        const latest=await latestPaperRecommendations.getLatest(tab);
+        return json(res,200,latest);
+      }catch(_error){
+        return json(res,503,{tab,state:'WAIT',last:null,message:'Paper research unavailable',
+          paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false});
+      }
+    }
     if (url.pathname === '/api/upstox/status') {
       return json(res, 200, {
         provider: 'UPSTOX',

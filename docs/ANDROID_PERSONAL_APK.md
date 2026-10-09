@@ -1,3 +1,46 @@
+## Personal Android UI — last recommendation only
+
+The Android screen is intentionally minimal and follows the user's last-recommendation reference.
+Each bottom tab shows **Last Recommendation**, action state, exact broker contract, recommendation price,
+first target, stop loss, date and status:
+
+- **Nifty:** NIFTY 50 option research.
+- **Sensex:** SENSEX option research.
+- **Options Trade:** INFY stock-options research (the screenshot's contract is a design reference, not a real prediction).
+- **Commodity:** MCX GOLD options research.
+
+Research calculations moved to the Render backend route
+`GET /api/paper-recommendations/latest?tab=nifty|sensex|options|commodity`:
+same verified 5-minute candles, trend/EMA/RSI/MACD, exact listed contract selection,
+fresh option premium and open interest, Upstox margin estimate, and ₹500 paper-risk check.
+The APK reads only this sanitized summary every ~30 seconds while visible. No separate
+technical charts, diagnostics, or journal is shown in this simplified Android release.
+The separate GitHub Pages site retains its detailed research interface.
+
+The backend returns `PAPER_SETUP` only when the underlying and exact option contract
+and premium plan pass strict pre-existing research gates, broker margin is verified,
+and the theoretical envelope is at least one lot. It **never** returns
+`EXECUTED`, an order ID, a real fill, or executable lots. Because MCX multiplier,
+tender/delivery, and other safety checks are not independently verified, the
+commodity tab currently fails closed to WAIT rather than inventing a recommendation.
+Historical paper ideas remain labeled "previous paper idea, not current" and never
+appear as currently actionable BUY signals.
+
+**No background service guarantee or durable server journal yet.** Recommendation
+checks are on-demand and cached by Render process, and the latest historical setup
+exists only in that process's memory. On Render restart, previous in-memory results
+are lost. To guarantee historical recommendations while the phone is off requires
+a server-side scheduled worker and durable database, which are a separate
+implementation and qualification phase.
+
+An unavailable/expired broker token, market closure, stale candle, missing
+option chain, insufficient risk or margin evidence always produces WAIT.
+No fabricated ₹59/₹70/₹52 values from the screenshot are shipped in the app.
+The user must test the backend on the phone after deployment.
+
+
+---
+
 # AI Trade Pro — personal Android APK (paper-only)
 
 This is a **sideloaded debug APK** for a personally owned Android device. It is not a Google Play Store release, and it does not enable production orders. The existing GitHub Pages web app and Render backend are not modified by building this APK.
