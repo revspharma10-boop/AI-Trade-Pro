@@ -109,8 +109,14 @@ class FakeD1{
        b.candle_end_utc.localeCompare(a.candle_end_utc))[0];
       if(!row)return null;
       const o=db.outcomes.find(x=>x.forecast_id===row.id);
-      return {...row,outcome:o?.outcome??null,
-       observed_close:o?.observed_close??null,change_bps:o?.change_bps??null};
+      // Match the exact SQL SELECT projection: do not fabricate extra
+      // sensitive fields that a production D1 query would not return.
+      return {id:row.id,market:row.market,direction:row.direction,
+       candle_end_utc:row.candle_end_utc,captured_at_utc:row.captured_at_utc,
+       horizon_end_utc:row.horizon_end_utc,reference_price:row.reference_price,
+       data_quality:row.data_quality,reason_code:row.reason_code,
+       outcome:o?.outcome??null,observed_close:o?.observed_close??null,
+       change_bps:o?.change_bps??null};
      }
      throw Error('UNEXPECTED_D1_FIRST_QUERY');
     },
