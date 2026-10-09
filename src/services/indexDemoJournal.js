@@ -1,4 +1,6 @@
 // Paper-only 30-minute *direction* audit. Snapshots are frozen before outcomes.
+import {analyzeIntradayCandles} from './intradayTechnicalEngine.js';
+import {buildIndexPredictionReview} from './indexPredictionReview.js';
 // No external training, no orders, no fake fills, no automatic strategy changes.
 export const DEMO_VERSION='INDEX_DEMO_2026_10_V1';
 export const DEMO_SYMBOLS=Object.freeze(['NIFTY','BANKNIFTY','SENSEX']);
@@ -41,7 +43,7 @@ export function createDemoObservation({symbol,asOf,underlyingKey=null,session=nu
   theoreticalLots:plan?.paperEnvelopeLots??null,approvedRealLots:0,
   status:direction==='WAIT'?'WAIT':'PENDING_30M_DIRECTION',
   reasons:unique([...(direction==='WAIT'&&rawDirection!=='WAIT'?['FRESH_EVIDENCE_REQUIRED']:[]),...reasons]),
-  outcome:null,learningNotes:[],...DEMO_SAFETY};
+  outcome:null,review:null,learningNotes:[],fundamentalContext:null,...DEMO_SAFETY};
  return Object.freeze(study);
 }
 export function evaluateDemoObservations(records=[],symbol='',completedCandles=[],asOf=Date.now()){
@@ -53,9 +55,9 @@ export function evaluateDemoObservations(records=[],symbol='',completedCandles=[
  return records.map(record=>{
   if(record.symbol!==symbol||record.status!=='PENDING_30M_DIRECTION'||!positive(record.indexQuote)||
      !positive(record.atr14)||!['CE','PE'].includes(record.direction)||
-     !finite(Date.parse(record.lastCompletedAt)))return record;
-  const origin=Date.parse(record.lastCompletedAt);
-  const horizon=origin+HORIZON_MS;
+     !finite(Date.parse(record.recordedAt)))return record;
+  // Measure the horizon from the recorded prediction, never from an earlier candle.
+  const horizon=Date.parse(record.recordedAt)+HORIZON_MS;
   const target=bars.find(b=>b.at>=horizon&&b.at<horizon+10*60000&&
    istDay(b.at)===record.dateIST);
   if(!target)return record;
@@ -70,12 +72,21 @@ export function evaluateDemoObservations(records=[],symbol='',completedCandles=[
     ['Index moved in the forecast direction; this does NOT prove an option trade would have profited.']:
     ['Move was within the volatility/noise threshold; classify as inconclusive, not a win.'];
   if(!positive(record.optionBuyEntry))notes.push('Option premium entry was not verified; do not infer option P&L.');
-  return {...record,status:'EVALUATED_30M_DIRECTION',
+  const atOutcome=target.at+5*60000+10000;
+  const historic=bars.filter(b=>b.at<=target.at&&istDay(b.at)===record.dateIST);
+  const result=analyzeIntradayCandles(historic,{asOf:atOutcome,intervalMinutes:5,session:{open:true,exchange:'NSE'}});
+  const after=result.valid?result.snapshot:null;
+  const outcomeRecord={...record,status:'EVALUATED_30M_DIRECTION',
    outcome:{verdict,settledAt:new Date(now).toISOString(),horizonMinutes:30,
     observedCandleAt:new Date(target.at).toISOString(),observedClose:target.close,
     signedDirectionalMove:Number(movement.toFixed(3)),noiseThreshold:Number(threshold.toFixed(3)),
     realizedPaperOptionPnL:null,marketExecutionVerified:false},
    learningNotes:notes,approvedRealLots:0,orderSubmissionAllowed:false};
+  const review=buildIndexPredictionReview({prediction:outcomeRecord,postTechnical:after,
+   fundamentalContext:record.fundamentalContext});
+  return {...outcomeRecord,review,
+   learningNotes:[...notes,...(review?.improvementCandidates||[])],
+   approvedRealLots:0,orderSubmissionAllowed:false};
  });
 }
 export function mergeDemoObservation(records=[],observation,maxRecords=1000){
@@ -112,8 +123,13 @@ export function demoSummary(records=[]){
 export function demoCsv(records=[]){
  const fields=['dateIST','symbol','recordedAt','status','direction','underlyingClose','indexQuote','ema9','ema21','rsi14','macdHistogram','atr14',
   'optionContract','optionStrike','optionExpiry','optionBuyEntry','optionStop','optionTarget1','optionTarget2','theoreticalLots','approvedRealLots',
-  'outcome.verdict','outcome.observedClose','outcome.signedDirectionalMove','reasons'];
+  'outcome.verdict','outcome.observedClose','outcome.signedDirectionalMove','review.summary','review.technical.status',
+  'review.technical.conclusion','review.fundamental.status','review.improvementCandidates','reasons'];
  const escape=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
- const value=(r,k)=>k==='reasons'?(r.reasons||[]).join('; '):k.startsWith('outcome.')?r.outcome?.[k.slice(8)]:r[k];
+ const value=(r,k)=>{
+  if(k==='reasons')return (r.reasons||[]).join('; ');
+  if(k==='review.improvementCandidates')return (r.review?.improvementCandidates||[]).join('; ');
+  return k.split('.').reduce((v,part)=>v?.[part],r);
+ };
  return [fields.join(','),...records.map(r=>fields.map(k=>escape(value(r,k))).join(','))].join('\r\n');
 }

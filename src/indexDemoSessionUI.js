@@ -87,8 +87,9 @@ export function mountIndexDemoJournal(){
   '<p id="demo-status" class="ir-status" role="status">Demo inactive. Arm this browser and leave the tab open for automated paper observations.</p>',
   '<div id="demo-stats" class="ir-facts"></div>',
   '<h3>Latest frozen research records</h3><div id="demo-recent" class="ir-demo-recent"></div>',
-  '<h3>Hypotheses for analysis (not automatic strategy changes)</h3><ul id="demo-lessons" class="ir-reasons"></ul>',
-  '<p class="ir-muted">30-minute labels measure underlying index direction only, not real option profits. Browser sleep, lost connection, closed tab or failed login mean missing evidence; no hypothetical fills are fabricated. Data is stored in this browser only.</p>'
+  '<h3>Self-review after each measured outcome</h3><div id="demo-reviews" class="ir-demo-recent"></div>',
+  '<h3>Proposed improvements (not automatic rule changes)</h3><ul id="demo-lessons" class="ir-reasons"></ul>',
+  '<p class="ir-muted">Original prediction is recorded first; post-prediction technical and fundamental audits appear only after a measured outcome. Fundamentals need dated sourced data; absent evidence is labeled NOT VERIFIED. 30-minute labels measure index direction, not option P&L. Browser must stay awake and connected. Data stays in this browser only.</p>'
  ].join('');
  optionPanel.insertAdjacentElement('afterend',panel);
  const $=id=>panel.querySelector('#'+id),status=$('demo-status');
@@ -105,7 +106,7 @@ export function mountIndexDemoJournal(){
  }
  function show(){
   const summary=demoSummary(records);
-  $('demo-stats').replaceChildren();$('demo-recent').replaceChildren();$('demo-lessons').replaceChildren();
+  $('demo-stats').replaceChildren();$('demo-recent').replaceChildren();$('demo-reviews').replaceChildren();$('demo-lessons').replaceChildren();
   const pairs=[
    ['Snapshots',summary.total],['WAIT (not a forecast)',summary.wait],
    ['Directional hypotheses',summary.predictions],['Awaiting 30m follow-up',summary.pending],
@@ -122,6 +123,21 @@ export function mountIndexDemoJournal(){
      make('span',(r.reasons||[]).slice(0,2).join('; ')||'Outcome not yet measured');
    el.append(name,when,notes);$('demo-recent').append(el);
   }
+  for(const record of records.filter(x=>x.review).slice(-6).reverse()){
+   const review=record.review;
+   const item=make('article','','ir-demo-review');
+   item.append(make('strong',record.symbol+' • '+record.direction+' • '+review.verdict),
+    make('p','Original prediction: '+new Date(record.recordedAt).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata'})+
+     ' IST • Index '+asText(record.indexQuote)+' → '+asText(record.outcome?.observedClose)),
+    make('p',review.summary),
+    make('p','Technical review: '+review.technical.conclusion),
+    make('p','Fundamental evidence: '+review.fundamental.status+' — '+review.fundamental.limitation),
+    make('p','Potential improvement (requires testing): '+(review.improvementCandidates?.[0]??'More verified data needed')),
+    make('p','Option target/stop profit: NOT VERIFIED • Real orders: 0'));
+   $('demo-reviews').append(item);
+  }
+  if(!records.some(x=>x.review))$('demo-reviews').append(
+   make('p','No completed prediction reviews yet. An original CE/PE prediction must first be recorded; outcome and diagnostics follow only after fresh 30-minute evidence.','ir-muted'));
   for(const tip of summary.proposals.slice(0,5))$('demo-lessons').append(make('li',tip));
   $('demo-arm').disabled=!storageAvailable||armed;$('demo-stop').disabled=!armed;
  }
