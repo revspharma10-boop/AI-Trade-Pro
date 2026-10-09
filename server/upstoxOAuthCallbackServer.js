@@ -2,6 +2,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { exchangeUpstoxAuthorizationCode } from '../src/upstox/upstoxOAuth.js';
+import {readOnlyCorsHeaders} from './readOnlyCorsPolicy.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const CLIENT_ID = process.env.UPSTOX_CLIENT_ID || '';
@@ -72,7 +73,7 @@ function json(res, status, payload) {
     'Cache-Control': 'no-store',
     'Referrer-Policy': 'no-referrer',
     'X-Content-Type-Options': 'nosniff',
-    ...( { 'Access-Control-Allow-Origin': 'https://revspharma10-boop.github.io', 'Vary': 'Origin' } )
+    ...readOnlyCorsHeaders(res.req?.headers?.origin)
   });
   res.end(JSON.stringify(payload));
 }

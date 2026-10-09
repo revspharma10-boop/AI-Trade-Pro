@@ -1,0 +1,75 @@
+name: Build Personal Android APK (Paper Only)
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'capacitor.config.json'
+      - '.github/workflows/build-personal-android-apk.yml'
+      - 'index.html'
+      - 'src/**'
+      - 'server/readOnlyCorsPolicy.js'
+      - 'server/readOnlyCorsPolicyQualificationRunner.js'
+      - 'server/upstoxOAuthCallbackServer.js'
+      - 'package.json'
+      - 'package-lock.json'
+permissions:
+  contents: read
+concurrency:
+  group: personal-android-apk-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  android-debug-apk:
+    name: Package read-only AI Trade Pro Android APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Ensure supported Android SDK packages
+        run: |
+          SDKMANAGER="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -path '*/bin/sdkmanager' | sort -V | tail -n 1)"
+          test -x "$SDKMANAGER"
+          "$SDKMANAGER" --version
+          "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0"
+      - name: Install locked web dependencies
+        run: npm ci
+      - name: Install isolated Android build tooling
+        run: npm install --no-save --package-lock=false @capacitor/core@8.0.0 @capacitor/android@8.0.0 @capacitor/cli@8.0.0
+      - name: Validate native navigation mapping and paper safety
+        run: |
+          node --check src/androidBottomNavigation.js
+          node src/androidBottomNavigationQualificationRunner.js
+          node server/readOnlyCorsPolicyQualificationRunner.js
+          node src/openingRangeQualificationRunner.js
+          node src/autoOptionResearchQualificationRunner.js
+      - name: Build Android web assets with relative base path
+        env:
+          VITE_UPSTOX_READONLY_API_BASE: https://ai-trade-pro-oauth.onrender.com
+          VITE_ANDROID_APP: 'true'
+        run: npm run build -- --base ./
+      - name: Generate native Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+      - name: Assemble installable debug APK
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace assembleDebug
+      - name: Verify APK is present
+        run: test -s android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload APK artifact (not a Play Store release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Trade-Pro-Personal-Paper-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
