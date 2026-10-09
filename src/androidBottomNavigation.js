@@ -62,7 +62,7 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   date:hasLast?date(last.date):'—',
   status:active?'Paper idea · Not executed':
    previous?'Previous idea · Not executed':hasCandidate?
-    'Contract verified · Premium WAIT':'No paper trade executed',
+    'Contract verified · Setup WAIT':'No paper trade executed',
   explanation:matches&&typeof data.message==='string'?
    data.message:'Awaiting verified broker research'
  };
