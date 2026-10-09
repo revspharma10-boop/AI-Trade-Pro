@@ -33,6 +33,7 @@ const fail=(state,message,more={})=>({state,message,...more});
 
 export function qualifyPaperRecommendation(plan,contract,asOf=Date.now()){
  if(plan?.status!=='UNVALIDATED_PAPER_LEVELS'||!contract||
+    plan.optionType!==contract.instrumentType||plan.direction!==contract.instrumentType||
     !['CE','PE'].includes(contract.instrumentType)||
     !positive(contract.strike)||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(contract.expiry??'')||
     contract.expiry<=dayIST(asOf)||
@@ -135,7 +136,9 @@ export function createPaperRecommendationFeed({
 
   const underlying=market.kind==='INDEX'?await searchIndex(market.symbol):
    await searchEquity(market.symbol);
-  if(!underlying?.instrumentKey)return fail('WAIT','Exact underlying instrument not verified');
+  if(!underlying?.instrumentKey||
+    (market.kind==='STOCK'&&String(underlying.tradingSymbol??'').toUpperCase()!==market.symbol))
+   return fail('WAIT','Exact underlying instrument not verified');
   const key=underlying.instrumentKey;
   const [bars,rawQuote]=await Promise.all([getCandles(key,'5m'),getQuote(key)]);
   const candles=bars?.candles??bars??[];
@@ -194,7 +197,7 @@ export function createPaperRecommendationFeed({
    result={...result,checkedAt};
    if(result.qualified)lastByTab.set(tab,result.qualified);
    cache.set(tab,{slot,checkedAt:now,result});
-   return presentRecommendation({tab,last:lastByTab.get(tab)??null,result,asOf:now});
+   return presentRecommendation({tab,last:lastByTab.get(tab)??null,result,asOf:Date.now()});
   })();
   pending.set(tab,promise);
   try{return await promise;}finally{pending.delete(tab);}
