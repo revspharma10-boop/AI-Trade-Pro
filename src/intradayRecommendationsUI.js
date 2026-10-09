@@ -1,13 +1,16 @@
-// AI Trade Pro — simple automatic CE/PE research and paper-demo entrypoint.
-// Legacy manual contract search remains in tested services / read-only backend.
+// Two deliberately separate surfaces:
+// - Android APK: minimal last recommendation; all research computed by Render.
+// - Existing GitHub Pages website: full research UI unchanged.
 import './intradayRecommendations.css';
-import {mountAutoOptionResearch} from './autoOptionResearchUI.js';
-import {mountIndexDemoJournal} from './indexDemoSessionUI.js';
-import {mountAndroidBottomNavigation} from './androidBottomNavigation.js';
 import './androidBottomNavigation.css';
+import {mountAndroidBottomNavigation} from './androidBottomNavigation.js';
 
-mountAutoOptionResearch();
-mountIndexDemoJournal();
-
-// Android build enables this native-style shell. The GitHub Pages web UI is unaffected.
-if(import.meta.env.VITE_ANDROID_APP==='true')mountAndroidBottomNavigation();
+if(import.meta.env.VITE_ANDROID_APP==='true'){
+ mountAndroidBottomNavigation();
+}else{
+ // Keep the web-based research interface and browser-local demo for web users.
+ import('./autoOptionResearchUI.js').then(({mountAutoOptionResearch})=>{
+  mountAutoOptionResearch();
+  return import('./indexDemoSessionUI.js');
+ }).then(({mountIndexDemoJournal})=>mountIndexDemoJournal());
+}
