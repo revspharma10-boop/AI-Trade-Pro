@@ -53,6 +53,19 @@ const later=presentRecommendation({tab:'nifty',last:qualified,
  result:{state:'WAIT',message:'No new setup'},asOf:asOf+6*60000});
 assert.equal(later.state,'PAST_PAPER_IDEA');
 assert.match(later.message,/not a current signal/i);
+const waitWithContract=presentRecommendation({tab:'nifty',asOf,
+ result:{state:'WAIT',stage:'OPTION_PREMIUM_AND_RISK',
+ message:'Broker margin estimate unavailable',
+ verifiedContract:{tradingSymbol:contract.tradingSymbol,optionType:'CE',
+ strike:contract.strike,expiry:contract.expiry,paperOnly:true,orderSubmissionAllowed:false},
+ blockers:[{code:'BROKER_MARGIN_QUOTE_REQUIRED',
+ message:'Upstox option margin estimate is unavailable or unverified'}]}});
+assert.equal(waitWithContract.state,'WAIT');
+assert.equal(waitWithContract.verifiedContract.tradingSymbol,contract.tradingSymbol);
+assert.equal(waitWithContract.last,null,'Verified contract alone must not create paper recommendation');
+assert.equal(waitWithContract.blockers[0].code,'BROKER_MARGIN_QUOTE_REQUIRED');
+assert.equal(waitWithContract.orderSubmissionAllowed,false);
+
 const zero=presentRecommendation({tab:'options',asOf});
 assert.equal(zero.state,'WAIT');
 assert.equal(zero.last,null);

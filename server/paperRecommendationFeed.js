@@ -7,6 +7,7 @@ import {deriveAutoOptionDirection,chooseAutoOptionContract,calculateAutoOptionPa
  from '../src/services/autoOptionResearchEngine.js';
 import {deriveOpeningRangeBias} from '../src/services/openingRangeResearch.js';
 import {extractUpstoxLiveQuoteEvidence} from '../src/services/intradayRiskEngine.js';
+import {describePaperRejection} from './recommendationWaitDiagnostics.js';
 import {chooseMcxOptionUnderlying,deriveMcxOptionDirection,
  chooseMcxOptionContract,calculateMcxOptionPaperPlan}
  from '../src/services/mcxAutoOptionResearchEngine.js';
@@ -74,6 +75,11 @@ export function presentRecommendation({tab,last=null,result=null,asOf=Date.now()
  return {
   tab,symbol:market.symbol,marketName:market.name,
   state,last:last??null,
+  // Underlying/contract metadata is shown only when independently verified;
+  // WAIT never authorizes entering, stopping or exiting a trade.
+  verifiedContract:result?.verifiedContract??null,
+  stage:result?.stage??null,
+  blockers:result?.blockers??[],
   lastCheckedAt:result?.checkedAt??null,
   message:state==='PAST_PAPER_IDEA'?'Previous paper idea — not a current signal':
    result?.message??'No verified paper recommendation',
@@ -92,7 +98,11 @@ export function createPaperRecommendationFeed({
   const market=RECOMMENDATION_MARKETS[tab];
   const session=marketClockState({segment:market.segment,
    underlyingSymbol:market.kind==='MCX'?market.symbol:'',asOf});
-  if(!session.open)return fail('WAIT','Market session closed or not verified');
+  const rejected=(stage,codes,more={})=>({
+   ...describePaperRejection({stage,codes,contract:more.contract,asOf,
+    fallback:more.fallback}),...(more.extra??{})
+  });
+  if(!session.open)return rejected('MARKET_SESSION',['MARKET_SESSION_CLOSED']);
   let contract=null,plan=null;
   if(market.kind==='MCX'){
    const [f,c,p]=await Promise.all([
@@ -102,7 +112,8 @@ export function createPaperRecommendationFeed({
    ]);
    const futures=f?.contracts??[],options=[...(c?.contracts??[]),...(p?.contracts??[])];
    const pick=chooseMcxOptionUnderlying({futures,options,symbol:market.symbol,asOf});
-   if(!pick.future)return fail('WAIT','MCX futures/option linkage not verified');
+   if(!pick.future)return rejected('MCX_UNDERLYING',
+    pick.reasons?.length?pick.reasons:['MCX_FUTURE_AND_OPTION_UNDERLYING_LINK_NOT_VERIFIED']);
    const future=pick.future;
    const [bars,rawQuote]=await Promise.all([getCandles(future.instrumentKey,'5m'),
     getQuote(future.instrumentKey)]);
@@ -111,10 +122,14 @@ export function createPaperRecommendationFeed({
    const quote=extractUpstoxLiveQuoteEvidence(rawQuote,future.instrumentKey,asOf);
    const direction=deriveMcxOptionDirection({future,research:underlying,quote,session,asOf});
    if(!['CE','PE'].includes(direction.direction))
-    return fail('WAIT','No verified commodity CALL/PUT setup');
-   contract=chooseMcxOptionContract({options,future,spot:quote.lastPrice,
-    direction:direction.direction,asOf}).contract;
-   if(!contract)return fail('WAIT','Exact MCX option contract not verified');
+    return rejected('MCX_TECHNICAL',direction.reasons?.length?direction.reasons:
+     ['MCX_FUTURES_PRICE_NOT_VERIFIED'],{fallback:'MCX_FUTURES_PRICE_NOT_VERIFIED'});
+   const selection=chooseMcxOptionContract({options,future,spot:quote.lastPrice,
+    direction:direction.direction,asOf});
+   contract=selection.contract;
+   if(!contract)return rejected('MCX_CONTRACT',selection.reasons?.length?
+    selection.reasons:['EXACT_MCX_OPTION_CONTRACT_NOT_FOUND'],
+    {fallback:'EXACT_MCX_OPTION_CONTRACT_NOT_FOUND'});
    const [optionBars,optionRaw]=await Promise.all([
     getCandles(contract.instrumentKey,'5m'),getQuote(contract.instrumentKey)]);
    const optionResearch=analyzeIntradayCandles(optionBars?.candles??optionBars??[],
@@ -130,15 +145,16 @@ export function createPaperRecommendationFeed({
      plan=calculateMcxOptionPaperPlan({...args,marginQuote:margin});
     }catch(_e){/* A missing margin must fail closed. */}
    }
-   return {state:'WAIT',message:'MCX multiplier/delivery risk not independently verified',
-    contract,plan};
+   return rejected('MCX_OPTION_QUALIFICATION',
+    [...(plan.reasons??[]),'MCX_MULTIPLIER_NOT_INDEPENDENTLY_VERIFIED'],
+    {contract,fallback:'MCX_MULTIPLIER_NOT_INDEPENDENTLY_VERIFIED'});
   }
 
   const underlying=market.kind==='INDEX'?await searchIndex(market.symbol):
    await searchEquity(market.symbol);
   if(!underlying?.instrumentKey||
     (market.kind==='STOCK'&&String(underlying.tradingSymbol??'').toUpperCase()!==market.symbol))
-   return fail('WAIT','Exact underlying instrument not verified');
+   return rejected('UNDERLYING',['UNDERLYING_NOT_VERIFIED']);
   const key=underlying.instrumentKey;
   const [bars,rawQuote]=await Promise.all([getCandles(key,'5m'),getQuote(key)]);
   const candles=bars?.candles??bars??[];
@@ -150,18 +166,29 @@ export function createPaperRecommendationFeed({
   if(direction.direction==='WAIT'){
    if(market.kind==='INDEX'&&technical.completedBars<35){
     const early=deriveOpeningRangeBias({candles,quote,session,asOf});
-    return fail('WAIT',['CE','PE'].includes(early.direction)?
-     'Early '+early.direction+' bias only — no verified option premium':
-     'WAIT — completed candles or directional evidence incomplete');
+    return rejected('OPENING_RANGE',
+     ['CE','PE'].includes(early.direction)?['OPENING_RANGE_BIAS_ONLY']:
+      ['OPENING_RANGE_NOT_CONFIRMED',...((technical.reasons??[]).slice(0,1))],
+     {fallback:'OPENING_RANGE_NOT_CONFIRMED'});
    }
-   return fail('WAIT','WAIT — five-minute technical checks not aligned');
+   return rejected('UNDERLYING_TECHNICAL',
+    direction.reasons?.length?direction.reasons:['NO_CLEAR_TECHNICAL_DIRECTION'],
+    {fallback:'NO_CLEAR_TECHNICAL_DIRECTION'});
   }
   const contracts=await getContracts(key);
-  contract=chooseAutoOptionContract({contracts,underlyingKey:key,
-   spot:quote.lastPrice,direction:direction.direction,asOf}).contract;
-  if(!contract)return fail('WAIT','Exact exchange option contract not verified');
-  const [optionBars,rawOptionQuote]=await Promise.all([
+  const selected=chooseAutoOptionContract({contracts,underlyingKey:key,
+   spot:quote.lastPrice,direction:direction.direction,asOf});
+  contract=selected.contract;
+  if(!contract)return rejected('OPTION_CONTRACT',
+   selected.reasons?.length?selected.reasons:['OPTION_CONTRACT_NOT_VERIFIED'],
+   {fallback:'OPTION_CONTRACT_NOT_VERIFIED'});
+  // A failed option-quote endpoint must not erase a verified contract. Do not
+  // fabricate option prices; the existing option plan will fail closed with
+  // exact quote/candle rejection codes when either response is unavailable.
+  const [optionBarsResult,optionQuoteResult]=await Promise.allSettled([
    getCandles(contract.instrumentKey,'5m'),getQuote(contract.instrumentKey)]);
+  const optionBars=optionBarsResult.status==='fulfilled'?optionBarsResult.value:null;
+  const rawOptionQuote=optionQuoteResult.status==='fulfilled'?optionQuoteResult.value:null;
   const optionResearch=analyzeIntradayCandles(optionBars?.candles??optionBars??[],
    {asOf,session,intervalMinutes:5});
   const optionQuote=extractUpstoxLiveQuoteEvidence(rawOptionQuote,contract.instrumentKey,asOf);
@@ -177,8 +204,12 @@ export function createPaperRecommendationFeed({
   }
   const qualified=qualifyPaperRecommendation(plan,contract,asOf);
   return qualified?
-   {state:'PAPER_SETUP',message:'Provisional paper levels • Not executed',qualified}:
-   fail('WAIT','Option premium, risk or broker margin not qualified');
+   {state:'PAPER_SETUP',stage:'PAPER_LEVELS',message:'Provisional paper levels • Not executed',qualified}:
+   rejected('OPTION_PREMIUM_AND_RISK',[
+    ...(plan.reasons??[]),
+    ...(optionBarsResult.status==='rejected'?['FRESH_LIQUID_OPTION_PREMIUM_CANDLES_REQUIRED']:[]),
+    ...(optionQuoteResult.status==='rejected'?['FRESH_OPTION_BID_ASK_LAST_TRADE_REQUIRED']:[])
+   ],{contract,fallback:'PAPER_ENVELOPE_NOT_QUALIFIED'});
  }
  async function getLatest(tab,asOf=Date.now()){
   if(!Object.hasOwn(RECOMMENDATION_MARKETS,tab))throw Error('UNSUPPORTED_RECOMMENDATION_TAB');

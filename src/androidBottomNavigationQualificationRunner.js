@@ -26,6 +26,31 @@ const historical=safeRecommendationCard({...paper,state:'PAST_PAPER_IDEA'},'opti
 assert.equal(historical.state,'PAST_PAPER_IDEA');
 assert.equal(historical.tag,'PAST PAPER IDEA');
 assert.notEqual(historical.tag,'PAPER BUY');
+const incomplete={tab:'nifty',state:'WAIT',
+ paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false,
+ message:'Option 5-minute candles or liquidity are not qualified (35 fresh bars required)',
+ stage:'OPTION_PREMIUM_AND_RISK',
+ verifiedContract:{tradingSymbol:'NIFTY 15 OCT 25000 CE',optionType:'CE',strike:25000,
+  expiry:'2026-10-15',paperOnly:true,orderSubmissionAllowed:false}};
+const waiting=safeRecommendationCard(incomplete,'nifty',time);
+assert.equal(waiting.state,'WAIT');
+assert.equal(waiting.tag,'WAIT');
+assert.equal(waiting.contract,'NIFTY 15 OCT 25000 CE');
+assert.equal(waiting.entry,'—','Verified contract does NOT qualify a premium');
+assert.equal(waiting.stopLoss,'—');
+assert.equal(waiting.target,'—');
+assert.equal(waiting.date,'—');
+assert.match(waiting.status,/Setup WAIT/);
+assert.match(waiting.explanation,/35 fresh bars/);
+assert.equal(safeRecommendationCard({...incomplete,verifiedContract:{
+ ...incomplete.verifiedContract,orderSubmissionAllowed:true}},'nifty',time).contract,
+ 'NO VERIFIED OPTION CONTRACT');
+assert.equal(safeRecommendationCard({...incomplete,verifiedContract:{
+ ...incomplete.verifiedContract,expiry:'2026-10-09'}},'nifty',time).contract,
+ 'NO VERIFIED OPTION CONTRACT');
+assert.equal(safeRecommendationCard(incomplete,'sensex',time).contract,
+ 'NO VERIFIED OPTION CONTRACT','Never leak a different tab contract');
+
 const other=safeRecommendationCard(paper,'nifty',time);
 assert.equal(other.state,'WAIT');
 assert.equal(other.entry,'—','Never leak a paper value from a different tab');

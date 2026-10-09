@@ -48,6 +48,7 @@ jobs:
           node --check src/androidBottomNavigation.js
           node src/androidBottomNavigationQualificationRunner.js
           node server/paperRecommendationFeedQualificationRunner.js
+          node server/recommendationWaitDiagnosticsQualificationRunner.js
           node server/readOnlyCorsPolicyQualificationRunner.js
           node src/openingRangeQualificationRunner.js
           node src/autoOptionResearchQualificationRunner.js
