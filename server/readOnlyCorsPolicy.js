@@ -8,6 +8,8 @@ export function allowedReadOnlyClientOrigin(origin){
  return typeof origin==='string'&&READ_ONLY_CLIENT_ORIGINS.includes(origin)?origin:null;
 }
 export function readOnlyCorsHeaders(origin){
- const approved=allowedReadOnlyClientOrigin(origin);
+ // Preserve the original response to non-browser callers that send no Origin.
+ // An explicit, unrecognized Origin never receives a CORS allowance.
+ const approved=origin===undefined?READ_ONLY_CLIENT_ORIGINS[0]:allowedReadOnlyClientOrigin(origin);
  return approved?{'Access-Control-Allow-Origin':approved,'Vary':'Origin'}:{'Vary':'Origin'};
 }
