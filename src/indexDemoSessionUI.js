@@ -6,6 +6,7 @@ import {analyzeIntradayCandles} from './services/intradayTechnicalEngine.js';
 import {marketClockState} from './services/intradayMarketClock.js';
 import {deriveAutoOptionDirection,chooseAutoOptionContract,calculateAutoOptionPaperPlan} from './services/autoOptionResearchEngine.js';
 import {extractUpstoxLiveQuoteEvidence} from './services/intradayRiskEngine.js';
+import {deriveOpeningRangeBias} from './services/openingRangeResearch.js';
 import {DEMO_SYMBOLS,DEMO_VERSION,createDemoObservation,evaluateDemoObservations,mergeDemoObservation,demoSummary,demoCsv} from './services/indexDemoJournal.js';
 
 const DATE='2026-10-09',STATE_KEY='AI_TRADE_PRO_DEMO_OCT09_V1',ARM_KEY=STATE_KEY+'_ARM';
@@ -15,7 +16,7 @@ const make=(tag,value='',className='')=>{const el=document.createElement(tag);el
 async function captureIndex(symbol,asOf,authenticated){
  const segment=symbol==='SENSEX'?'BSE_INDEX':'NSE_INDEX';
  const session=marketClockState({segment,asOf});
- let underlyingKey=null,research=null,quote=null,signal={direction:'WAIT',reasons:[]},contract=null,plan=null;
+ let underlyingKey=null,research=null,quote=null,signal={direction:'WAIT',reasons:[]},contract=null,plan=null,openingRange=null;
  const errors=[];
  try{
   if(!authenticated)throw Error('UPSTOX_READ_ONLY_LOGIN_REQUIRED');
@@ -29,8 +30,15 @@ async function captureIndex(symbol,asOf,authenticated){
   if(live.status==='rejected')errors.push(String(live.reason?.message??'INDEX_QUOTE_UNAVAILABLE'));
   research=analyzeIntradayCandles(candles,{asOf,intervalMinutes:5,session});
   quote=live.status==='fulfilled'?live.value:null;
-  signal=deriveAutoOptionDirection({research,underlyingQuote:quote,underlyingSegment:segment,session,asOf});
-  if(['CE','PE'].includes(signal.direction)){
+  const minutes=new Date(asOf+330*60000).getUTCHours()*60+
+   new Date(asOf+330*60000).getUTCMinutes();
+  const earlyWindow=minutes>=570&&research.completedBars<35;
+  if(earlyWindow){
+   openingRange=deriveOpeningRangeBias({candles,quote,session,asOf});
+   signal={direction:openingRange.direction,reasons:openingRange.reasons};
+  }else signal=deriveAutoOptionDirection({research,underlyingQuote:quote,underlyingSegment:segment,session,asOf});
+  // Early directional hypotheses are research-only, never auto-selected option trades.
+  if(['CE','PE'].includes(signal.direction)&&!earlyWindow){
    try{
     const choices=await getUpstoxOptionContracts(underlyingKey);
     const selected=chooseAutoOptionContract({contracts:choices,underlyingKey,spot:quote.lastPrice,direction:signal.direction,asOf});
@@ -59,11 +67,11 @@ async function captureIndex(symbol,asOf,authenticated){
   }
   // Returns actual completed candles only; no lookahead or backfilled fabricated entries.
   return {observation:createDemoObservation({symbol,asOf,underlyingKey,session,research,quote,signal,
-    contract,plan,diagnostics:errors}),candles};
+    contract,plan,openingRange,diagnostics:errors}),candles};
  }catch(e){
   errors.push(String(e?.message??'INDEX_CAPTURE_ERROR'));
   return {observation:createDemoObservation({symbol,asOf,underlyingKey,session,research,quote,
-    signal:{direction:'WAIT',reasons:errors},diagnostics:errors}),candles:[]};
+    signal:{direction:'WAIT',reasons:errors},openingRange,diagnostics:errors}),candles:[]};
  }
 }
 function downloadData(content,name,mime){
@@ -78,9 +86,9 @@ export function mountIndexDemoJournal(){
  const panel=document.createElement('section');
  panel.className='ir-panel ir-demo-panel';
  panel.innerHTML=[
-  '<h2>Tomorrow: 3-index paper demo journal</h2>',
-  '<p class="ir-muted">Friday 9 Oct 2026 • NIFTY / BANKNIFTY / SENSEX • 9:20–15:20 IST checks every 5 minutes when this browser tab is awake. Monitoring starts only when armed. No orders or model retraining.</p>',
-  '<div class="ir-actions"><button id="demo-arm" class="ir-primary" type="button">Arm tomorrow’s paper demo</button>',
+  '<h2>Today: 9:30 opening-range index demo</h2>',
+  '<p class="ir-muted">9:15–9:30 IST: record the 15-minute opening OHLC/high/low from 3 completed 5-minute candles. Starting about 9:30:15 IST, scan NIFTY / BANKNIFTY / SENSEX every 5 minutes for provisional CALL / PUT / WAIT opening-range bias. Full strategy still needs 35 candles. Browser must be armed and awake; real orders disabled.</p>',
+  '<div class="ir-actions"><button id="demo-arm" class="ir-primary" type="button">Arm today’s paper demo</button>',
   '<button id="demo-stop" class="ir-secondary" type="button">Stop demo</button>',
   '<button id="demo-csv" class="ir-secondary" type="button">Export CSV</button>',
   '<button id="demo-json" class="ir-secondary" type="button">Export JSON</button></div>',
@@ -118,10 +126,14 @@ export function mountIndexDemoJournal(){
   }
   for(const r of records.slice(-10).reverse()){
    const el=make('div','','ir-demo-item'),name=make('strong',r.symbol+' • '+r.direction+' • '+r.status);
+   const range=r.openingOHLC?make('span','09:15–09:30 OHLC: '+
+    [r.openingOHLC.open,r.openingOHLC.high,r.openingOHLC.low,r.openingOHLC.close].map(asText).join(' / ')+
+    ' • Opening H '+asText(r.openingRangeHigh)+' L '+asText(r.openingRangeLow)):
+    make('span',r.predictionType||'Standard 5m');
    const when=make('span',new Date(r.recordedAt).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata'})+' IST');
    const notes=r.outcome?make('span',r.outcome.verdict+' • '+(r.learningNotes||[]).join(' ')):
      make('span',(r.reasons||[]).slice(0,2).join('; ')||'Outcome not yet measured');
-   el.append(name,when,notes);$('demo-recent').append(el);
+   el.append(name,when,range,notes);$('demo-recent').append(el);
   }
   for(const record of records.filter(x=>x.review).slice(-6).reverse()){
    const review=record.review;
@@ -144,7 +156,7 @@ export function mountIndexDemoJournal(){
  $('demo-arm').addEventListener('click',()=>{
   if(!storageAvailable)return;
   armed=true;localStorage.setItem(ARM_KEY,'true');lastBucket=null;
-  status.textContent='Armed for 9 Oct 2026, 09:20 IST. Keep this browser tab open, awake and online.';
+  status.textContent='Armed for 9 Oct 2026, 09:30 IST opening-range research. Keep this browser tab open and authenticated.';
   show();void tick();
  });
  $('demo-stop').addEventListener('click',()=>{
@@ -158,8 +170,10 @@ export function mountIndexDemoJournal(){
   if(!armed||running||!storageAvailable)return;
   const now=Date.now(),date=nowIST(now),ist=new Date(now+330*60000),minutes=ist.getUTCHours()*60+ist.getUTCMinutes();
   if(date!==DATE){if(date>DATE){armed=false;localStorage.setItem(ARM_KEY,'false');status.textContent='Demo date completed. Export the local journal.';show();}return;}
-  if(minutes<560||minutes>=920)return; // 09:20 through 15:19 IST, no post-close guesses.
-  const bucket=Math.floor(now/300000);
+  if(minutes<570||minutes>=920)return; // Do not issue predictions before the 09:15–09:30 opening range closes.
+  // Settle the last 09:25 candle for 12 seconds before evaluating and deduplicating each new slot.
+  const bucket=Math.floor((now-12000)/300000);
+  if(minutes===570&&new Date(now+330*60000).getUTCSeconds()<12)return;
   if(bucket===lastBucket)return;
   lastBucket=bucket;running=true;
   status.textContent='Collecting read-only snapshots — '+new Date(now).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata'})+' IST';
@@ -181,7 +195,7 @@ export function mountIndexDemoJournal(){
   finally{running=false;show();}
  }
  show();
- if(armed)status.textContent='Demo armed • Keep this browser tab open for 9 Oct, 09:20 IST.';
+ if(armed)status.textContent='Opening range demo armed • First possible prediction after 09:30:12 IST.';
  setInterval(()=>{if(!document.hidden)void tick();},30000);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)void tick();});
 }
