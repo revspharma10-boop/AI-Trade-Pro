@@ -11,17 +11,19 @@ const istDay=n=>new Date(n+330*60000).toISOString().slice(0,10);
 const HORIZON_MS=30*60*1000;
 const unique=xs=>[...new Set(xs.filter(Boolean))];
 export function createDemoObservation({symbol,asOf,underlyingKey=null,session=null,
- research=null,quote=null,signal=null,contract=null,plan=null,diagnostics=[]}={}){
+ research=null,quote=null,signal=null,contract=null,plan=null,openingRange=null,diagnostics=[]}={}){
  const now=Number(new Date(asOf));
  if(!DEMO_SYMBOLS.includes(symbol)||!finite(now))throw Error('INVALID_DEMO_OBSERVATION');
  const s=research?.valid?research.snapshot:null;
+ const openingValid=openingRange?.valid===true&&openingRange?.strategy==='OPENING_RANGE_15M';
+ const openingOHLC=openingValid?openingRange.openingOHLC:null;
  const rawDirection=['CE','PE'].includes(signal?.direction)?signal.direction:'WAIT';
  const reasons=unique([...(Array.isArray(signal?.reasons)?signal.reasons:[]),
   ...(Array.isArray(plan?.reasons)?plan.reasons:[]),...diagnostics]);
  const validPrice=positive(quote?.lastPrice)&&finite(quote?.timestamp)&&
   quote.timestamp<=now+10000&&now-quote.timestamp<=120000;
- const direction=rawDirection!=='WAIT'&&s&&validPrice?rawDirection:'WAIT';
- const lastCompletedAt=s?.lastCompletedAt??research?.latestCompletedAt??null;
+ const direction=rawDirection!=='WAIT'&&(s||openingValid)&&validPrice?rawDirection:'WAIT';
+ const lastCompletedAt=s?.lastCompletedAt??openingRange?.lastCompletedAt??research?.latestCompletedAt??null;
  const barMs=Date.parse(lastCompletedAt);
  const key=finite(barMs)?String(barMs):String(Math.floor(now/300000)*300000);
  const study={version:DEMO_VERSION,id:istDay(now)+'/'+symbol+'/'+key,
@@ -29,6 +31,12 @@ export function createDemoObservation({symbol,asOf,underlyingKey=null,session=nu
   underlyingKey:typeof underlyingKey==='string'?underlyingKey:null,
   sessionOpen:session?.open===true,
   researchValid:research?.valid===true,completedBars:research?.completedBars??null,
+  predictionType:openingValid&&!s?'EARLY_OPENING_RANGE_15M':'FULL_5M_TECHNICAL',
+  openingOHLC,openingRangePoints:openingValid?openingRange.range:null,
+  openingRangeHigh:openingValid?openingRange.openingRangeHigh:null,
+  openingRangeLow:openingValid?openingRange.openingRangeLow:null,
+  openingBreakoutByQuote:openingValid?openingRange.breakoutConfirmedByQuote:null,
+  openingEvidence:openingValid?openingRange.evidence:[],
   lastCompletedAt:finite(barMs)?new Date(barMs).toISOString():null,
   underlyingClose:positive(s?.close)?s.close:null,
   indexQuote:validPrice?quote.lastPrice:null,quoteTimestamp:validPrice?quote.timestamp:null,
@@ -54,7 +62,8 @@ export function evaluateDemoObservations(records=[],symbol='',completedCandles=[
  })).filter(c=>finite(c.at)&&positive(c.close)&&c.at+5*60000+10000<=now).sort((a,b)=>a.at-b.at);
  return records.map(record=>{
   if(record.symbol!==symbol||record.status!=='PENDING_30M_DIRECTION'||!positive(record.indexQuote)||
-     !positive(record.atr14)||!['CE','PE'].includes(record.direction)||
+     !(record.predictionType==='EARLY_OPENING_RANGE_15M'?positive(record.openingRangePoints):positive(record.atr14))||
+     !['CE','PE'].includes(record.direction)||
      !finite(Date.parse(record.recordedAt)))return record;
   // Measure the horizon from the recorded prediction, never from an earlier candle.
   const horizon=Date.parse(record.recordedAt)+HORIZON_MS;
@@ -62,7 +71,8 @@ export function evaluateDemoObservations(records=[],symbol='',completedCandles=[
    istDay(b.at)===record.dateIST);
   if(!target)return record;
   const movement=(record.direction==='CE'?1:-1)*(target.close-record.indexQuote);
-  const threshold=Math.max(record.atr14*0.25,record.indexQuote*0.0005);
+  const fluctuation=record.predictionType==='EARLY_OPENING_RANGE_15M'?record.openingRangePoints:record.atr14;
+  const threshold=Math.max(fluctuation*0.25,record.indexQuote*0.0005);
   const verdict=movement>threshold?'CORRECT_DIRECTION':
    movement< -threshold?'WRONG_DIRECTION':'INCONCLUSIVE_NOISE';
   const notes=verdict==='WRONG_DIRECTION'?
@@ -121,7 +131,9 @@ export function demoSummary(records=[]){
  return result;
 }
 export function demoCsv(records=[]){
- const fields=['dateIST','symbol','recordedAt','status','direction','underlyingClose','indexQuote','ema9','ema21','rsi14','macdHistogram','atr14',
+ const fields=['dateIST','symbol','recordedAt','status','direction','predictionType','openingOHLC.open','openingOHLC.high',
+  'openingOHLC.low','openingOHLC.close','openingRangePoints','openingBreakoutByQuote',
+  'underlyingClose','indexQuote','ema9','ema21','rsi14','macdHistogram','atr14',
   'optionContract','optionStrike','optionExpiry','optionBuyEntry','optionStop','optionTarget1','optionTarget2','theoreticalLots','approvedRealLots',
   'outcome.verdict','outcome.observedClose','outcome.signedDirectionalMove','review.summary','review.technical.status',
   'review.technical.conclusion','review.fundamental.status','review.improvementCandidates','reasons'];
