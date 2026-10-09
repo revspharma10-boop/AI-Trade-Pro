@@ -1,0 +1,48 @@
+name: AI Trade Pro 2.0 Phase 1 Local Replay Qualification
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/phase1ShadowForecastPipeline.js'
+      - 'server/phase1LocalJsonlLedger.js'
+      - 'server/phase1LocalPipelineQualificationRunner.js'
+      - 'docs/AI_TRADE_PRO_2_PHASE1_FOUNDATION.md'
+      - '.github/workflows/phase1-local-replay-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  phase1-local:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install existing repository dependencies
+        run: npm ci
+      - name: Check Phase 1 Node modules
+        run: |
+          node --check server/phase1ShadowForecastPipeline.js
+          node --check server/phase1LocalJsonlLedger.js
+          node --check server/phase1LocalPipelineQualificationRunner.js
+      - name: Test local shadow scheduler + immutable forecast/outcome ledger
+        run: node server/phase1LocalPipelineQualificationRunner.js
+      - name: Retain Phase 0 source baseline and existing fail-closed safety
+        run: |
+          node src/phase0ArchitectureAuditQualificationRunner.js
+          node server/paperRecommendationFeedQualificationRunner.js
+          node server/recommendationWaitDiagnosticsQualificationRunner.js
+          node server/readOnlyCorsPolicyQualificationRunner.js
+          node src/openingRangeQualificationRunner.js
+          node src/autoOptionResearchQualificationRunner.js
+          node src/webRecommendationUIQualificationRunner.js
+      - name: Verify experimental modules are not imported by the live server or web app
+        run: |
+          ! grep -q 'phase1ShadowForecastPipeline\|phase1LocalJsonlLedger' server/upstoxOAuthCallbackServer.js
+          ! grep -q 'phase1ShadowForecastPipeline\|phase1LocalJsonlLedger' src/intradayRecommendationsUI.js
+          test -s docs/AI_TRADE_PRO_2_PHASE1_FOUNDATION.md
+      - name: Verify public browser build remains unchanged
+        run: npm run build
