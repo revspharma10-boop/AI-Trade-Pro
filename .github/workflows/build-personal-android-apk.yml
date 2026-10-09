@@ -1,18 +1,8 @@
 name: Build Personal Android APK (Paper Only)
+# Legacy Android packaging is retained for optional manual maintenance only.
+# Normal CI and frontend deployments run in the browser; do not auto-build APKs.
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'capacitor.config.json'
-      - '.github/workflows/build-personal-android-apk.yml'
-      - 'index.html'
-      - 'src/**'
-      - 'server/readOnlyCorsPolicy.js'
-      - 'server/readOnlyCorsPolicyQualificationRunner.js'
-      - 'server/upstoxOAuthCallbackServer.js'
-      - 'package.json'
-      - 'package-lock.json'
 permissions:
   contents: read
 concurrency:
