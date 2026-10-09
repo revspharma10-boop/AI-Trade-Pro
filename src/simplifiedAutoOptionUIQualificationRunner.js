@@ -16,6 +16,8 @@ assert.match(form,/id="ir-auto-symbol"/);
 assert.match(form,/id="ir-auto-analyze"/);
 assert.match(form,/id="ir-opening-evidence"/);
 assert.match(form,/deriveOpeningRangeBias/);
+assert.match(form,/openingRangeProgress/);
+assert.match(form,/WAIT — Collecting the 09:15–09:30 opening range/);
 assert.match(demo,/09:15–09:30/);
 assert.match(demo,/minutes<570/);
 assert.match(demo,/minutes===570/);
