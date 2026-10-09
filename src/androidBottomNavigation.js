@@ -35,6 +35,16 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   last.stopLoss<last.entry&&last.entry<last.target&&
   last.executionStatus==='NOT EXECUTED'&&last.approvedLots===0&&last.paperOnly===true;
  const hasLast=matches&&pricesValid;
+ // Broker-confirmed exchange metadata may be shown during WAIT, but never
+ // interpreted as verified option premium, entry, SL, target, or trade approval.
+ const candidate=matches&&!hasLast&&data.state==='WAIT'?data.verifiedContract:null;
+ const marketDate=new Date(asOf+330*60000).toISOString().slice(0,10);
+ const hasCandidate=!!candidate&&candidate.paperOnly===true&&
+  candidate.orderSubmissionAllowed===false&&
+  ['CE','PE'].includes(candidate.optionType)&&
+  typeof candidate.tradingSymbol==='string'&&candidate.tradingSymbol.trim().length>0&&
+  typeof candidate.strike==='number'&&candidate.strike>0&&
+  /^\d{4}-\d{2}-\d{2}$/.test(candidate.expiry??'')&&candidate.expiry>marketDate;
  const observed=hasLast?Date.parse(last.capturedAt):NaN;
  const current=Number.isFinite(observed)&&Number.isFinite(asOf)&&
   observed<=asOf+10000&&Math.floor((observed-12000)/300000)===
@@ -44,13 +54,15 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
  return {
   state:active?'PAPER_SETUP':previous?'PAST_PAPER_IDEA':'WAIT',
   tag:active?'PAPER BUY':previous?'PAST PAPER IDEA':'WAIT',
-  contract:hasLast?last.contract:'NO VERIFIED OPTION CONTRACT',
+  contract:hasLast?last.contract:hasCandidate?
+   candidate.tradingSymbol:'NO VERIFIED OPTION CONTRACT',
   entry:hasLast?money(last.entry):'—',
   target:hasLast?money(last.target):'—',
   stopLoss:hasLast?money(last.stopLoss):'—',
   date:hasLast?date(last.date):'—',
   status:active?'Paper idea · Not executed':
-   previous?'Previous idea · Not executed':'No paper trade executed',
+   previous?'Previous idea · Not executed':hasCandidate?
+    'Contract verified · Premium WAIT':'No paper trade executed',
   explanation:matches&&typeof data.message==='string'?
    data.message:'Awaiting verified broker research'
  };
