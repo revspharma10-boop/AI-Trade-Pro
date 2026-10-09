@@ -23,6 +23,8 @@ jobs:
       - run: node --check src/services/marketQuoteRefreshPolicy.js
       - run: node src/autoOptionResearchQualificationRunner.js
       - run: node src/indexDemoJournalQualificationRunner.js
+      - run: node src/indexPredictionReviewQualificationRunner.js
+      - run: node --check src/services/indexPredictionReview.js
       - run: node --check src/indexDemoSessionUI.js
       - run: node src/autoOptionBackendQualificationRunner.js
       - run: node src/mcxAutoOptionResearchQualificationRunner.js
