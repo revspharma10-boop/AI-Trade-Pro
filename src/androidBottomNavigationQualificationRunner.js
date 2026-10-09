@@ -42,6 +42,43 @@ assert.equal(waiting.target,'—');
 assert.equal(waiting.date,'—');
 assert.match(waiting.status,/Setup WAIT/);
 assert.match(waiting.explanation,/35 fresh bars/);
+assert.equal(waiting.diagnosticStage,'OPTION PREMIUM AND RISK');
+assert.deepEqual(waiting.failedChecks,[],'Unstructured legacy WAIT must not fabricate blockers');
+const detailed=safeRecommendationCard({
+ ...incomplete,blockerCount:5,blockers:[
+ {code:'FRESH_OPTION_BID_ASK_LAST_TRADE_REQUIRED',message:'Option bid/ask is not current'},
+ {code:'FRESH_LIQUID_OPTION_PREMIUM_CANDLES_REQUIRED',message:'Option candles need 35 fresh bars'},
+ {code:'ONE_LOT_EXCEEDS_500_RUPEE_RISK_BUDGET',message:'One lot exceeds ₹500 risk'},
+ {code:'BROKER_MARGIN_QUOTE_REQUIRED',message:'Broker margin unavailable'},
+ {code:'OPTION_SPREAD_TOO_WIDE_OR_UNKNOWN',message:'Option spread too wide'}
+]},'nifty',time);
+assert.equal(detailed.state,'WAIT');
+assert.equal(detailed.contract,'NIFTY 15 OCT 25000 CE');
+assert.equal(detailed.entry,'—');
+assert.equal(detailed.failedChecks.length,3,'Only first three reasons appear in compact UI');
+assert.equal(detailed.otherChecks,2,'Remaining blockers remain counted');
+assert.deepEqual(detailed.failedChecks.map(x=>x.code),[
+ 'FRESH_OPTION_BID_ASK_LAST_TRADE_REQUIRED',
+ 'FRESH_LIQUID_OPTION_PREMIUM_CANDLES_REQUIRED',
+ 'ONE_LOT_EXCEEDS_500_RUPEE_RISK_BUDGET'
+]);
+const beforeSelection=safeRecommendationCard({
+ ...incomplete,stage:'UNDERLYING_TECHNICAL',verifiedContract:null,
+ blockers:[{code:'NO_CLEAR_TECHNICAL_DIRECTION',message:'EMA / RSI / MACD disagree'}],
+ blockerCount:1},'nifty',time);
+assert.equal(beforeSelection.contract,'OPTION CONTRACT NOT CHECKED');
+assert.equal(beforeSelection.diagnosticStage,'FIVE-MINUTE TECHNICAL SIGNAL');
+assert.equal(beforeSelection.failedChecks[0].message,'EMA / RSI / MACD disagree');
+const closed=safeRecommendationCard({...incomplete,stage:'MARKET_SESSION',
+ verifiedContract:null,blockers:[{code:'MARKET_SESSION_CLOSED',
+ message:'Exchange session is closed or not verified'}],
+ blockerCount:1},'nifty',time);
+assert.equal(closed.contract,'OPTION CONTRACT NOT CHECKED');
+assert.equal(closed.failedChecks[0].code,'MARKET_SESSION_CLOSED');
+assert.equal(safeRecommendationCard({...incomplete,
+ blockers:[{code:'INVALID CODE',message:'Bad code'},{code:'VALID_CODE',message:''}]},
+ 'nifty',time).failedChecks.length,0,'Malformed API diagnostics are not shown');
+
 assert.equal(safeRecommendationCard({...incomplete,verifiedContract:{
  ...incomplete.verifiedContract,orderSubmissionAllowed:true}},'nifty',time).contract,
  'NO VERIFIED OPTION CONTRACT');
