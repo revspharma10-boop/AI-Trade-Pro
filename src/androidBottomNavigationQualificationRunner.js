@@ -7,11 +7,13 @@ assert.deepEqual(ANDROID_TABS.map(t=>t.id),['nifty','sensex','options','commodit
 assert.equal(new Set(ANDROID_TABS.map(x=>x.id)).size,4);
 for(const tab of ANDROID_TABS)assert.equal(androidTabById(tab.id),tab);
 assert.equal(androidTabById('missing').id,'nifty');
+const time=Date.parse('2026-10-09T12:30:18+05:30');
 const paper={tab:'options',state:'PAPER_SETUP',message:'Backend paper setup',
  paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false,
  last:{contract:'INFY OCT 960 CE',optionType:'CE',entry:59,target:70,stopLoss:52,
-  date:'2026-10-09',executionStatus:'NOT EXECUTED',approvedLots:0,paperOnly:true}};
-const card=safeRecommendationCard(paper,'options');
+  capturedAt:new Date(time).toISOString(),date:'2026-10-09',
+  executionStatus:'NOT EXECUTED',approvedLots:0,paperOnly:true}};
+const card=safeRecommendationCard(paper,'options',time);
 assert.equal(card.state,'PAPER_SETUP');
 assert.equal(card.tag,'PAPER BUY');
 assert.equal(card.entry,'₹59.00');
@@ -20,19 +22,20 @@ assert.equal(card.stopLoss,'₹52.00');
 assert.equal(card.date,'09/10/2026');
 assert.equal(card.contract,'INFY OCT 960 CE');
 assert.match(card.status,/Not executed/);
-const historical=safeRecommendationCard({...paper,state:'PAST_PAPER_IDEA'},'options');
+const historical=safeRecommendationCard({...paper,state:'PAST_PAPER_IDEA'},'options',time);
 assert.equal(historical.state,'PAST_PAPER_IDEA');
 assert.equal(historical.tag,'PAST PAPER IDEA');
 assert.notEqual(historical.tag,'PAPER BUY');
-const other=safeRecommendationCard(paper,'nifty');
+const other=safeRecommendationCard(paper,'nifty',time);
 assert.equal(other.state,'WAIT');
 assert.equal(other.entry,'—','Never leak a paper value from a different tab');
-assert.equal(safeRecommendationCard({...paper,realOrderPlaced:true},'options').state,'WAIT');
-assert.equal(safeRecommendationCard({...paper,orderSubmissionAllowed:true},'options').state,'WAIT');
-assert.equal(safeRecommendationCard({...paper,last:{...paper.last,executionStatus:'Executed'}},'options').state,'WAIT');
-assert.equal(safeRecommendationCard({...paper,last:{...paper.last,approvedLots:1}},'options').state,'WAIT');
-assert.equal(safeRecommendationCard({...paper,last:{...paper.last,entry:0}},'options').state,'WAIT');
-assert.equal(safeRecommendationCard({...paper,last:{...paper.last,stopLoss:61}},'options').state,'WAIT');
+assert.equal(safeRecommendationCard(paper,'options',time+6*60000).state,'PAST_PAPER_IDEA');
+assert.equal(safeRecommendationCard({...paper,realOrderPlaced:true},'options',time).state,'WAIT');
+assert.equal(safeRecommendationCard({...paper,orderSubmissionAllowed:true},'options',time).state,'WAIT');
+assert.equal(safeRecommendationCard({...paper,last:{...paper.last,executionStatus:'Executed'}},'options',time).state,'WAIT');
+assert.equal(safeRecommendationCard({...paper,last:{...paper.last,approvedLots:1}},'options',time).state,'WAIT');
+assert.equal(safeRecommendationCard({...paper,last:{...paper.last,entry:0}},'options',time).state,'WAIT');
+assert.equal(safeRecommendationCard({...paper,last:{...paper.last,stopLoss:61}},'options',time).state,'WAIT');
 assert.equal(safeRecommendationCard({tab:'sensex',state:'WAIT',paperOnly:true,
  orderSubmissionAllowed:false,realOrderPlaced:false},'sensex').state,'WAIT');
 const entry=readFileSync(new URL('./intradayRecommendationsUI.js',import.meta.url),'utf8');
