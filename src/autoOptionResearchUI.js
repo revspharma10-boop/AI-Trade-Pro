@@ -10,6 +10,7 @@ import {searchUpstoxDerivatives} from './services/upstoxReadOnlyMarketData.js';
 import {describeMcxTechnicalSetup} from './services/mcxWaitDiagnostics.js';
 import {MARKET_QUOTE_POLL_MS,assessMarketQuote,mayPollMarketQuote} from './services/marketQuoteRefreshPolicy.js';
 import {frozenResearchWindow,frozenResearchState} from './services/frozenResearchPolicy.js';
+import {deriveOpeningRangeBias} from './services/openingRangeResearch.js';
 
 const fmt=n=>typeof n==='number'&&Number.isFinite(n)?'₹'+n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'NOT VERIFIED';
 const time=n=>Number.isFinite(n)?new Date(n).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour12:true}):'NOT VERIFIED';
@@ -80,6 +81,8 @@ export function mountAutoOptionResearch(){
   '<div class="ir-live-head"><h3>Broker quote • 30-second refresh</h3><span id="ir-live-status">Awaiting analysis</span></div>',
   '<div id="ir-live-facts" class="ir-facts"></div>',
   '<p class="ir-muted">Read-only Upstox quotes update approximately every 30 seconds while this tab is visible and the market is open. Not a live WebSocket stream. Strategy candles are 5-minute bars; predictions update after each completed 5-minute candle.</p></section>',
+  '<section id="ir-opening-evidence" class="ir-opening-evidence" hidden><h3>09:15–09:30 Opening Range — Provisional Direction Only</h3>',
+  '<div id="ir-opening-facts" class="ir-facts"></div><p id="ir-opening-notes" class="ir-muted"></p></section>',
   '<div class="ir-decision ir-option-result"><h3>Option research result</h3><span class="ir-paper-wait" id="ir-auto-direction">WAIT</span></div>',
   '<p class="ir-paper-warning">Illustrative long-option premium prices, not instructions or order previews. ₹50,000 capital, ₹500 planned risk. Real trading is disabled.</p>',
   '<h3>Underlying 5-minute candle chart</h3><div class="ir-option-chart" id="ir-auto-chart">Awaiting fresh market data.</div>',
@@ -94,6 +97,26 @@ export function mountAutoOptionResearch(){
  const mcxEvidence=find('ir-mcx-evidence'),mcxFacts=find('ir-mcx-facts');
  const mcxChecklist=find('ir-mcx-checks'),mcxSummary=find('ir-mcx-confirm-summary');
  const liveLabel=find('ir-live-status'),liveFacts=find('ir-live-facts');
+ const openingEvidence=find('ir-opening-evidence'),openingFacts=find('ir-opening-facts'),
+  openingNotes=find('ir-opening-notes');
+ function showOpeningRange(r){
+  openingEvidence.hidden=false;openingFacts.replaceChildren();
+  const oh=r?.openingOHLC,fmtRange=n=>Number.isFinite(n)?fmt(n):'NOT VERIFIED';
+  [
+   ['Opening (09:15)',fmtRange(oh?.open)],['Opening range high',fmtRange(oh?.high)],
+   ['Opening range low',fmtRange(oh?.low)],['Closing (09:30)',fmtRange(oh?.close)],
+   ['Opening high−low points',Number.isFinite(r?.range)?String(r.range):'NOT VERIFIED'],
+   ['Provisional opening bias',r?.direction==='CE'?'CALL (CE) • NOT QUALIFIED':
+     r?.direction==='PE'?'PUT (PE) • NOT QUALIFIED':'WAIT'],
+   ['Quote-only breakout check',r?.breakoutConfirmedByQuote===true?'YES • NOT 5M CONFIRMED':'NOT CONFIRMED']
+  ].forEach(([k,v])=>row(openingFacts,k,v));
+  openingNotes.textContent=(r?.evidence||[]).join(' • ')+' • '+
+   (r?.reasons||[]).join('; ')+' • Early direction does NOT validate an option entry, strike, SL or target.';
+ }
+ function clearOpeningRange(){
+  openingEvidence.hidden=true;openingFacts.replaceChildren();openingNotes.textContent='';
+ }
+
  let quoteSelection=null,refreshInProgress=false,lastResearchAt=null;
  let hasStartedAnalysis=false,capturedSlot=null,analysisInFlight=false;
  const freezeLabel=find('ir-freeze-state'),freezeTaken=find('ir-freeze-taken'),freezeNext=find('ir-freeze-next');
@@ -252,7 +275,7 @@ export function mountAutoOptionResearch(){
   version++;hasStartedAnalysis=false;capturedSlot=null;analysisInFlight=false;button.disabled=false;
   label.textContent='WAIT';label.className='ir-paper-wait';
   result.replaceChildren();blocks.replaceChildren();chart.textContent='Awaiting fresh market data.';clearMcxEvidence();
-  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();paintFrozenResearch();
+  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();paintFrozenResearch();clearOpeningRange();
   status.textContent='Select instrument type and symbol, then analyze.';
  };
  type.addEventListener('change',()=>{symbol.value=type.value==='INDEX'?'NIFTY':type.value==='MCX'?'GOLD':'RELIANCE';reset();});
@@ -302,7 +325,7 @@ export function mountAutoOptionResearch(){
   hasStartedAnalysis=true;capturedSlot=window.slot;analysisInFlight=true;
   button.disabled=true;label.textContent='WAIT';label.className='ir-paper-wait';
   result.replaceChildren();blocks.replaceChildren();chart.replaceChildren();status.textContent='Loading underlying market evidence...';clearMcxEvidence();
-  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();paintFrozenResearch();
+  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();paintFrozenResearch();clearOpeningRange();
   let chosen=null,plan=null,direction='WAIT';
   const issues=[];
   try{
@@ -408,7 +431,25 @@ export function mountAutoOptionResearch(){
    direction=side.direction;issues.push(...side.reasons);
    if(barsResponse.status!=='fulfilled')issues.push(String(barsResponse.reason?.message??'UNDERLYING_CANDLES_UNAVAILABLE'));
    if(quoteResponse.status!=='fulfilled')issues.push(String(quoteResponse.reason?.message??'UNDERLYING_PRICE_UNAVAILABLE'));
-   if(direction==='WAIT'){showPlan(null,null,issues);status.textContent='WAIT — technical confirmation unavailable';return;}
+   if(direction==='WAIT'){
+    showPlan(null,null,issues);
+    if(isIndex){
+     const early=deriveOpeningRangeBias({candles,quote,session,asOf:now});
+     const clock=new Date(now+330*60000),minutes=clock.getUTCHours()*60+clock.getUTCMinutes();
+     if(minutes>=570&&research.completedBars<35){
+      showOpeningRange(early);
+      if(early.direction==='CE'||early.direction==='PE'){
+       label.textContent='EARLY '+(early.direction==='CE'?'CALL':'PUT')+' BIAS';
+       label.className='ir-paper-wait';
+       status.textContent='PROVISIONAL '+early.direction+' opening-range bias — not a qualified option trade. No contract, premium entry, stop or targets.';
+       return;
+      }
+      status.textContent='WAIT — No clear opening-range direction or fresh market evidence. See 09:15–09:30 OHLC below.';
+      return;
+     }
+    }
+    status.textContent='WAIT — technical confirmation unavailable';return;
+   }
    status.textContent='Checking exchange-listed '+direction+' contracts and option premium...';
    const contracts=await getUpstoxOptionContracts(key);
    if(!current())return;
