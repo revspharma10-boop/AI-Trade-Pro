@@ -56,6 +56,7 @@ export function mountAndroidBottomNavigation(){
  const status=panel?.querySelector('#ir-auto-status');
  const researchLabel=panel?.querySelector('#ir-auto-direction');
  const liveLabel=panel?.querySelector('#ir-live-status');
+ const liveFacts=panel?.querySelector('#ir-live-facts');
  if(!app||!panel||!type||!symbol||!analyze||!status||!researchLabel||!liveLabel)return false;
  if(document.querySelector('#android-bottom-tabs'))return true;
  document.body.classList.add('android-native-shell');
@@ -74,7 +75,7 @@ export function mountAndroidBottomNavigation(){
  researchBlock.append(make('span','','PAPER SIGNAL'));
  const researchValue=make('strong','android-research-value','WAIT');researchBlock.append(researchValue);
  const quoteBlock=make('div','android-mini-stat');
- quoteBlock.append(make('span','','BROKER QUOTE'));
+ quoteBlock.append(make('span','','BROKER LAST PRICE'));
  const quoteValue=make('strong','android-quote-value','AWAITING DATA');quoteBlock.append(quoteValue);
  miniGrid.append(researchBlock,quoteBlock);
  const note=make('p','android-market-note','Paper-only research • No real orders');
@@ -106,7 +107,12 @@ export function mountAndroidBottomNavigation(){
  let currentTab='nifty',savedOptions={instrumentType:'INDEX',symbol:'NIFTY'},savedCommodity='GOLD';
  function renderSummary(){
   researchValue.textContent=researchLabel.textContent.trim()||'WAIT';
-  quoteValue.textContent=liveLabel.textContent.trim()||'AWAITING DATA';
+  // Show only the genuine price from the existing Upstox quote facts.
+  const last=[...(liveFacts?.querySelectorAll('.ir-fact')??[])].find(f=>
+   f.querySelector('span')?.textContent?.trim()==='Underlying last');
+  const brokerLast=last?.querySelector('strong')?.textContent?.trim();
+  quoteValue.textContent=brokerLast&&brokerLast!=='NOT CURRENT'?brokerLast:
+   liveLabel.textContent.includes('Market closed')?'MARKET CLOSED':'NOT VERIFIED';
  }
  function activate(id,runResearch){
   const previous=currentTab;
@@ -140,6 +146,7 @@ export function mountAndroidBottomNavigation(){
  const watcher=new MutationObserver(renderSummary);
  watcher.observe(researchLabel,{childList:true,characterData:true,subtree:true});
  watcher.observe(liveLabel,{childList:true,characterData:true,subtree:true});
+ watcher.observe(liveFacts,{childList:true,characterData:true,subtree:true});
  activate('nifty',true);
  return true;
 }
