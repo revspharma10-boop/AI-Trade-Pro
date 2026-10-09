@@ -22,7 +22,6 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       VITE_UPSTOX_READONLY_API_BASE: https://ai-trade-pro-oauth.onrender.com
-      VITE_WEB_RECOMMENDATION_UI: 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
