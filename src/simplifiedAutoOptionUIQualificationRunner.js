@@ -7,8 +7,10 @@ const form=read('./autoOptionResearchUI.js');
 const demo=read('./indexDemoSessionUI.js');
 const backend=read('../server/upstoxOAuthCallbackServer.js');
 const signal=read('./services/autoOptionResearchEngine.js');
-assert.match(entry,/mountAutoOptionResearch\(\)/);
-assert.match(entry,/mountIndexDemoJournal\(\)/);
+assert.match(entry,/mountAndroidBottomNavigation\(\)/,
+ 'Public web app must use the four-tab, read-only recommendation card');
+assert.doesNotMatch(entry,/mountAutoOptionResearch\(\)|mountIndexDemoJournal\(\)/,
+ 'Detailed engineering panels are not mounted in the public web app');
 assert.doesNotMatch(entry,/mountIntradayRecommendations\(\)/);
 assert.doesNotMatch(entry,/ir-kind|ir-find|ir-contract|ir-interval/);
 assert.match(form,/id="ir-auto-type"/);
@@ -50,4 +52,4 @@ assert.match(demo,/Export CSV/);
 assert.match(backend,/\/api\/upstox\/derivative-search/);
 assert.match(backend,/\/api\/upstox\/option-contracts/);
 assert.match(signal,/orderSubmissionAllowed:false/);
-console.log('SIMPLE AUTO OPTION UI QUALIFICATION PASSED: legacy controls removed, demo and backend lookups retained, real orders blocked');
+console.log('SIMPLE WEB RECOMMENDATION UI QUALIFICATION PASSED: public four-tab card, legacy research source retained but hidden, broker lookups and paper-only safety retained');
