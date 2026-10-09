@@ -188,3 +188,34 @@ body.android-minimal-shell .android-simple-diagnostic-list li{
 body.android-minimal-shell .android-simple-diagnostic-more{
  color:#68858e;font-size:11px;margin:10px 0 0;
 }
+
+
+/* Browser-hosted mobile-style UI. The browser manages phone status and browser
+   chrome; unlike Capacitor, the web view must not reserve Android status-bar
+   space. Preserve browser safe insets in full-screen/added-to-home-screen modes. */
+body.android-minimal-shell.web-recommendation-shell .android-simple-app{
+ padding-top:max(20px,env(safe-area-inset-top,0px));
+}
+body.android-minimal-shell.web-recommendation-shell .android-simple-nav{
+ padding-bottom:calc(11px + env(safe-area-inset-bottom,0px));
+}
+@media(min-width:720px){
+ body.android-minimal-shell.web-recommendation-shell{
+  background:linear-gradient(180deg,#eaf2f3 0%,#f3f7f8 100%);
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-app{
+  padding-top:36px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-nav{
+  max-width:540px;
+  left:50%;
+  right:auto;
+  transform:translateX(-50%);
+  width:calc(100% - 32px);
+  bottom:16px;
+  border:1px solid #d7e5e6;
+  border-radius:18px;
+  padding:9px 10px 11px;
+  box-shadow:0 12px 44px #123b3d24;
+ }
+}
