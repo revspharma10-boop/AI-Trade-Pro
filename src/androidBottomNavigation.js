@@ -25,7 +25,7 @@ const money=n=>typeof n==='number'&&Number.isFinite(n)&&n>0?
 const date=n=>typeof n==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(n)?
  n.slice(8,10)+'/'+n.slice(5,7)+'/'+n.slice(0,4):'—';
 
-export function safeRecommendationCard(data,selectedTab){
+export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
  const matches=data&&data.tab===selectedTab&&data.orderSubmissionAllowed===false&&
   data.realOrderPlaced===false&&data.paperOnly===true;
  const last=matches&&data.last&&typeof data.last==='object'?data.last:null;
@@ -35,8 +35,12 @@ export function safeRecommendationCard(data,selectedTab){
   last.stopLoss<last.entry&&last.entry<last.target&&
   last.executionStatus==='NOT EXECUTED'&&last.approvedLots===0&&last.paperOnly===true;
  const hasLast=matches&&pricesValid;
- const active=hasLast&&data.state==='PAPER_SETUP';
- const previous=hasLast&&data.state==='PAST_PAPER_IDEA';
+ const observed=hasLast?Date.parse(last.capturedAt):NaN;
+ const current=Number.isFinite(observed)&&Number.isFinite(asOf)&&
+  observed<=asOf+10000&&Math.floor((observed-12000)/300000)===
+    Math.floor((asOf-12000)/300000);
+ const active=hasLast&&current&&data.state==='PAPER_SETUP';
+ const previous=hasLast&&(data.state==='PAST_PAPER_IDEA'||data.state==='PAPER_SETUP'&&!current);
  return {
   state:active?'PAPER_SETUP':previous?'PAST_PAPER_IDEA':'WAIT',
   tag:active?'PAPER BUY':previous?'PAST PAPER IDEA':'WAIT',
