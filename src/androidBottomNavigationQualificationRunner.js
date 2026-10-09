@@ -101,10 +101,13 @@ assert.equal(safeRecommendationCard({...paper,last:{...paper.last,stopLoss:61}},
 assert.equal(safeRecommendationCard({tab:'sensex',state:'WAIT',paperOnly:true,
  orderSubmissionAllowed:false,realOrderPlaced:false},'sensex').state,'WAIT');
 const entry=readFileSync(new URL('./intradayRecommendationsUI.js',import.meta.url),'utf8');
-assert.match(entry,/VITE_ANDROID_APP==='true'/);
+assert.match(entry,/VITE_ANDROID_APP!=='true'/,
+ 'Only legacy native Android builds should get extra status-bar spacing');
 assert.match(entry,/mountAndroidBottomNavigation\(\)/);
-assert.match(entry,/import\('\.\/autoOptionResearchUI\.js'\)/,
- 'Web research loaded only by the existing web interface');
+assert.match(entry,/web-recommendation-shell/,
+ 'Web browser must use the same minimalist recommendation interface');
+assert.doesNotMatch(entry,/import\('\.\/autoOptionResearchUI\.js'\)/,
+ 'Do not ship detailed trading research as the public frontend interface');
 const workflow=readFileSync(new URL('../.github/workflows/build-personal-android-apk.yml',import.meta.url),'utf8');
 assert.match(workflow,/VITE_ANDROID_APP: 'true'/);
 assert.match(workflow,/node src\/androidBottomNavigationQualificationRunner\.js/);
