@@ -32,7 +32,7 @@ export function validatePhase1Event(event){
  if(event.kind==='DIRECTIONAL_FORECAST'){
   const allowed=['schemaVersion','kind','id','market','exchange','strategyVersion',
    'forecastCandleEndUtc','capturedAtUtc','horizonEndUtc','featureCutoffUtc',
-   'direction','status','referencePrice','sourceQuoteAtUtc','evidenceHash',
+   'underlyingInstrumentKey','direction','status','referencePrice','sourceQuoteAtUtc','evidenceHash',
    'reasonCodes','dataQuality','paperOnly','realOrderPlaced','orderSubmissionAllowed'];
   if(!knownKeys(event,allowed)||!/^or15-shadow-v[0-9]+$/.test(event.strategyVersion??'')||
      !isIso(event.horizonEndUtc)||!isIso(event.featureCutoffUtc)||
@@ -40,6 +40,9 @@ export function validatePhase1Event(event){
      Date.parse(event.capturedAtUtc)<Date.parse(event.forecastCandleEndUtc)+12000||
      Date.parse(event.capturedAtUtc)>Date.parse(event.forecastCandleEndUtc)+90000||
      event.featureCutoffUtc!==event.capturedAtUtc||
+     (event.underlyingInstrumentKey!==null&&
+      (typeof event.underlyingInstrumentKey!=='string'||
+       !event.underlyingInstrumentKey.startsWith(event.exchange+'_INDEX|')))||
      !DIRECTIONS.has(event.direction)||!FORECAST_STATUSES.has(event.status)||
      (event.status==='PROVISIONAL_DIRECTION')!==(event.direction!=='ABSTAIN')||
      !['VERIFIED','MISSING'].includes(event.dataQuality)||
@@ -50,18 +53,22 @@ export function validatePhase1Event(event){
      (event.sourceQuoteAtUtc!==null&&!isIso(event.sourceQuoteAtUtc))||
      (event.direction!=='ABSTAIN'&&
       (event.dataQuality!=='VERIFIED'||event.referencePrice===null||
+       event.underlyingInstrumentKey===null||
        event.sourceQuoteAtUtc===null||event.evidenceHash===null))||
-     (event.dataQuality==='MISSING'&&event.referencePrice!==null)||
+     (event.dataQuality==='MISSING'&&
+      (event.referencePrice!==null||event.underlyingInstrumentKey!==null))||
      (event.sourceQuoteAtUtc!==null&&Date.parse(event.sourceQuoteAtUtc)>Date.parse(event.featureCutoffUtc)+10000))
    throw Error('PHASE1_FORECAST_VALIDATION_FAILED');
  }else{
   const allowed=['schemaVersion','kind','id','forecastId','market','exchange',
    'forecastCandleEndUtc','capturedAtUtc','horizonEndUtc','observedCloseAtUtc',
-   'outcome','referencePrice','observedClose','changeBps','reasonCode',
+   'underlyingInstrumentKey','outcome','referencePrice','observedClose','changeBps','reasonCode',
    'paperOnly','realOrderPlaced','orderSubmissionAllowed'];
   if(!knownKeys(event,allowed)||!isId(event.forecastId)||
      !isIso(event.horizonEndUtc)||event.capturedAtUtc<event.horizonEndUtc||
      !OUTCOMES.has(event.outcome)||
+     typeof event.underlyingInstrumentKey!=='string'||
+     !event.underlyingInstrumentKey.startsWith(event.exchange+'_INDEX|')||
      (event.observedCloseAtUtc!==null&&!isIso(event.observedCloseAtUtc))||
      (event.observedClose!==null&&!(finite(event.observedClose)&&event.observedClose>0))||
      (event.changeBps!==null&&!finite(event.changeBps))||
