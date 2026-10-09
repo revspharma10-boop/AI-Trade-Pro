@@ -33,7 +33,7 @@ const validBar=c=>c&&Number.isFinite(Date.parse(c.datetime))&&
  c.close>=c.low&&c.close<=c.high;
 const emptyForecast=(base,reason)=>({
  ...base,status:'ABSTAIN',direction:'ABSTAIN',referencePrice:null,
- sourceQuoteAtUtc:null,evidenceHash:null,dataQuality:'MISSING',
+ underlyingInstrumentKey:null,sourceQuoteAtUtc:null,evidenceHash:null,dataQuality:'MISSING',
  reasonCodes:reasonSet([reason])
 });
 
@@ -130,6 +130,7 @@ export function createPhase1ShadowPipeline({
        quote:[quote.lastPrice,quote.timestamp]
       };
       event={...base,
+       underlyingInstrumentKey:key,
        status:direction==='ABSTAIN'?'ABSTAIN':'PROVISIONAL_DIRECTION',
        direction,referencePrice:quote.lastPrice,
        sourceQuoteAtUtc:iso(quote.timestamp),
@@ -172,7 +173,8 @@ export function createPhase1ShadowPipeline({
    });
    const candle=response?.candle;
    if(response?.verified===true&&response.market===forecast.market&&
-      response.exchange===forecast.exchange&&validBar(candle)&&
+      response.exchange===forecast.exchange&&
+      response.instrumentKey===forecast.underlyingInstrumentKey&&validBar(candle)&&
       Date.parse(candle.datetime)===expectedOpen&&
       Date.parse(candle.datetime)+FIVE+GRACE<=now)
     observed={close:candle.close};
@@ -193,6 +195,7 @@ export function createPhase1ShadowPipeline({
    schemaVersion:1,kind:'DIRECTIONAL_OUTCOME',id,
    forecastId:forecast.id,market:forecast.market,exchange:forecast.exchange,
    forecastCandleEndUtc:forecast.forecastCandleEndUtc,
+   underlyingInstrumentKey:forecast.underlyingInstrumentKey,
    horizonEndUtc:forecast.horizonEndUtc,
    capturedAtUtc:iso(now),
    observedCloseAtUtc:observed?forecast.horizonEndUtc:null,
