@@ -68,9 +68,11 @@ export function deriveOpeningRangeBias({candles=[],quote=null,session=null,asOf=
  if(postOpening.some((c,i)=>i>0&&c.timestamp===postOpening[i-1].timestamp))
   return {...base,openingOHLC,reasons:['DUPLICATE_POST_OPENING_CANDLE']};
  const lastPost=postOpening.at(-1);
+ const postFresh=!lastPost||now-(lastPost.timestamp+5*60000)<=7*60000;
  const snapshot={...base,valid:true,range:round(range),openingOHLC,
   lastCompletedAt:lastPost?.datetime??bars[2].datetime,
   evidence:['Opening 09:15–09:30 OHLC frozen from exactly three 5-minute candles']};
+ if(!postFresh)return {...snapshot,valid:false,reasons:['POST_OPENING_CANDLE_STALE']};
  if(!positive(quote?.lastPrice)||!finite(quote?.timestamp)||quote.timestamp>now+10000||now-quote.timestamp>120000)
   return {...snapshot,valid:false,reasons:['FRESH_INDEX_QUOTE_REQUIRED_FOR_OPENING_BIAS']};
  const position=(close-low)/range,body=(close-open)/range,mid=(high+low)/2;
