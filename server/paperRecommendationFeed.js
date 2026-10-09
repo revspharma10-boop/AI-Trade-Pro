@@ -80,6 +80,8 @@ export function presentRecommendation({tab,last=null,result=null,asOf=Date.now()
   verifiedContract:result?.verifiedContract??null,
   stage:result?.stage??null,
   blockers:result?.blockers??[],
+  blockerCount:Number.isSafeInteger(result?.blockerCount)?
+   result.blockerCount:(result?.blockers?.length??0),
   lastCheckedAt:result?.checkedAt??null,
   message:state==='PAST_PAPER_IDEA'?'Previous paper idea — not a current signal':
    result?.message??'No verified paper recommendation',
