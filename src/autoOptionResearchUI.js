@@ -11,6 +11,7 @@ import {describeMcxTechnicalSetup} from './services/mcxWaitDiagnostics.js';
 import {MARKET_QUOTE_POLL_MS,assessMarketQuote,mayPollMarketQuote} from './services/marketQuoteRefreshPolicy.js';
 import {frozenResearchWindow,frozenResearchState} from './services/frozenResearchPolicy.js';
 import {deriveOpeningRangeBias,openingRangeProgress} from './services/openingRangeResearch.js';
+import {describeIndexOptionGates} from './services/optionResearchGates.js';
 
 const fmt=n=>typeof n==='number'&&Number.isFinite(n)?'₹'+n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'NOT VERIFIED';
 const time=n=>Number.isFinite(n)?new Date(n).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour12:true}):'NOT VERIFIED';
@@ -99,6 +100,9 @@ export function mountAutoOptionResearch(){
   '<span>₹50,000 capital • ₹500 planned risk • <b>0 REAL ORDERS</b></span></div>',
   '<p id="ir-card-warning" class="ir-card-warning">WAIT — Premium, stop, targets and contract require verified broker evidence. No option order is authorized.</p>',
   '</section>',
+  '<section id="ir-no-signal-panel" class="ir-signal-gate-panel" hidden aria-label="Why CALL or PUT is missing">',
+  '<h3>Why no CALL / PUT option?</h3><p id="ir-signal-gate-summary" class="ir-muted"></p>',
+  '<div id="ir-signal-gate-rows" class="ir-gate-rows"></div></section>',
   '<p class="ir-paper-warning">Illustrative long-option premium prices, not instructions or order previews. ₹50,000 capital, ₹500 planned risk. Real trading is disabled.</p>',
   '<h3>Underlying 5-minute candle chart</h3><div class="ir-option-chart" id="ir-auto-chart">Awaiting fresh market data.</div>',
   '<section id="ir-mcx-evidence" class="ir-mcx-evidence" hidden><h3>MCX futures technical evidence</h3><div id="ir-mcx-facts" class="ir-facts"></div><h3>CALL vs PUT confirmation checklist</h3><p class="ir-muted" id="ir-mcx-confirm-summary"></p><div id="ir-mcx-checks" class="ir-mcx-checks"></div></section>',
@@ -109,7 +113,22 @@ export function mountAutoOptionResearch(){
  const find=id=>panel.querySelector('#'+id),type=find('ir-auto-type'),symbol=find('ir-auto-symbol');
  const button=find('ir-auto-analyze'),status=find('ir-auto-status'),result=find('ir-auto-results');
  const blocks=find('ir-auto-blocks'),label=find('ir-auto-direction'),chart=find('ir-auto-chart');
- const colorCard=find('ir-color-option-card');
+ const colorCard=find('ir-color-option-card'),
+  gatePanel=find('ir-no-signal-panel'),gateSummary=find('ir-signal-gate-summary'),gateRows=find('ir-signal-gate-rows');
+ function clearIndexGates(){gatePanel.hidden=true;gateSummary.textContent='';gateRows.replaceChildren();}
+ function showIndexGates({asOf,underlyingResearch,openingRange,signal,contract,plan,dataErrors}={}){
+  if(type.value!=='INDEX'){clearIndexGates();return;}
+  const s=describeIndexOptionGates({asOf,underlyingResearch,openingRange,signal,contract,plan,dataErrors});
+  gatePanel.hidden=false;gateRows.replaceChildren();
+  gateSummary.textContent='Main blocker: '+s.mainBlocker.replaceAll('_',' ')+'. Check each requirement:';
+  for(const gate of s.gates){
+   const item=element('div','','ir-gate-item'),state=element('span',gate.status,'ir-gate-status');
+   state.classList.add(['PASS','AVAILABLE','VERIFIED','EARLY_BIAS','PAPER_LEVELS'].includes(gate.status)?
+    'ir-gate-ok':['MISSING','BLOCKED'].includes(gate.status)?'ir-gate-fail':'ir-gate-pending');
+   item.append(element('strong',gate.label),state,element('p',gate.explanation));
+   gateRows.append(item);
+  }
+ }
  const mcxEvidence=find('ir-mcx-evidence'),mcxFacts=find('ir-mcx-facts');
  const mcxChecklist=find('ir-mcx-checks'),mcxSummary=find('ir-mcx-confirm-summary');
  const liveLabel=find('ir-live-status'),liveFacts=find('ir-live-facts');
@@ -328,7 +347,7 @@ export function mountAutoOptionResearch(){
   version++;hasStartedAnalysis=false;capturedSlot=null;analysisInFlight=false;button.disabled=false;
   label.textContent='WAIT';label.className='ir-paper-wait';renderColorOptionCard();
   result.replaceChildren();blocks.replaceChildren();chart.textContent='Awaiting fresh market data.';clearMcxEvidence();
-  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();paintFrozenResearch();clearOpeningRange();
+  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();paintFrozenResearch();clearOpeningRange();clearIndexGates();
   status.textContent='Select instrument type and symbol, then analyze.';
  };
  type.addEventListener('change',()=>{symbol.value=type.value==='INDEX'?'NIFTY':type.value==='MCX'?'GOLD':'RELIANCE';reset();});
@@ -380,8 +399,9 @@ export function mountAutoOptionResearch(){
   hasStartedAnalysis=true;capturedSlot=window.slot;analysisInFlight=true;
   button.disabled=true;label.textContent='WAIT';label.className='ir-paper-wait';renderColorOptionCard();
   result.replaceChildren();blocks.replaceChildren();chart.replaceChildren();status.textContent='Loading underlying market evidence...';clearMcxEvidence();
-  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();paintFrozenResearch();clearOpeningRange();
+  quoteSelection=null;lastResearchAt=null;paintQuoteStatus();paintFrozenResearch();clearOpeningRange();clearIndexGates();
   let chosen=null,plan=null,direction='WAIT';
+  let gateResearch=null,gateOpening=null,gateSignal=null;
   const issues=[];
   try{
    if(!/^[A-Z0-9_-]{1,35}$/.test(input))throw Error('VALID_SYMBOL_REQUIRED');
@@ -478,12 +498,13 @@ export function mountAutoOptionResearch(){
    const candles=barsResponse.status==='fulfilled'?barsResponse.value.candles:[];
    candlesChart(chart,candles,now);
    const research=analyzeIntradayCandles(candles,{asOf:now,intervalMinutes:5,session});
+   gateResearch=research;
    const quote=quoteResponse.status==='fulfilled'?
     isIndex?quoteResponse.value:extractUpstoxLiveQuoteEvidence(quoteResponse.value,key,now):null;
    if(quoteResponse.status==='fulfilled')observedQuote('underlying',quoteResponse.value);
    const side=deriveAutoOptionDirection({research,underlyingQuote:quote,
     underlyingSegment:isIndex?underlying.segment:'NSE_EQ',session,asOf:now});
-   direction=side.direction;issues.push(...side.reasons);
+   direction=side.direction;gateSignal=side;issues.push(...side.reasons);
    if(barsResponse.status!=='fulfilled')issues.push(String(barsResponse.reason?.message??'UNDERLYING_CANDLES_UNAVAILABLE'));
    if(quoteResponse.status!=='fulfilled')issues.push(String(quoteResponse.reason?.message??'UNDERLYING_PRICE_UNAVAILABLE'));
    if(direction==='WAIT'){
@@ -505,6 +526,7 @@ export function mountAutoOptionResearch(){
       return;
      }
      const early=deriveOpeningRangeBias({candles,quote,session,asOf:now});
+     gateOpening=early;
      if(minutes>=570&&research.completedBars<35){
       showOpeningRange(early);
       if(early.direction==='CE'||early.direction==='PE'){
@@ -560,6 +582,8 @@ export function mountAutoOptionResearch(){
    status.textContent='WAIT — '+issues.at(-1);
   }finally{
    if(current()){
+    if(isIndex)showIndexGates({asOf:now,underlyingResearch:gateResearch,openingRange:gateOpening,
+     signal:gateSignal,contract:chosen,plan,dataErrors:issues});
     lastResearchAt=Date.now();analysisInFlight=false;button.disabled=false;
     paintQuoteStatus();paintFrozenResearch();
    }
