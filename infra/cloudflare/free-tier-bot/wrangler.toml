@@ -1,0 +1,18 @@
+# Phase 1B: Cloudflare Workers Free + D1 Free
+# This config is an UNDEPLOYED TEMPLATE; replace the D1 ID with one created in
+# your Cloudflare account after you connect it. Do not store broker tokens here.
+name = "ai-trade-pro-shadow-free"
+main = "./worker.js"
+compatibility_date = "2026-09-15"
+workers_dev = true
+
+# UTC Cron; run once a minute in this window, but the code permits only
+# completed 5-minute decision slots ~09:31,09:36,... IST on verified sessions.
+# No daily market assumption: D1 must contain verified official calendar rows.
+[triggers]
+crons = ["* 3-10 * * 1-5"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ai-trade-pro-shadow-free"
+database_id = "REPLACE_WITH_REAL_D1_DATABASE_ID"
