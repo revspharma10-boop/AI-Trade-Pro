@@ -14,7 +14,7 @@ const ICONS=Object.freeze({
  target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/>',
  layers:'<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5M3 16l9 5 9-5"/>'
 });
-const API=import.meta.env.VITE_UPSTOX_READONLY_API_BASE||
+const API=import.meta.env?.VITE_UPSTOX_READONLY_API_BASE||
  'https://ai-trade-pro-oauth.onrender.com';
 const make=(tag,className='',text='')=>{
  const el=document.createElement(tag);if(className)el.className=className;
