@@ -49,6 +49,8 @@ const fixtureData=({quoteAt=at('09:40')+19000,
  async getSettlementCandle({market:requested,candleStartUtc}){
   return {verified:true,market:requested,
    exchange:requested==='nifty'?'NSE':'BSE',
+   instrumentKey:requested==='nifty'?
+    'NSE_INDEX|Synthetic Nifty':'BSE_INDEX|Synthetic Sensex',
    candle:{...candle('09:40',102.7,104.5,102.6,103.5),
     datetime:candleStartUtc}};
  }
@@ -100,6 +102,7 @@ try{
  assert.equal(event.status,'PROVISIONAL_DIRECTION');
  assert.equal(event.direction,'BULLISH');
  assert.equal(event.referencePrice,102.85);
+ assert.equal(event.underlyingInstrumentKey,'NSE_INDEX|Synthetic Nifty');
  assert.equal(event.dataQuality,'VERIFIED');
  assert.equal(event.horizonEndUtc,new Date(at('09:45')).toISOString());
  assert.equal(event.featureCutoffUtc,new Date(moment).toISOString());
@@ -137,6 +140,7 @@ try{
  assert.equal(settled.event.outcome,'CORRECT');
  assert.equal(settled.event.observedClose,103.5);
  assert.equal(settled.event.referencePrice,102.85);
+ assert.equal(settled.event.underlyingInstrumentKey,'NSE_INDEX|Synthetic Nifty');
  assert.equal(settled.event.observedCloseAtUtc,new Date(at('09:45')).toISOString());
  assert.equal(settled.event.orderSubmissionAllowed,false);
  assert.equal(settled.event.realOrderPlaced,false);
@@ -231,6 +235,24 @@ try{
  assert.equal(unavailable.event.changeBps,null);
  assert.equal((await missing.evaluate({forecastId:candidate.id,
   asOf:at('09:50')})).status,'DUPLICATE');
+
+ // Market names alone are insufficient to verify settlement instruments.
+ const wrongInstrumentStore=await new Phase1LocalJsonlLedger(
+  join(tmp,'wrong-instrument.jsonl')).open();
+ const wrongInstrumentProvider=fixtureData();
+ wrongInstrumentProvider.getSettlementCandle=async params=>({
+  ...(await provider.getSettlementCandle(params)),
+  instrumentKey:'NSE_INDEX|Different Index'
+ });
+ const wrongInstrument=createPhase1ShadowPipeline({ledger:wrongInstrumentStore,
+  marketData:wrongInstrumentProvider,calendar:goodCalendar});
+ const wrongForecast=(await wrongInstrument.tick({
+  market:'nifty',asOf:moment})).event;
+ assert.equal((await wrongInstrument.evaluate({forecastId:wrongForecast.id,
+  asOf:at('09:46')})).status,'OUTCOME_AWAITING_VERIFIED_CANDLE');
+ assert.equal((await wrongInstrument.evaluate({forecastId:wrongForecast.id,
+  asOf:at('09:49')})).event.outcome,'UNEVALUABLE',
+  'Wrong-index candles must never count as successful forecasts');
 
  // Checksum/damaged write on restart is detected, not silently skipped.
  const invalidFile=join(tmp,'corrupted.jsonl');
