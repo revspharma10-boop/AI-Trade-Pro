@@ -46,6 +46,16 @@ assert.match(entry,/import\('\.\/autoOptionResearchUI\.js'\)/,
 const workflow=readFileSync(new URL('../.github/workflows/build-personal-android-apk.yml',import.meta.url),'utf8');
 assert.match(workflow,/VITE_ANDROID_APP: 'true'/);
 assert.match(workflow,/node src\/androidBottomNavigationQualificationRunner\.js/);
+const config=JSON.parse(readFileSync(new URL('../capacitor.config.json',import.meta.url),'utf8'));
+assert.deepEqual(config.plugins?.SystemBars,
+ {insetsHandling:'css',style:'LIGHT',hidden:false},
+ 'Android 16 light status bar needs proper icons and injected safe-area insets');
+const layout=readFileSync(new URL('./androidBottomNavigation.css',import.meta.url),'utf8');
+assert.match(layout,/--safe-area-inset-top/);
+assert.match(layout,/max\(42px, calc\(18px/,'At least 42px separates the app header from system icons on first paint');
+assert.match(layout,/--safe-area-inset-bottom/);
+const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+assert.match(html,/viewport-fit=cover/,'WebView must expose real viewport safe areas');
 const nav=readFileSync(new URL('./androidBottomNavigation.js',import.meta.url),'utf8');
 assert.match(nav,/\/api\/paper-recommendations\/latest\?tab=/);
 assert.match(nav,/document\.hidden/);
