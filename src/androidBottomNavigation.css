@@ -163,3 +163,28 @@ body.android-minimal-shell .android-simple-tab:focus-visible{
  body.android-minimal-shell .android-simple-tab span{font-size:9px}
  body.android-minimal-shell .android-simple-fact strong{font-size:17px}
 }
+
+
+/* Compact backend rejection diagnostics: short and readable, never a trading action. */
+body.android-minimal-shell .android-simple-diagnostics{
+ margin-top:16px;padding:14px 13px 12px;
+ border-radius:13px;border:1px solid #d9e8eb;background:#f5f9fa;
+}
+body.android-minimal-shell .android-simple-diagnostics[hidden]{display:none}
+body.android-minimal-shell .android-simple-diagnostic-title{
+ display:block;font-size:11px;font-weight:850;letter-spacing:.08em;color:#314e59;
+}
+body.android-minimal-shell .android-simple-diagnostic-stage{
+ display:block;font-size:10px;font-weight:750;letter-spacing:.035em;
+ margin:4px 0 10px;color:#66828b;
+}
+body.android-minimal-shell .android-simple-diagnostic-list{
+ padding-left:16px;margin:0;display:grid;gap:8px;list-style:disc;
+}
+body.android-minimal-shell .android-simple-diagnostic-list li{
+ color:#435f69;font-size:12px;line-height:1.5;
+ overflow-wrap:anywhere;
+}
+body.android-minimal-shell .android-simple-diagnostic-more{
+ color:#68858e;font-size:11px;margin:10px 0 0;
+}

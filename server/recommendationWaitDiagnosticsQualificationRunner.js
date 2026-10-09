@@ -28,11 +28,13 @@ const rejected=describePaperRejection({stage:'OPTION_PREMIUM_AND_RISK',asOf:at,
 ]});
 assert.equal(rejected.state,'WAIT');
 assert.equal(rejected.stage,'OPTION_PREMIUM_AND_RISK');
-assert.equal(rejected.blockers.length,3,'Keep the UI concise and prioritize first three blockers');
+assert.equal(rejected.blockers.length,4,'Backend retains every known blocker for accurate diagnostics');
+assert.equal(rejected.blockerCount,4);
 assert.deepEqual(rejected.blockers.map(x=>x.code),[
  'FRESH_OPTION_BID_ASK_LAST_TRADE_REQUIRED',
  'OPTION_OPEN_INTEREST_OR_VOLUME_UNVERIFIED',
- 'FRESH_LIQUID_OPTION_PREMIUM_CANDLES_REQUIRED'
+ 'FRESH_LIQUID_OPTION_PREMIUM_CANDLES_REQUIRED',
+ 'BROKER_MARGIN_QUOTE_REQUIRED'
 ]);
 assert.match(rejected.message,/bid\/ask/i);
 assert.match(rejected.message,/open interest/i);
@@ -47,6 +49,24 @@ assert.equal(risk.state,'WAIT');
 const margin=describePaperRejection({stage:'OPTION_PREMIUM_AND_RISK',asOf:at,
  contract,codes:['BROKER_MARGIN_QUOTE_REQUIRED']});
 assert.match(margin.message,/Upstox option margin estimate/);
+const broker=describePaperRejection({stage:'UPSTOX_DATA',asOf:at,
+ codes:['UPSTOX_REAUTHENTICATION_REQUIRED']});
+assert.equal(broker.blockers[0].code,'UPSTOX_REAUTHENTICATION_REQUIRED');
+assert.match(broker.message,/Upstox login has expired/);
+const rateLimit=describePaperRejection({stage:'UPSTOX_DATA',asOf:at,
+ codes:['UPSTOX_RATE_LIMITED']});
+assert.match(rateLimit.message,/rate limit/i);
+const unavailable=describePaperRejection({stage:'UPSTOX_DATA',asOf:at,
+ codes:['UPSTOX_RESEARCH_DATA_UNAVAILABLE']});
+assert.match(unavailable.message,/could not be completed/);
+const many=describePaperRejection({stage:'OPTION_PREMIUM_AND_RISK',asOf:at,
+ codes:['FRESH_OPTION_BID_ASK_LAST_TRADE_REQUIRED','OPTION_SPREAD_TOO_WIDE_OR_UNKNOWN',
+  'OPTION_OPEN_INTEREST_OR_VOLUME_UNVERIFIED','FRESH_LIQUID_OPTION_PREMIUM_CANDLES_REQUIRED',
+  'ONE_LOT_EXCEEDS_500_RUPEE_RISK_BUDGET','BROKER_MARGIN_QUOTE_REQUIRED',
+  'BROKER_MARGIN_ESTIMATE_UNAVAILABLE']});
+assert.equal(many.blockerCount,7);
+assert.equal(many.blockers.length,7);
+
 const noContract=describePaperRejection({stage:'OPTION_CONTRACT',asOf:at,
  codes:['NO_VERIFIED_FUTURE_EXPIRY_OPTION_CONTRACT']});
 assert.equal(noContract.verifiedContract,null);

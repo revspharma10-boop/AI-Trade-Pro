@@ -3,6 +3,22 @@
 // reason codes. No prices, trades, or authorization can be created here.
 const LABELS=Object.freeze({
  MARKET_SESSION_CLOSED:'Exchange session is closed or not verified',
+ UPSTOX_REAUTHENTICATION_REQUIRED:'Upstox login has expired; reconnect before paper research can continue',
+ UPSTOX_ANALYTICS_TOKEN_INVALID_OR_EXPIRED:'Read-only Upstox analytics token is invalid or expired',
+ UPSTOX_ANALYTICS_PERMISSION_DENIED:'Upstox has not permitted the required read-only market-data endpoint',
+ UPSTOX_RATE_LIMITED:'Upstox rate limit reached; wait before retrying market-data requests',
+ UPSTOX_INDEX_SEARCH_UNAVAILABLE:'Upstox could not verify the underlying index instrument',
+ EXACT_INDEX_INSTRUMENT_NOT_RETURNED:'Upstox index search did not return the exact index instrument',
+ UPSTOX_INSTRUMENT_SEARCH_FAILED:'Upstox could not verify the requested stock instrument',
+ UPSTOX_EQUITY_NOT_FOUND:'Exact requested stock instrument was not found at Upstox',
+ UPSTOX_INTRADAY_REQUEST_FAILED:'Upstox 5-minute candle request failed',
+ UPSTOX_INTRADAY_DATA_EMPTY:'Upstox returned no usable completed five-minute candles',
+ UPSTOX_LIVE_QUOTE_FAILED:'Upstox live quote request failed',
+ UPSTOX_LIVE_QUOTE_EMPTY:'Upstox returned no verified live quote',
+ UPSTOX_OPTION_CONTRACT_LOOKUP_FAILED:'Upstox option-chain request failed',
+ UPSTOX_DERIVATIVE_SEARCH_FAILED:'Upstox derivative contract search failed',
+ UPSTOX_RESEARCH_DATA_UNAVAILABLE:'Upstox market research request could not be completed',
+
  UNDERLYING_NOT_VERIFIED:'Exact underlying instrument was not verified by Upstox',
  UNDERLYING_CANDLES_REQUIRED:'Completed underlying 5-minute candles are missing or stale',
  FRESH_UNDERLYING_5M_CANDLES_REQUIRED:'At least 35 completed, fresh underlying 5-minute candles are required',
@@ -91,8 +107,10 @@ export function describePaperRejection({stage='UNKNOWN',codes=[],
  }
  return {
   state:'WAIT',stage,
-  // Up to three specific blockers keep the Android summary short.
-  blockers:uniqueBlocked.slice(0,3),
+  // Preserve the specific known failing checks for API consumers. Android renders
+  // only the first few in a compact panel; counts disclose omitted checks.
+  blockers:uniqueBlocked.slice(0,8),
+  blockerCount:uniqueBlocked.length,
   message:uniqueBlocked.slice(0,2).map(x=>x.message).join(' · '),
   verifiedContract:brokerVerifiedContractSummary(contract,asOf)
  };

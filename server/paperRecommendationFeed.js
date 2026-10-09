@@ -80,6 +80,8 @@ export function presentRecommendation({tab,last=null,result=null,asOf=Date.now()
   verifiedContract:result?.verifiedContract??null,
   stage:result?.stage??null,
   blockers:result?.blockers??[],
+  blockerCount:Number.isSafeInteger(result?.blockerCount)?
+   result.blockerCount:(result?.blockers?.length??0),
   lastCheckedAt:result?.checkedAt??null,
   message:state==='PAST_PAPER_IDEA'?'Previous paper idea — not a current signal':
    result?.message??'No verified paper recommendation',
@@ -195,12 +197,13 @@ export function createPaperRecommendationFeed({
   const args={direction:direction.direction,contract,underlyingKey:key,
    optionQuote,optionResearch,asOf};
   plan=calculateAutoOptionPaperPlan(args);
+  let marginLookupFailed=false;
   if(plan.status==='UNVALIDATED_PAPER_LEVELS'&&plan.preliminaryRiskLots>=1){
    try{
     const margin=await getMargin({instrumentKey:contract.instrumentKey,side:'BUY',
      quantity:contract.lotSize,price:plan.entry});
     plan=calculateAutoOptionPaperPlan({...args,marginQuote:margin});
-   }catch(_e){/* No fabricated broker margin. */}
+   }catch(_e){marginLookupFailed=true;/* No fabricated broker margin. */}
   }
   const qualified=qualifyPaperRecommendation(plan,contract,asOf);
   return qualified?
@@ -208,7 +211,8 @@ export function createPaperRecommendationFeed({
    rejected('OPTION_PREMIUM_AND_RISK',[
     ...(plan.reasons??[]),
     ...(optionBarsResult.status==='rejected'?['FRESH_LIQUID_OPTION_PREMIUM_CANDLES_REQUIRED']:[]),
-    ...(optionQuoteResult.status==='rejected'?['FRESH_OPTION_BID_ASK_LAST_TRADE_REQUIRED']:[])
+    ...(optionQuoteResult.status==='rejected'?['FRESH_OPTION_BID_ASK_LAST_TRADE_REQUIRED']:[]),
+    ...(marginLookupFailed?['BROKER_MARGIN_ESTIMATE_UNAVAILABLE']:[])
    ],{contract,fallback:'PAPER_ENVELOPE_NOT_QUALIFIED'});
  }
  async function getLatest(tab,asOf=Date.now()){
@@ -224,7 +228,12 @@ export function createPaperRecommendationFeed({
   const promise=(async()=>{
    let result;
    try{result=await research(tab,now);}
-   catch(e){result=fail('WAIT','Market data unavailable: '+safeError(e));}
+   catch(e){
+    // Translate only known, sanitized broker codes. Never leak token values,
+    // upstream payloads, or arbitrary exceptions to a public mobile UI.
+    result=describePaperRejection({stage:'UPSTOX_DATA',
+     codes:[safeError(e)],asOf:now,fallback:'RECOMMENDATION_BACKEND_UNAVAILABLE'});
+   }
    const checkedAt=asIso(now);
    result={...result,checkedAt};
    if(result.qualified)lastByTab.set(tab,result.qualified);
