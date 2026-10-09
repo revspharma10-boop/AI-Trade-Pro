@@ -2,6 +2,21 @@
 
 This is a **sideloaded debug APK** for a personally owned Android device. It is not a Google Play Store release, and it does not enable production orders. The existing GitHub Pages web app and Render backend are not modified by building this APK.
 
+## Android home screen & bottom tabs
+
+This edition has a bottom navigation bar **inside the Android APK only**:
+
+- **Nifty:** Automatically selects NSE NIFTY and runs the existing 5-minute, paper-only CE/PE/WAIT analysis. Shows the verified underlying quote when available.
+- **Sensex:** Selects BSE SENSEX and uses the same evidence-gated analysis.
+- **Options Trade:** Presents index, stock, and MCX contract-research controls plus the browser-local prediction journal, frozen snapshot, premium/stop/targets and trade-safety checks.
+- **Commodity:** Selects MCX (GOLD by default); the commodity symbol field can be changed to another supported instrument such as SILVER.
+
+Tabs never fabricate a CALL/PUT, option contract, premium, entry, stop loss, target, or lots. The existing five-minute freeze, Upstox freshness checks and WAIT fallbacks remain authoritative. Switching tabs invokes the existing analysis button; market closure or unavailable auth correctly yields WAIT.
+
+**Backend requirement:** Android uses Capacitor's HTTPS `https://localhost` WebView origin. Render's read-only API must deploy the narrowly allowlisted origin policy alongside this APK. No wildcard CORS or browser-accessible broker tokens are permitted.
+
+**Upgrade from the first debug APK:** GitHub's ephemeral debug signing keys may change between builds. If Android shows "App not installed" due to a signature mismatch, export any browser-local journal first, then uninstall the previous debug build before installing the new one. Uninstalling can delete local app data.
+
 ## Build through GitHub Actions
 
 1. Open the GitHub Actions workflow **Build Personal Android APK (Paper Only)**. A pull request containing the workflow also launches it automatically.
