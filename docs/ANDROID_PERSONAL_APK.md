@@ -1,3 +1,28 @@
+## Exact rejection diagnostics (Android v5)
+
+The Render paper-research endpoint includes `stage`, up to three `blockers`
+with stable error codes and human-readable descriptions, and a narrowly validated
+`verifiedContract` field when an exchange-listed option has been selected.
+
+Example of honest WAIT presentation:
+
+- Action: **WAIT**, not BUY or EXECUTED
+- Broker-verified contract (if available): actual exchange trading symbol
+- Entry, stop loss and target: **—** until premium, risk and margin checks pass
+- Reason: "Option open interest or traded volume is not verified" or
+  "One option lot exceeds the ₹500 planned loss limit", according to actual
+  research engine evidence
+
+`verifiedContract` means **metadata only**. It does not authorize trading and
+does not prove option premium quality or sufficient margin. No synthetic contracts
+or screenshot example prices are inserted. The broker token remains on Render.
+A prior paper idea is always labeled historical when it falls outside the
+original five-minute research slot.
+
+The exact blocker for a given moment depends on the current Upstox data. The
+app does not claim that an unmeasured candle, option quote or broker margin
+was verified. Four market tabs continue to fail closed.
+
 ## Personal Android UI — last recommendation only
 
 The Android screen is intentionally minimal and follows the user's last-recommendation reference.
