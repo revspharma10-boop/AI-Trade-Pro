@@ -11,6 +11,7 @@ const entry=createDemoObservation({symbol:'NIFTY',asOf:start,underlyingKey:'NSE_
 assert.equal(entry.direction,'CE');
 assert.equal(entry.status,'PENDING_30M_DIRECTION');
 assert.equal(entry.optionBuyEntry,100);
+assert.equal(entry.optionTarget3,null,'No unsupplied target can appear in the immutable journal');
 assert.equal(entry.approvedRealLots,0);
 assert.equal(entry.orderSubmissionAllowed,false);
 const rows=mergeDemoObservation(mergeDemoObservation([],entry),entry);

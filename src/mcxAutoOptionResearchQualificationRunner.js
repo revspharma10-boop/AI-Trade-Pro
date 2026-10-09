@@ -47,6 +47,7 @@ assert.equal(plan.entry,20.05);
 assert.equal(plan.stopLoss,18.55);
 assert.equal(plan.target1,22.3);
 assert.equal(plan.target2,23.05);
+assert.equal(plan.target3,24.55);
 assert.equal(plan.exposureUnitsPerLot,10);
 assert.equal(plan.riskPerLot,16);
 assert.equal(plan.preliminaryRiskLots,31);
@@ -67,6 +68,7 @@ const oversized=calculateMcxOptionPaperPlan({...input,contract:{...call,qtyMulti
 assert.equal(oversized.status,'WAIT');
 assert.ok(oversized.reasons.includes('ONE_MCX_OPTION_LOT_EXCEEDS_500_RISK_BUDGET'));
 assert.equal(oversized.entry,null);
+assert.equal(oversized.target3,null,'No third target when risk check fails');
 const missingMultiplier=calculateMcxOptionPaperPlan({...input,contract:{...call,qtyMultiplier:null}});
 assert.equal(missingMultiplier.status,'WAIT');
 const wrongFuture=calculateMcxOptionPaperPlan({...input,future:{...future,instrumentKey:'MCX_FO|WRONG'}});

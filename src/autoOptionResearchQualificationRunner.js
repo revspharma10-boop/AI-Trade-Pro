@@ -28,6 +28,7 @@ assert.equal(initial.entry,100.2);
 assert.equal(initial.stopLoss,97.2);
 assert.equal(initial.target1,104.7);
 assert.equal(initial.target2,106.2);
+assert.equal(initial.target3,109.2);
 assert.equal(initial.riskPerLot,201.5);
 assert.equal(initial.preliminaryRiskLots,2);
 assert.equal(initial.paperEnvelopeLots,null,'No broker margin means no combined envelope');
