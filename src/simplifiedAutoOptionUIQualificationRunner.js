@@ -14,6 +14,13 @@ assert.doesNotMatch(entry,/ir-kind|ir-find|ir-contract|ir-interval/);
 assert.match(form,/id="ir-auto-type"/);
 assert.match(form,/id="ir-auto-symbol"/);
 assert.match(form,/id="ir-auto-analyze"/);
+assert.match(form,/id="ir-color-option-card"/);
+for(const id of ['ir-card-contract','ir-card-buy','ir-card-stop','ir-card-t1','ir-card-t2','ir-card-t3','ir-card-lots'])
+ assert.ok(form.includes('id="'+id+'"'),'Missing colored card field '+id);
+assert.match(form,/renderColorOptionCard/);
+assert.match(form,/renderColorOptionCard\(null,null,early.direction\)/);
+assert.match(form,/Target 3 \(3R\)/);
+assert.match(form,/Approved: 0/);
 assert.match(form,/id="ir-opening-evidence"/);
 assert.match(form,/deriveOpeningRangeBias/);
 assert.match(form,/openingRangeProgress/);

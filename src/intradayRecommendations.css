@@ -111,3 +111,35 @@ button:disabled{opacity:.55;cursor:wait}
 .ir-opening-evidence{margin:16px 0;padding:16px;border:1px solid #417498;border-radius:12px;background:#10273b}
 .ir-opening-evidence h3{margin:0 0 12px;color:#e2e8f0}
 .ir-opening-evidence .ir-muted{font-size:12px;line-height:1.5;margin:12px 0 0}
+
+
+/* High-contrast evidence-gated option plan: no fabricated premium when WAIT. */
+.ir-color-option-card{margin:12px 0 18px;border:2px solid #52647c;border-radius:16px;padding:18px;
+ background:linear-gradient(125deg,#18243a,#101d31);box-shadow:0 12px 28px #02061744;overflow-wrap:anywhere}
+.ir-card-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.ir-card-overline{display:block;font-size:11px;color:#c2d3eb;font-weight:800;letter-spacing:.08em}
+.ir-card-heading h3{margin:7px 0;color:#f8fafc;font-size:23px;letter-spacing:.015em;line-height:1.25}
+.ir-card-heading p{margin:4px 0 0;color:#cbd5e1;font-size:12px}
+.ir-card-state{border-radius:99px;padding:8px 13px;background:#3f4b62;color:#fff;font-weight:850;font-size:12px}
+.ir-card-prices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0}
+.ir-price-tile{min-height:100px;border:1px solid #64748b;border-radius:12px;padding:13px 15px;
+ display:flex;flex-direction:column;justify-content:center;gap:9px}
+.ir-price-tile span{font-size:11px;font-weight:850;letter-spacing:.06em}
+.ir-price-tile strong{font-size:clamp(17px,2.7vw,28px);font-variant-numeric:tabular-nums;line-height:1.15}
+.ir-price-buy{background:#053c32;border-color:#10b981;color:#a7f3d0}
+.ir-price-stop{background:#4c1727;border-color:#fb7185;color:#fecdd3}
+.ir-price-t1{background:#102f63;border-color:#60a5fa;color:#bfdbfe}
+.ir-price-t2{background:#342267;border-color:#a78bfa;color:#ddd6fe}
+.ir-price-t3{background:#563718;border-color:#fbbf24;color:#fde68a;grid-column:1/-1}
+.ir-card-footer{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;border-top:1px solid #42536f;padding-top:13px;
+ font-size:12px;color:#e2e8f0}
+.ir-card-footer b{color:#fda4af}
+.ir-card-warning{margin:12px 0 0;font-size:12px;color:#dbeafe;line-height:1.55}
+.ir-card-call{border-color:#10b981}.ir-card-call .ir-card-state{background:#047857}
+.ir-card-put{border-color:#a78bfa}.ir-card-put .ir-card-state{background:#6d28d9}
+.ir-card-early{border-color:#eab308}.ir-card-early .ir-card-state{background:#92400e}
+.ir-card-wait{border-color:#475569}.ir-card-wait .ir-price-tile{background:#172238;border-color:#34445b;color:#94a3b8}
+.ir-card-wait .ir-price-tile strong,.ir-card-early .ir-price-tile strong{font-size:16px}
+.ir-card-early .ir-price-tile{background:#172238;border-color:#34445b;color:#94a3b8}
+@media(max-width:520px){.ir-color-option-card{padding:13px}.ir-card-prices{grid-template-columns:1fr}
+ .ir-price-t3{grid-column:auto}.ir-price-tile{min-height:88px}.ir-card-heading h3{font-size:19px}}
