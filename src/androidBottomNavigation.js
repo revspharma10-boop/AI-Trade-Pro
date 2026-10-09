@@ -24,6 +24,23 @@ const money=n=>typeof n==='number'&&Number.isFinite(n)&&n>0?
  '₹'+n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
 const date=n=>typeof n==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(n)?
  n.slice(8,10)+'/'+n.slice(5,7)+'/'+n.slice(0,4):'—';
+const STAGE_LABELS=Object.freeze({
+ MARKET_SESSION:'MARKET SESSION',
+ UNDERLYING:'UNDERLYING INSTRUMENT',
+ UPSTOX_DATA:'BROKER MARKET DATA',
+ OPENING_RANGE:'OPENING RANGE',
+ UNDERLYING_TECHNICAL:'FIVE-MINUTE TECHNICAL SIGNAL',
+ OPTION_CONTRACT:'OPTION CONTRACT',
+ OPTION_PREMIUM_AND_RISK:'OPTION PREMIUM AND RISK',
+ MCX_UNDERLYING:'COMMODITY UNDERLYING',
+ MCX_TECHNICAL:'COMMODITY TECHNICAL SIGNAL',
+ MCX_CONTRACT:'COMMODITY OPTION CONTRACT',
+ MCX_OPTION_QUALIFICATION:'COMMODITY PREMIUM AND RISK'
+});
+const NOT_CHECKED_STAGES=new Set([
+ 'MARKET_SESSION','UNDERLYING','UPSTOX_DATA','OPENING_RANGE',
+ 'UNDERLYING_TECHNICAL','MCX_UNDERLYING','MCX_TECHNICAL'
+]);
 
 export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
  const matches=data&&data.tab===selectedTab&&data.orderSubmissionAllowed===false&&
@@ -51,11 +68,20 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
     Math.floor((asOf-12000)/300000);
  const active=hasLast&&current&&data.state==='PAPER_SETUP';
  const previous=hasLast&&(data.state==='PAST_PAPER_IDEA'||data.state==='PAPER_SETUP'&&!current);
+ const activeWait=matches&&!active&&!previous;
+ const stage=activeWait&&Object.hasOwn(STAGE_LABELS,data.stage??'')?data.stage:null;
+ const failures=activeWait&&Array.isArray(data.blockers)?
+  data.blockers.filter(x=>x&&typeof x.code==='string'&&/^[A-Z0-9_]{4,110}$/.test(x.code)&&
+   typeof x.message==='string'&&x.message.length>0&&x.message.length<=220).slice(0,8):[];
+ const count=activeWait&&Number.isSafeInteger(data.blockerCount)&&
+  data.blockerCount>=failures.length&&data.blockerCount<=100?
+  data.blockerCount:failures.length;
  return {
   state:active?'PAPER_SETUP':previous?'PAST_PAPER_IDEA':'WAIT',
   tag:active?'PAPER BUY':previous?'PAST PAPER IDEA':'WAIT',
   contract:hasLast?last.contract:hasCandidate?
-   candidate.tradingSymbol:'NO VERIFIED OPTION CONTRACT',
+   candidate.tradingSymbol:stage&&NOT_CHECKED_STAGES.has(stage)?
+    'OPTION CONTRACT NOT CHECKED':'NO VERIFIED OPTION CONTRACT',
   entry:hasLast?money(last.entry):'—',
   target:hasLast?money(last.target):'—',
   stopLoss:hasLast?money(last.stopLoss):'—',
@@ -63,6 +89,9 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   status:active?'Paper idea · Not executed':
    previous?'Previous idea · Not executed':hasCandidate?
     'Contract verified · Setup WAIT':'No paper trade executed',
+  diagnosticStage:stage?STAGE_LABELS[stage]:null,
+  failedChecks:failures.slice(0,3).map(x=>({code:x.code,message:x.message})),
+  otherChecks:Math.max(0,count-Math.min(3,failures.length)),
   explanation:matches&&typeof data.message==='string'?
    data.message:'Awaiting verified broker research'
  };
@@ -119,7 +148,15 @@ export function mountAndroidBottomNavigation(){
  const explanation=make('p','android-simple-message','Waiting for verified broker data');
  explanation.setAttribute('role','status');
  explanation.setAttribute('aria-live','polite');
- card.append(market,chips,facts,details,explanation);
+ const diagnostics=make('section','android-simple-diagnostics');
+ diagnostics.setAttribute('aria-label','Why the paper recommendation is waiting');
+ diagnostics.hidden=true;
+ const diagnosticHeading=make('strong','android-simple-diagnostic-title','WHY WAIT?');
+ const diagnosticStage=make('span','android-simple-diagnostic-stage');
+ const diagnosticList=make('ul','android-simple-diagnostic-list');
+ const diagnosticMore=make('p','android-simple-diagnostic-more');
+ diagnostics.append(diagnosticHeading,diagnosticStage,diagnosticList,diagnosticMore);
+ card.append(market,chips,facts,details,explanation,diagnostics);
 
  const foot=make('footer','android-simple-footer');
  const refreshed=make('p','','Automatic read-only refresh while the app is open');
@@ -162,6 +199,16 @@ export function mountAndroidBottomNavigation(){
   observedDate.textContent=view.date;
   tradeStatus.textContent=view.status;
   explanation.textContent=view.explanation;
+  diagnostics.hidden=view.state!=='WAIT'||view.failedChecks.length===0;
+  diagnosticStage.textContent=view.diagnosticStage??'RESEARCH DATA';
+  diagnosticList.replaceChildren();
+  for(const check of view.failedChecks){
+   // DOM textContent prevents Upstox-originated messages from inserting markup.
+   diagnosticList.append(make('li','',check.message));
+  }
+  diagnosticMore.textContent=view.otherChecks>0?
+   '+'+view.otherChecks+' additional blocker'+(view.otherChecks===1?'':'s')+
+   ' recorded by the backend':'';
  }
  async function refresh(force=false){
   if(document.hidden||loading)return;
