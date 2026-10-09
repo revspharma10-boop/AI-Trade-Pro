@@ -48,6 +48,7 @@ export function createDemoObservation({symbol,asOf,underlyingKey=null,session=nu
   optionExpiry:contract?.expiry??null,optionLotSize:contract?.lotSize??null,
   optionBuyEntry:plan?.entry??null,optionStop:plan?.stopLoss??null,
   optionTarget1:plan?.target1??null,optionTarget2:plan?.target2??null,
+  optionTarget3:plan?.target3??null,
   theoreticalLots:plan?.paperEnvelopeLots??null,approvedRealLots:0,
   status:direction==='WAIT'?'WAIT':'PENDING_30M_DIRECTION',
   reasons:unique([...(direction==='WAIT'&&rawDirection!=='WAIT'?['FRESH_EVIDENCE_REQUIRED']:[]),...reasons]),
@@ -134,7 +135,7 @@ export function demoCsv(records=[]){
  const fields=['dateIST','symbol','recordedAt','status','direction','predictionType','openingOHLC.open','openingOHLC.high',
   'openingOHLC.low','openingOHLC.close','openingRangePoints','openingBreakoutByQuote',
   'underlyingClose','indexQuote','ema9','ema21','rsi14','macdHistogram','atr14',
-  'optionContract','optionStrike','optionExpiry','optionBuyEntry','optionStop','optionTarget1','optionTarget2','theoreticalLots','approvedRealLots',
+  'optionContract','optionStrike','optionExpiry','optionBuyEntry','optionStop','optionTarget1','optionTarget2','optionTarget3','theoreticalLots','approvedRealLots',
   'outcome.verdict','outcome.observedClose','outcome.signedDirectionalMove','review.summary','review.technical.status',
   'review.technical.conclusion','review.fundamental.status','review.improvementCandidates','reasons'];
  const escape=v=>'"'+String(v??'').replace(/"/g,'""')+'"';

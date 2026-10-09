@@ -59,7 +59,7 @@ export function calculateMcxOptionPaperPlan({contract=null,future=null,direction
  const base={status:'WAIT',direction,contract:contract?.tradingSymbol??null,optionType:direction,
   capital,riskBudget,lotSize:contract?.lotSize??null,qtyMultiplier:contract?.qtyMultiplier??null,
   exposureUnitsPerLot:Number.isSafeInteger(units)&&units>0?units:null,
-  exchangeTick:tick,entry:null,stopLoss:null,target1:null,target2:null,
+  exchangeTick:tick,entry:null,stopLoss:null,target1:null,target2:null,target3:null,
   riskPerLot:null,optionPremiumCostPerLot:null,preliminaryRiskLots:null,
   capitalAffordabilityLots:null,brokerRequiredMarginPerLot:null,
   brokerMarginVerified:false,paperEnvelopeLots:null,approvedLots:0,
@@ -94,8 +94,9 @@ export function calculateMcxOptionPaperPlan({contract=null,future=null,direction
  const entry=aligned(quote.ask,tick,'up');
  const stopLoss=aligned(entry-Math.max(1.5*research.snapshot.atr14,3*tick),tick,'down');
  const r=entry-stopLoss;
- const target1=aligned(entry+1.5*r,tick,'down'),target2=aligned(entry+2*r,tick,'down');
- if(!positive(entry)||!positive(stopLoss)||!positive(r)||target1<=entry||target2<=target1){
+ const target1=aligned(entry+1.5*r,tick,'down'),target2=aligned(entry+2*r,tick,'down'),
+  target3=aligned(entry+3*r,tick,'down');
+ if(!positive(entry)||!positive(stopLoss)||!positive(r)||target1<=entry||target2<=target1||target3<=target2){
   base.reasons=['MCX_OPTION_PREMIUM_LEVELS_INVALID'];return base;
  }
  const loss=money((r+2*tick)*units),premium=money(entry*units);
@@ -116,7 +117,7 @@ export function calculateMcxOptionPaperPlan({contract=null,future=null,direction
    valid(marginQuote.asOf)&&marginQuote.asOf<=now+10000&&now-marginQuote.asOf<180000;
  const envelope=marginVerified?Math.min(riskLots,cashLots,Math.floor(capital/Math.max(premium,margin))):null;
  return Object.assign(base,{
-  status:'UNVALIDATED_PAPER_LEVELS',entry,stopLoss,target1,target2,
+  status:'UNVALIDATED_PAPER_LEVELS',entry,stopLoss,target1,target2,target3,
   riskPerLot:loss,optionPremiumCostPerLot:premium,
   preliminaryRiskLots:riskLots,capitalAffordabilityLots:cashLots,
   brokerMarginVerified:marginVerified,brokerRequiredMarginPerLot:marginVerified?money(margin):null,

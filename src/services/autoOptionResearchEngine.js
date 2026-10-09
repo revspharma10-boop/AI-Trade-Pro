@@ -52,7 +52,7 @@ export function calculateAutoOptionPaperPlan({direction='WAIT',contract=null,und
  const now=Number(new Date(asOf)),reasons=[];
  const base={status:'WAIT',direction,optionType:direction,contract:contract?.tradingSymbol??null,
   strike:contract?.strike??null,expiry:contract?.expiry??null,lotSize:contract?.lotSize??null,
-  contractMultiplier:1,priceTick:null,entry:null,stopLoss:null,target1:null,target2:null,
+  contractMultiplier:1,priceTick:null,entry:null,stopLoss:null,target1:null,target2:null,target3:null,
   riskPerLot:null,capital,riskBudget,preliminaryRiskLots:null,capitalAffordabilityLots:null,
   brokerRequiredMarginPerLot:null,brokerMarginVerified:false,paperEnvelopeLots:null,approvedLots:0,
   availableBrokerFundsVerified:false,feesAndGapsIncluded:false,modelBacktested:false,
@@ -85,7 +85,8 @@ export function calculateAutoOptionPaperPlan({direction='WAIT',contract=null,und
  const stop=aligned(entry-rDistance,tick,'down');
  const target1=aligned(entry+1.5*(entry-stop),tick,'down');
  const target2=aligned(entry+2*(entry-stop),tick,'down');
- if(!positive(stop)||stop>=entry||target1<=entry||target2<=target1){
+ const target3=aligned(entry+3*(entry-stop),tick,'down');
+ if(!positive(stop)||stop>=entry||target1<=entry||target2<=target1||target3<=target2){
   base.reasons=['OPTION_PREMIUM_LEVELS_INVALID'];return base;
  }
  const grossLoss=(entry-stop)*contract.lotSize;
@@ -105,7 +106,7 @@ export function calculateAutoOptionPaperPlan({direction='WAIT',contract=null,und
  const budgetLots=Math.min(riskLots,cashLots);
  const marginLots=brokerMarginVerified?Math.floor(capital/Math.max(costPerLot,marginRequired)):null;
  const envelope=brokerMarginVerified?Math.min(budgetLots,marginLots):null;
- Object.assign(base,{status:'UNVALIDATED_PAPER_LEVELS',entry,stopLoss:stop,target1,target2,
+ Object.assign(base,{status:'UNVALIDATED_PAPER_LEVELS',entry,stopLoss:stop,target1,target2,target3,
   riskPerLot,optionPremiumCostPerLot:costPerLot,preliminaryRiskLots:riskLots,
   capitalAffordabilityLots:cashLots,brokerRequiredMarginPerLot:brokerMarginVerified?inr(marginRequired):null,
   brokerMarginVerified,paperEnvelopeLots:envelope,

@@ -84,6 +84,21 @@ export function mountAutoOptionResearch(){
   '<section id="ir-opening-evidence" class="ir-opening-evidence" hidden><h3>09:15–09:30 Opening Range — Provisional Direction Only</h3>',
   '<div id="ir-opening-facts" class="ir-facts"></div><p id="ir-opening-notes" class="ir-muted"></p></section>',
   '<div class="ir-decision ir-option-result"><h3>Option research result</h3><span class="ir-paper-wait" id="ir-auto-direction">WAIT</span></div>',
+  '<section id="ir-color-option-card" class="ir-color-option-card ir-card-wait" aria-label="Color-coded paper option prediction" aria-live="polite">',
+  '<div class="ir-card-heading"><div><span class="ir-card-overline">OPTION CHAIN • PROVISIONAL PAPER RESEARCH</span>',
+  '<h3 id="ir-card-contract">NO VERIFIED OPTION CONTRACT</h3><p id="ir-card-expiry">Strike / expiry not verified</p></div>',
+  '<span id="ir-card-state" class="ir-card-state">WAIT</span></div>',
+  '<div class="ir-card-prices">',
+  '<div class="ir-price-tile ir-price-buy"><span>BUY AT • PREMIUM</span><strong id="ir-card-buy">NOT VERIFIED</strong></div>',
+  '<div class="ir-price-tile ir-price-stop"><span>STOP LOSS</span><strong id="ir-card-stop">NOT VERIFIED</strong></div>',
+  '<div class="ir-price-tile ir-price-t1"><span>1ST TARGET • 1.5R</span><strong id="ir-card-t1">NOT VERIFIED</strong></div>',
+  '<div class="ir-price-tile ir-price-t2"><span>2ND TARGET • 2R</span><strong id="ir-card-t2">NOT VERIFIED</strong></div>',
+  '<div class="ir-price-tile ir-price-t3"><span>3RD TARGET • 3R</span><strong id="ir-card-t3">NOT VERIFIED</strong></div>',
+  '</div>',
+  '<div class="ir-card-footer"><span id="ir-card-lots">Theoretical lots: NOT VERIFIED</span>',
+  '<span>₹50,000 capital • ₹500 planned risk • <b>0 REAL ORDERS</b></span></div>',
+  '<p id="ir-card-warning" class="ir-card-warning">WAIT — Premium, stop, targets and contract require verified broker evidence. No option order is authorized.</p>',
+  '</section>',
   '<p class="ir-paper-warning">Illustrative long-option premium prices, not instructions or order previews. ₹50,000 capital, ₹500 planned risk. Real trading is disabled.</p>',
   '<h3>Underlying 5-minute candle chart</h3><div class="ir-option-chart" id="ir-auto-chart">Awaiting fresh market data.</div>',
   '<section id="ir-mcx-evidence" class="ir-mcx-evidence" hidden><h3>MCX futures technical evidence</h3><div id="ir-mcx-facts" class="ir-facts"></div><h3>CALL vs PUT confirmation checklist</h3><p class="ir-muted" id="ir-mcx-confirm-summary"></p><div id="ir-mcx-checks" class="ir-mcx-checks"></div></section>',
@@ -94,6 +109,7 @@ export function mountAutoOptionResearch(){
  const find=id=>panel.querySelector('#'+id),type=find('ir-auto-type'),symbol=find('ir-auto-symbol');
  const button=find('ir-auto-analyze'),status=find('ir-auto-status'),result=find('ir-auto-results');
  const blocks=find('ir-auto-blocks'),label=find('ir-auto-direction'),chart=find('ir-auto-chart');
+ const colorCard=find('ir-color-option-card');
  const mcxEvidence=find('ir-mcx-evidence'),mcxFacts=find('ir-mcx-facts');
  const mcxChecklist=find('ir-mcx-checks'),mcxSummary=find('ir-mcx-confirm-summary');
  const liveLabel=find('ir-live-status'),liveFacts=find('ir-live-facts');
@@ -117,6 +133,42 @@ export function mountAutoOptionResearch(){
   openingEvidence.hidden=true;openingFacts.replaceChildren();openingNotes.textContent='';
  }
 
+ function renderColorOptionCard(plan=null,contract=null,earlyBias=null){
+  const full=plan?.status==='UNVALIDATED_PAPER_LEVELS'&&contract&&
+   contract.instrumentType===plan.optionType&&['CE','PE'].includes(plan.optionType)&&
+   [plan.entry,plan.stopLoss,plan.target1,plan.target2,plan.target3].every(
+    n=>typeof n==='number'&&Number.isFinite(n)&&n>0)&&
+   plan.stopLoss<plan.entry&&plan.entry<plan.target1&&plan.target1<plan.target2&&plan.target2<plan.target3;
+  const early=earlyBias==='CE'||earlyBias==='PE';
+  const verifiedContract=contract&&['CE','PE'].includes(contract.instrumentType)&&
+   typeof contract.tradingSymbol==='string'&&contract.tradingSymbol.length>0&&
+   Number.isFinite(contract.strike)&&contract.strike>0&&
+   typeof contract.expiry==='string'&&Number.isSafeInteger(contract.lotSize)&&contract.lotSize>0;
+  const riskEligible=full&&Number.isInteger(plan.preliminaryRiskLots)&&plan.preliminaryRiskLots>=1;
+  colorCard.className='ir-color-option-card '+(full?
+   plan.optionType==='CE'?'ir-card-call':'ir-card-put':early?'ir-card-early':'ir-card-wait');
+  find('ir-card-contract').textContent=verifiedContract?String(contract.tradingSymbol):
+   early?'EARLY '+(earlyBias==='CE'?'CALL':'PUT')+' INDEX BIAS':'NO VERIFIED OPTION CONTRACT';
+  find('ir-card-state').textContent=full?(riskEligible?'PAPER BUY '+plan.optionType:'NO RISK-ELIGIBLE LOT'):
+   early?'UNVALIDATED '+earlyBias:'WAIT';
+  find('ir-card-expiry').textContent=verifiedContract?
+   'Strike '+contract.strike+' • '+contract.instrumentType+' • Expiry '+contract.expiry+' • Lot '+contract.lotSize:
+   early?'Opening-range directional hypothesis only — no option contract or premium levels':
+    'Strike / expiry not verified';
+  for(const [id,n] of [
+   ['ir-card-buy',plan?.entry],['ir-card-stop',plan?.stopLoss],
+   ['ir-card-t1',plan?.target1],['ir-card-t2',plan?.target2],['ir-card-t3',plan?.target3]
+  ])find(id).textContent=full?fmt(n):'NOT VERIFIED';
+  find('ir-card-lots').textContent=full?
+   'Theoretical paper lots: '+(plan.paperEnvelopeLots??'NOT VERIFIED')+' • Approved: 0':
+   'Theoretical lots: NOT VERIFIED • Approved: 0';
+  find('ir-card-warning').textContent=full?
+   (riskEligible?'Provisional premium research, not an order instruction. Targets 1.5R / 2R / 3R are hypothetical; fees, gaps, slippage and actual funds are unverified.':
+   'RISK BLOCKED: One lot exceeds the ₹500 risk budget. Prices are illustrative paper levels only; no option purchase is authorized.'):
+   early?'EARLY BIAS ONLY — Full option-price and risk checks have not passed. Do not treat this as an option purchase.':
+   'WAIT — Exact option premiums and targets are not verified; no option order is authorized.';
+ }
+
  let quoteSelection=null,refreshInProgress=false,lastResearchAt=null;
  let hasStartedAnalysis=false,capturedSlot=null,analysisInFlight=false;
  const freezeLabel=find('ir-freeze-state'),freezeTaken=find('ir-freeze-taken'),freezeNext=find('ir-freeze-next');
@@ -129,6 +181,7 @@ export function mountAutoOptionResearch(){
  function expireOldSnapshot(){
   if(label.textContent==='WAIT — EXPIRED')return;
   label.textContent='WAIT — EXPIRED';label.className='ir-paper-wait';
+  renderColorOptionCard();
   for(const fact of result.querySelectorAll('.ir-fact')){
    const name=fact.querySelector('span')?.textContent||'';
    if(/(entry|stop loss|target 1|target 2|theoretical lots|risk: theoretical lots)/i.test(name)){
@@ -273,7 +326,7 @@ export function mountAutoOptionResearch(){
  let version=0;
  const reset=()=>{
   version++;hasStartedAnalysis=false;capturedSlot=null;analysisInFlight=false;button.disabled=false;
-  label.textContent='WAIT';label.className='ir-paper-wait';
+  label.textContent='WAIT';label.className='ir-paper-wait';renderColorOptionCard();
   result.replaceChildren();blocks.replaceChildren();chart.textContent='Awaiting fresh market data.';clearMcxEvidence();
   quoteSelection=null;lastResearchAt=null;paintQuoteStatus();paintFrozenResearch();clearOpeningRange();
   status.textContent='Select instrument type and symbol, then analyze.';
@@ -282,6 +335,7 @@ export function mountAutoOptionResearch(){
  symbol.addEventListener('input',reset);
  function showPlan(plan=null,contract=null,issues=[]){
   result.replaceChildren();blocks.replaceChildren();
+  renderColorOptionCard(plan,contract);
   const available=plan?.status==='UNVALIDATED_PAPER_LEVELS';
   const noDirection=issues.includes('NO_CLEAR_BUY_OR_SELL_SETUP');
   const skipped=noDirection?'NOT CALCULATED — WAIT':'NOT VERIFIED';
@@ -296,6 +350,7 @@ export function mountAutoOptionResearch(){
    ['Buy entry — option premium',optionalPrice(plan?.entry)],
    ['Stop loss — option premium',optionalPrice(plan?.stopLoss)],
    ['Target 1 (1.5R)',optionalPrice(plan?.target1)],['Target 2 (2R)',optionalPrice(plan?.target2)],
+   ['Target 3 (3R)',optionalPrice(plan?.target3)],
    ['Contract lot size',contract?.lotSize??'NOT VERIFIED'],
    ['MCX quantity multiplier',contract?.segment==='MCX_FO'?(contract?.qtyMultiplier??'NOT VERIFIED'):'N/A'],
    ['Exposure units per MCX lot',contract?.segment==='MCX_FO'?(plan?.exposureUnitsPerLot??'NOT VERIFIED'):'N/A'],
@@ -323,7 +378,7 @@ export function mountAutoOptionResearch(){
   const thisRun=++version,input=symbol.value.trim().toUpperCase(),isIndex=type.value==='INDEX',isMcx=type.value==='MCX';
   const current=()=>thisRun===version;
   hasStartedAnalysis=true;capturedSlot=window.slot;analysisInFlight=true;
-  button.disabled=true;label.textContent='WAIT';label.className='ir-paper-wait';
+  button.disabled=true;label.textContent='WAIT';label.className='ir-paper-wait';renderColorOptionCard();
   result.replaceChildren();blocks.replaceChildren();chart.replaceChildren();status.textContent='Loading underlying market evidence...';clearMcxEvidence();
   quoteSelection=null;lastResearchAt=null;paintQuoteStatus();paintFrozenResearch();clearOpeningRange();
   let chosen=null,plan=null,direction='WAIT';
@@ -453,6 +508,7 @@ export function mountAutoOptionResearch(){
      if(minutes>=570&&research.completedBars<35){
       showOpeningRange(early);
       if(early.direction==='CE'||early.direction==='PE'){
+       renderColorOptionCard(null,null,early.direction);
        label.textContent='EARLY '+(early.direction==='CE'?'CALL':'PUT')+' BIAS';
        label.className='ir-paper-wait';
        status.textContent='PROVISIONAL '+early.direction+' opening-range bias — not a qualified option trade. No contract, premium entry, stop or targets.';
