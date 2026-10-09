@@ -185,7 +185,8 @@ export function createPaperRecommendationFeed({
   const now=Number(new Date(asOf));
   if(!Number.isFinite(now))throw Error('INVALID_RECOMMENDATION_CLOCK');
   const slot=fiveMinuteSlot(now),previous=cache.get(tab);
-  if(previous?.slot===slot&&now-previous.checkedAt<45000){
+  if(previous?.slot===slot&&
+     (previous.result.state==='PAPER_SETUP'||now-previous.checkedAt<45000)){
    return presentRecommendation({tab,last:lastByTab.get(tab)??null,result:previous.result,asOf:now});
   }
   if(pending.has(tab))return pending.get(tab);
