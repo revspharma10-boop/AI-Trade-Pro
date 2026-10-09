@@ -40,9 +40,16 @@ jobs:
         run: npm ci
       - name: Install isolated Android build tooling
         run: npm install --no-save --package-lock=false @capacitor/core@8.0.0 @capacitor/android@8.0.0 @capacitor/cli@8.0.0
+      - name: Validate native navigation mapping and paper safety
+        run: |
+          node --check src/androidBottomNavigation.js
+          node src/androidBottomNavigationQualificationRunner.js
+          node src/openingRangeQualificationRunner.js
+          node src/autoOptionResearchQualificationRunner.js
       - name: Build Android web assets with relative base path
         env:
           VITE_UPSTOX_READONLY_API_BASE: https://ai-trade-pro-oauth.onrender.com
+          VITE_ANDROID_APP: 'true'
         run: npm run build -- --base ./
       - name: Generate native Android project
         run: |
