@@ -85,6 +85,12 @@ const [a,b]=await Promise.all([feed.getLatest('nifty',asOf),feed.getLatest('nift
 assert.equal(searches,1,'concurrent requests share one backend call');
 assert.equal(a.state,'WAIT');assert.equal(b.state,'WAIT');
 assert.equal(a.last,null);
+assert.equal(a.stage,'UPSTOX_DATA');
+assert.equal(a.blockers[0].code,'UPSTOX_REAUTHENTICATION_REQUIRED');
+assert.match(a.message,/login has expired/);
+assert.equal(a.blockerCount,1);
+assert.equal(a.verifiedContract,null);
+
 assert.equal((await feed.getLatest('nifty',asOf+30000)).state,'WAIT');
 assert.equal(searches,1,'30-second polling uses cached data instead of repeated upstream calls');
 assert.equal((await feed.getLatest('nifty',asOf+47000)).state,'WAIT');
@@ -95,6 +101,11 @@ await assert.rejects(feed.getLatest('unverified-tab',asOf),/UNSUPPORTED_RECOMMEN
 assert.equal(RECOMMENDATION_FEED_SAFETY.orderSubmissionAllowed,false);
 assert.equal(RECOMMENDATION_FEED_SAFETY.realOrderPlaced,false);
 assert.equal(RECOMMENDATION_FEED_SAFETY.approvedLots,0);
+const source=readFileSync(new URL('./paperRecommendationFeed.js',import.meta.url),'utf8');
+assert.match(source,/let marginLookupFailed=false/);
+assert.match(source,/marginLookupFailed\?\['BROKER_MARGIN_ESTIMATE_UNAVAILABLE'\]/);
+assert.match(source,/describePaperRejection\(\{stage:'UPSTOX_DATA'/);
+
 const server=readFileSync(new URL('./upstoxOAuthCallbackServer.js',import.meta.url),'utf8');
 assert.match(server,/\/api\/paper-recommendations\/latest/);
 assert.match(server,/latestPaperRecommendations\.getLatest\(tab\)/);
