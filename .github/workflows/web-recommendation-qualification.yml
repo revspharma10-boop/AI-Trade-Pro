@@ -1,0 +1,51 @@
+name: Web Recommendation UI Qualification
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'server/paperRecommendationFeed.js'
+      - 'server/recommendationWaitDiagnostics.js'
+      - 'server/readOnlyCorsPolicy.js'
+      - 'index.html'
+      - 'vite.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-pages.yml'
+      - '.github/workflows/web-recommendation-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web-paper-recommendation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VITE_UPSTOX_READONLY_API_BASE: https://ai-trade-pro-oauth.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Check web, risk, and CORS invariants
+        run: |
+          node --check src/intradayRecommendationsUI.js
+          node --check src/androidBottomNavigation.js
+          node src/webRecommendationUIQualificationRunner.js
+          node src/androidBottomNavigationQualificationRunner.js
+          node server/paperRecommendationFeedQualificationRunner.js
+          node server/recommendationWaitDiagnosticsQualificationRunner.js
+          node server/readOnlyCorsPolicyQualificationRunner.js
+          node src/openingRangeQualificationRunner.js
+          node src/autoOptionResearchQualificationRunner.js
+      - name: Build browser UI
+        run: npm run build
+      - name: Validate published page payload
+        run: |
+          test -s dist/index.html
+          grep -q 'AI Trade Pro' dist/index.html
+          grep -Rql 'paper-recommendations/latest' dist/assets
+          ! grep -Rql 'UPSTOX_CLIENT_SECRET' dist/assets

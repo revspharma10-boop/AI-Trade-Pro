@@ -29,6 +29,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Qualify minimalist web recommendation surface and paper-only backend
+        run: |
+          node src/webRecommendationUIQualificationRunner.js
+          node src/androidBottomNavigationQualificationRunner.js
+          node server/paperRecommendationFeedQualificationRunner.js
+          node server/recommendationWaitDiagnosticsQualificationRunner.js
+          node server/readOnlyCorsPolicyQualificationRunner.js
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
