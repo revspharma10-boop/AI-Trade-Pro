@@ -23,6 +23,45 @@ assert.equal(after.optionPlanQualified,false);
 assert.equal(after.orderSubmissionAllowed,false);
 assert.equal(test(rising,q(25100)).breakoutConfirmedByQuote,true);
 assert.ok(test(rising,q(24980)).direction==='WAIT','Quote against bullish opening cannot publish bullish direction');
+// Regression: a bullish trend can emerge AFTER the 09:30 range even if opening bars were mixed.
+const mixed=sample([
+ ['09:15:00',25000,25038,24985,25030],
+ ['09:20:00',25030,25040,24970,24980],
+ ['09:25:00',24980,25028,24965,25010]
+]);
+const neutral=test(mixed,q(25015));
+assert.equal(neutral.direction,'WAIT','Mixed first 15m bars should not force a CE');
+const firstBreak=sample([['09:30:00',25010,25070,25003,25062]]);
+const mixedUp=test([...mixed,...firstBreak],q(25065,ist('09:35:15')),'09:35:16');
+assert.equal(mixedUp.direction,'CE','Completed 5m breakout above initial range must qualify as early CE');
+assert.equal(mixedUp.signalBasis,'COMPLETED_5M_UPSIDE_RANGE_BREAKOUT');
+assert.equal(mixedUp.breakoutConfirmedByCompletedCandle,true);
+assert.equal(mixedUp.lastCompletedAt,firstBreak[0].datetime,'Journal timestamp must advance after 09:30');
+assert.equal(mixedUp.orderSubmissionAllowed,false);
+const stalePost=test([...mixed,...firstBreak],q(25065,ist('09:55:14')),'09:55:16');
+assert.equal(stalePost.direction,'WAIT','Never reuse a 09:30 completed breakout candle at 09:55');
+assert.ok(stalePost.reasons.includes('POST_OPENING_CANDLE_STALE'));
+
+assert.equal(test([...mixed,...firstBreak],q(25065,ist('09:34:50')),'09:34:59').direction,'WAIT',
+ 'Never look ahead to a still-in-progress breakout candle');
+assert.equal(test([...mixed,...firstBreak],q(25025,ist('09:35:15')),'09:35:16').direction,'WAIT',
+ 'A completed breakout that has already reversed in the live quote is not current');
+assert.equal(test([...mixed,...firstBreak],q(25065,ist('09:35:15')),'09:35:16',
+ {open:false,exchange:'NSE'}).direction,'WAIT','No closed-market forecasts');
+const nextBar=sample([['09:35:00',25062,25082,25053,25076]]);
+const secondBreak=test([...mixed,...firstBreak,...nextBar],q(25078,ist('09:40:15')),'09:40:16');
+assert.equal(secondBreak.direction,'CE');
+assert.notEqual(secondBreak.lastCompletedAt,mixedUp.lastCompletedAt,
+ 'The next 5m snapshot must have a unique completed candle timestamp');
+const quoteOnly=test(mixed,q(25090,ist('09:40:15')),'09:40:16');
+assert.equal(quoteOnly.direction,'WAIT','A quote above range without completed breakout is not confirmation');
+const mixedDownCandle=sample([['09:30:00',25010,25011,24938,24941]]);
+const mixedDown=test([...mixed,...mixedDownCandle],q(24940,ist('09:35:15')),'09:35:16');
+assert.equal(mixedDown.direction,'PE');
+assert.equal(mixedDown.breakoutConfirmedByCompletedCandle,true);
+assert.equal(mixedDown.signalBasis,'COMPLETED_5M_DOWNSIDE_RANGE_BREAKOUT');
+assert.equal(test([...mixed,...firstBreak,...firstBreak],q(25065,ist('09:35:15')),'09:35:16').direction,'WAIT',
+ 'Duplicate post-opening timestamps must not create research');
 const falling=sample([
  ['09:15:00',25000,25010,24975,24980],
  ['09:20:00',24980,24984,24940,24945],

@@ -27,6 +27,7 @@ assert.match(form,/describeIndexOptionGates/);
 assert.match(form,/showIndexGates/);
 assert.match(form,/Why no CALL \/ PUT option/);
 assert.match(form,/deriveOpeningRangeBias/);
+assert.match(form,/Completed 5m breakout/);
 assert.match(form,/openingRangeProgress/);
 assert.match(form,/WAIT — Collecting the 09:15–09:30 opening range/);
 assert.match(demo,/09:15–09:30/);

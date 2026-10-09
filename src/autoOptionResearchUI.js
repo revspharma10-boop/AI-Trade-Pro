@@ -143,7 +143,12 @@ export function mountAutoOptionResearch(){
    ['Opening high−low points',Number.isFinite(r?.range)?String(r.range):'NOT VERIFIED'],
    ['Provisional opening bias',r?.direction==='CE'?'CALL (CE) • NOT QUALIFIED':
      r?.direction==='PE'?'PUT (PE) • NOT QUALIFIED':'WAIT'],
-   ['Quote-only breakout check',r?.breakoutConfirmedByQuote===true?'YES • NOT 5M CONFIRMED':'NOT CONFIRMED']
+   ['Completed 5m breakout',r?.breakoutConfirmedByCompletedCandle===true?
+      'CONFIRMED • PROVISIONAL DIRECTION':'NOT VERIFIED'],
+   ['Directional evidence',r?.signalBasis??'NONE'],
+   ['Latest analyzed 5m candle (IST)',r?.lastCompletedAt?
+      istTime(Date.parse(r.lastCompletedAt)):'NONE'],
+   ['Quote-only breakout check',r?.breakoutConfirmedByQuote===true?'YES • QUOTE ALONE INSUFFICIENT':'NOT CONFIRMED']
   ].forEach(([k,v])=>row(openingFacts,k,v));
   openingNotes.textContent=(r?.evidence||[]).join(' • ')+' • '+
    (r?.reasons||[]).join('; ')+' • Early direction does NOT validate an option entry, strike, SL or target.';

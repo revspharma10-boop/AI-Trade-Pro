@@ -29,6 +29,7 @@ export function openingRangeProgress({candles=[],asOf=Date.now()}={}){
 export function deriveOpeningRangeBias({candles=[],quote=null,session=null,asOf=Date.now()}={}){
  const now=Number(new Date(asOf)),base={valid:false,direction:'WAIT',status:'OPENING_RANGE_WAIT',
  strategy:'OPENING_RANGE_15M',range:null,openingOHLC:null,lastCompletedAt:null,
+ signalBasis:null,breakoutConfirmedByCompletedCandle:false,
  evidence:[],reasons:[],...OPENING_RANGE_SAFETY};
  const issues=[];
  if(!finite(now))issues.push('INVALID_CLOCK');
@@ -53,27 +54,63 @@ export function deriveOpeningRangeBias({candles=[],quote=null,session=null,asOf=
  if(!positive(range)||range<open*0.0003||range>open*0.03)
   return {...base,reasons:['OPENING_RANGE_TOO_NARROW_OR_EXTREME']};
  const openingOHLC={open:round(open),high:round(high),low:round(low),close:round(close)};
- const snapshot={...base,valid:true,range:round(range),openingOHLC,lastCompletedAt:bars[2].datetime,
+ // The frozen 09:15–09:30 OHLC stays constant, but later same-day completed
+ // 5m candles must be checked for a fresh breakout (not just the opening 3).
+ const postOpening=(Array.isArray(candles)?candles:[])
+  .map(c=>({...c,timestamp:Date.parse(c?.datetime)}))
+  .filter(c=>finite(c.timestamp)&&dateIST(c.timestamp)===today&&
+   minIST(c.timestamp)>=570&&minIST(c.timestamp)<930&&
+   c.timestamp+5*60000+12000<=now&&
+   [c.open,c.high,c.low,c.close].every(positive)&&
+   c.high>=c.low&&c.open>=c.low&&c.open<=c.high&&c.close>=c.low&&c.close<=c.high)
+  .sort((a,b)=>a.timestamp-b.timestamp);
+ // Duplicate timestamps must not create artificial confirmation.
+ if(postOpening.some((c,i)=>i>0&&c.timestamp===postOpening[i-1].timestamp))
+  return {...base,openingOHLC,reasons:['DUPLICATE_POST_OPENING_CANDLE']};
+ const lastPost=postOpening.at(-1);
+ const postFresh=!lastPost||now-(lastPost.timestamp+5*60000)<=7*60000;
+ const snapshot={...base,valid:true,range:round(range),openingOHLC,
+  lastCompletedAt:lastPost?.datetime??bars[2].datetime,
   evidence:['Opening 09:15–09:30 OHLC frozen from exactly three 5-minute candles']};
+ if(!postFresh)return {...snapshot,valid:false,reasons:['POST_OPENING_CANDLE_STALE']};
  if(!positive(quote?.lastPrice)||!finite(quote?.timestamp)||quote.timestamp>now+10000||now-quote.timestamp>120000)
   return {...snapshot,valid:false,reasons:['FRESH_INDEX_QUOTE_REQUIRED_FOR_OPENING_BIAS']};
  const position=(close-low)/range,body=(close-open)/range,mid=(high+low)/2;
  const upCloses=bars[0].close<=bars[1].close&&bars[1].close<=bars[2].close;
  const downCloses=bars[0].close>=bars[1].close&&bars[1].close>=bars[2].close;
- const bullish=body>=0.20&&position>=0.72&&upCloses&&quote.lastPrice>=mid;
- const bearish=body<=-0.20&&position<=0.28&&downCloses&&quote.lastPrice<=mid;
+ // A subsequent completed candle crossing the range is independently actionable
+ // as a PROVISIONAL directional hypothesis even if the opening 3 bars were mixed.
+ // Do not accept quote-only spikes: both completed close and fresh broker quote
+ // must be on the breakout side, with a candle body in the move direction.
+ const breakoutBuffer=Math.max(open*0.00005,range*0.03);
+ const bullBreakout=!!lastPost&&lastPost.close>high+breakoutBuffer&&
+  lastPost.close>lastPost.open&&quote.lastPrice>high&&quote.lastPrice>=mid;
+ const bearBreakout=!!lastPost&&lastPost.close<low-breakoutBuffer&&
+  lastPost.close<lastPost.open&&quote.lastPrice<low&&quote.lastPrice<=mid;
+ const openingBullish=body>=0.20&&position>=0.72&&upCloses&&quote.lastPrice>=mid;
+ const openingBearish=body<=-0.20&&position<=0.28&&downCloses&&quote.lastPrice<=mid;
+ const bullish=bullBreakout||(!bearBreakout&&openingBullish);
+ const bearish=bearBreakout||(!bullBreakout&&openingBearish);
  const direction=bullish?'CE':bearish?'PE':'WAIT';
+ const signalBasis=bullBreakout?'COMPLETED_5M_UPSIDE_RANGE_BREAKOUT':
+  bearBreakout?'COMPLETED_5M_DOWNSIDE_RANGE_BREAKOUT':
+  bullish?'OPENING_15M_BULLISH_BODY_AND_CLOSE_SEQUENCE':
+  bearish?'OPENING_15M_BEARISH_BODY_AND_CLOSE_SEQUENCE':null;
  const confirmedBreak=direction==='CE'?quote.lastPrice>high:
    direction==='PE'?quote.lastPrice<low:false;
  return {...snapshot,direction,status:direction==='WAIT'?'OPENING_RANGE_WAIT':'PROVISIONAL_OPENING_BIAS',
   openingRangeHigh:round(high),openingRangeLow:round(low),indexPriceAtCapture:quote.lastPrice,
   breakoutConfirmedByQuote:confirmedBreak,
+  breakoutConfirmedByCompletedCandle:bullBreakout||bearBreakout,signalBasis,
   evidence:[...snapshot.evidence,
    'Opening close position '+round(position*100)+'% of range',
    'Opening candle net body '+round(body*100)+'% of range',
    'Monotonic 5m closes '+(upCloses?'UP':downCloses?'DOWN':'MIXED'),
-   'Latest fresh broker index quote '+quote.lastPrice+' • quote-only breakout '+(confirmedBreak?'YES':'NO')],
-  reasons:direction==='WAIT'?['OPENING_RANGE_HAS_NO_CLEAR_DIRECTION']:[
+   'Latest fresh broker index quote '+quote.lastPrice+' • quote-only breakout '+(confirmedBreak?'YES':'NO'),
+   'Most recent completed post-opening candle '+(lastPost?.datetime??'NONE'),
+   'Completed 5-minute breakout '+(bullBreakout?'UP':bearBreakout?'DOWN':'NOT CONFIRMED'),
+   'Signal basis '+(signalBasis??'NO CONFIRMED DIRECTION')],
+  reasons:direction==='WAIT'?['OPENING_RANGE_HAS_NO_CLEAR_DIRECTION','POST_OPENING_5M_BREAKOUT_NOT_CONFIRMED']:[
    'EARLY_UNVALIDATED_15M_BIAS_NO_OPTION_TRADE','FULL_35_CANDLE_STRATEGY_NOT_QUALIFIED']
  };
 }

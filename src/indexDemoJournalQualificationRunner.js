@@ -61,6 +61,27 @@ const earlyPrediction=createDemoObservation({symbol:'NIFTY',asOf:earliest,
  underlyingKey:'NSE_INDEX|Nifty 50',openingRange,quote:{lastPrice:25085,timestamp:earliest-1000},
  signal:{direction:'CE',reasons:openingRange.reasons},session:{open:true}});
 assert.equal(earlyPrediction.direction,'CE','Must allow strict opening range signals without 35 candles');
+const breakoutAt=Date.parse('2026-10-09T09:35:16+05:30');
+const breakoutBase={...openingRange,
+ lastCompletedAt:new Date(Date.parse('2026-10-09T09:30:00+05:30')).toISOString(),
+ signalBasis:'COMPLETED_5M_UPSIDE_RANGE_BREAKOUT',breakoutConfirmedByCompletedCandle:true};
+const firstAfter=createDemoObservation({symbol:'NIFTY',asOf:breakoutAt,
+ session:{open:true},research:{valid:false,completedBars:4,reasons:['INSUFFICIENT_INTRADAY_CANDLES']},
+ openingRange:breakoutBase,quote:{lastPrice:25120,timestamp:breakoutAt-1000},
+ signal:{direction:'CE',reasons:['EARLY_UNVALIDATED_15M_BIAS_NO_OPTION_TRADE']}});
+const secondAt=Date.parse('2026-10-09T09:40:16+05:30');
+const secondAfter=createDemoObservation({symbol:'NIFTY',asOf:secondAt,
+ session:{open:true},research:{valid:false,completedBars:5,reasons:['INSUFFICIENT_INTRADAY_CANDLES']},
+ openingRange:{...breakoutBase,lastCompletedAt:new Date(Date.parse('2026-10-09T09:35:00+05:30')).toISOString()},
+ quote:{lastPrice:25150,timestamp:secondAt-1000},
+ signal:{direction:'CE',reasons:['EARLY_UNVALIDATED_15M_BIAS_NO_OPTION_TRADE']}});
+assert.equal(firstAfter.openingBreakoutByCompletedCandle,true);
+assert.equal(firstAfter.openingSignalBasis,'COMPLETED_5M_UPSIDE_RANGE_BREAKOUT');
+assert.notEqual(firstAfter.id,secondAfter.id,'New 5m breakout predictions must have unique immutable journal keys');
+const multi=mergeDemoObservation(mergeDemoObservation([],firstAfter),secondAfter);
+assert.equal(multi.length,2,'Journal must preserve 09:35 and 09:40 predictions independently');
+assert.equal(multi[0].recordedAt,firstAfter.recordedAt,'New snapshot must not overwrite the first forecast');
+
 assert.equal(earlyPrediction.predictionType,'EARLY_OPENING_RANGE_15M');
 assert.equal(earlyPrediction.atr14,null,'Never disguise 15-minute range as ATR');
 assert.equal(earlyPrediction.optionBuyEntry,null,'No early fake premium');

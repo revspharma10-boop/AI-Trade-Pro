@@ -36,6 +36,8 @@ export function createDemoObservation({symbol,asOf,underlyingKey=null,session=nu
   openingRangeHigh:openingValid?openingRange.openingRangeHigh:null,
   openingRangeLow:openingValid?openingRange.openingRangeLow:null,
   openingBreakoutByQuote:openingValid?openingRange.breakoutConfirmedByQuote:null,
+  openingBreakoutByCompletedCandle:openingValid?openingRange.breakoutConfirmedByCompletedCandle:null,
+  openingSignalBasis:openingValid?openingRange.signalBasis:null,
   openingEvidence:openingValid?openingRange.evidence:[],
   lastCompletedAt:finite(barMs)?new Date(barMs).toISOString():null,
   underlyingClose:positive(s?.close)?s.close:null,
@@ -134,6 +136,7 @@ export function demoSummary(records=[]){
 export function demoCsv(records=[]){
  const fields=['dateIST','symbol','recordedAt','status','direction','predictionType','openingOHLC.open','openingOHLC.high',
   'openingOHLC.low','openingOHLC.close','openingRangePoints','openingBreakoutByQuote',
+  'openingBreakoutByCompletedCandle','openingSignalBasis',
   'underlyingClose','indexQuote','ema9','ema21','rsi14','macdHistogram','atr14',
   'optionContract','optionStrike','optionExpiry','optionBuyEntry','optionStop','optionTarget1','optionTarget2','optionTarget3','theoreticalLots','approvedRealLots',
   'outcome.verdict','outcome.observedClose','outcome.signedDirectionalMove','review.summary','review.technical.status',
