@@ -14,7 +14,7 @@ assert.deepEqual(androidSelectionForTab('options'),{instrumentType:'INDEX',symbo
 assert.deepEqual(androidSelectionForTab('options',{instrumentType:'STOCK',symbol:'RELIANCE'}),
  {instrumentType:'STOCK',symbol:'RELIANCE'});
 assert.deepEqual(androidSelectionForTab('options',{instrumentType:'MCX',symbol:'SILVER'}),
- {instrumentType:'INDEX',symbol:'SILVER'});
+ {instrumentType:'MCX',symbol:'SILVER'});
 assert.deepEqual(androidSelectionForTab('options',{instrumentType:'STOCK',symbol:'BAD SYMBOL'}),
  {instrumentType:'STOCK',symbol:'RELIANCE'});
 assert.deepEqual(androidSelectionForTab('commodity'),{instrumentType:'MCX',symbol:'GOLD'});
