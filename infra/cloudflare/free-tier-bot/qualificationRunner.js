@@ -54,7 +54,7 @@ const predicted=directionFromSnapshot({
 assert.equal(predicted.direction,'BULLISH');
 assert.equal(predicted.referencePrice,102.85);
 assert.equal(predicted.reason,'OPENING_15M_BULLISH_BODY_AND_CLOSE_SEQUENCE');
-assert.ok(!predicted.evidence.includes('500'),'Later 09:45 future candle never enters earlier features');
+assert.ok(!predicted.evidence.includes('2026-10-09T09:45'),'Later 09:45 future candle never enters earlier features');
 assert.equal(directionFromSnapshot({snapshot:snapshot('nifty',time('09:25')),
  slot:s,now:time('09:31'),market:'nifty'}).direction,'ABSTAIN');
 assert.equal(directionFromSnapshot({snapshot:snapshot('sensex'),
@@ -102,8 +102,8 @@ class FakeD1{
     async first(){
      if(sql.includes('FROM verified_sessions'))return db.sessions.find(x=>
       x.market===args[0]&&x.session_date===args[1])??null;
-     if(sql.includes('FROM forecasts WHERE id=?'))return
-      db.forecasts.find(x=>x.id===args[0])??null;
+     if(sql.includes('FROM forecasts WHERE id=?'))
+      return db.forecasts.find(x=>x.id===args[0])??null;
      if(sql.includes('FROM forecasts f ')&&sql.includes('LEFT JOIN outcomes')){
       const row=db.forecasts.filter(x=>x.market===args[0]).sort((a,b)=>
        b.candle_end_utc.localeCompare(a.candle_end_utc))[0];
