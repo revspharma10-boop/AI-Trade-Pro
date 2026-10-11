@@ -1,0 +1,48 @@
+name: Phase 5 Directional Accuracy Evidence Qualification
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/phase5*'
+      - 'server/phase1ShadowForecastPipeline.js'
+      - 'server/phase1LocalJsonlLedger.js'
+      - 'server/phase1LocalPipelineQualificationRunner.js'
+      - 'docs/AI_TRADE_PRO_2_PHASE5_ACCURACY_EVALUATION.md'
+      - '.github/workflows/phase5-accuracy-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-accuracy-integrity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked existing dependencies
+        run: npm ci
+      - name: Check audit and offline candidate syntax
+        run: |
+          node --check server/phase5DirectionalAccuracyAudit.js
+          node --check server/phase5SelectiveResearchCandidate.js
+          node --check server/phase5DirectionalAccuracyAuditQualificationRunner.js
+          node --check server/phase5AccuracyReportCli.js
+      - name: Test immutable 5-minute accuracy accounting and no-lookahead splits
+        run: node server/phase5DirectionalAccuracyAuditQualificationRunner.js
+      - name: Retain Phase 1 ledger, clock, paper-only and web safeguards
+        run: |
+          node server/phase1LocalPipelineQualificationRunner.js
+          node server/paperRecommendationFeedQualificationRunner.js
+          node src/phase0ArchitectureAuditQualificationRunner.js
+          node src/openingRangeQualificationRunner.js
+          node src/webRecommendationUIQualificationRunner.js
+      - name: Confirm experiments have no live backend or web imports
+        run: |
+          ! grep -q 'phase5DirectionalAccuracyAudit\|phase5SelectiveResearchCandidate\|phase5AccuracyReportCli' server/upstoxOAuthCallbackServer.js
+          ! grep -q 'phase5DirectionalAccuracyAudit\|phase5SelectiveResearchCandidate\|phase5AccuracyReportCli' src/androidBottomNavigation.js
+          test -s docs/AI_TRADE_PRO_2_PHASE5_ACCURACY_EVALUATION.md
+      - name: Ensure existing web build still succeeds
+        run: npm run build
