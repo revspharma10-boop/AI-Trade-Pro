@@ -4,6 +4,7 @@
 // No USD price conversion, charts, user input, private API or orders.
 export const BTC_INR_SOURCE='COINDCX_PUBLIC_SPOT';
 export const BTC_INR_INDICATIVE_SOURCE='COINGECKO_PUBLIC_INR';
+export const BTC_INR_PAPRIKA_SOURCE='COINPAPRIKA_PUBLIC_INR';
 const SOURCE_MAX_AGE_MS=120000,COINDCX_MAX_AGE_MS=90000;
 const FUTURE_GRACE_MS=15000,MIN_POLL_MS=15000;
 const safe=Object.freeze({paperOnly:true,orderSubmissionAllowed:false,
@@ -30,7 +31,14 @@ export function parseCoinDcxBtcInrTicker(payload,now=Date.now()){
   return unavailable(now,'BTC_INR_TICKER_INVALID');
  const selected=payload.filter(x=>x?.market==='BTCINR');
  if(selected.length!==1)return unavailable(now,'BTC_INR_PAIR_MISSING_OR_DUPLICATED');
- const tick=selected[0],last=number(tick.last_price),timestamp=tick.timestamp;
+ const tick=selected[0],last=number(tick.last_price),rawTimestamp=tick.timestamp;
+ // CoinDCX returns Unix seconds in the public exchange ticker. Previously
+ // this was compared with Date.now() in milliseconds, falsely aging valid
+ // BTC/INR trades by ~55 years. Support both known epoch units, not guesses.
+ const timestamp=Number.isSafeInteger(rawTimestamp)&&rawTimestamp>=1e9&&
+  rawTimestamp<1e10?rawTimestamp*1000:
+  Number.isSafeInteger(rawTimestamp)&&rawTimestamp>=1e12&&
+  rawTimestamp<1e13?rawTimestamp:NaN;
  if(!reasonable(last)||!Number.isSafeInteger(timestamp)||timestamp<=0)
   return unavailable(now,'BTC_INR_TICKER_INVALID');
  if(!fresh(timestamp,now,COINDCX_MAX_AGE_MS))
@@ -51,10 +59,37 @@ export function parseCoinGeckoBtcInrPrice(payload,now=Date.now()){
  return quote(now,price,timestamp,BTC_INR_INDICATIVE_SOURCE,
   'INDICATIVE_MARKET_PRICE');
 }
+export function parseCoinPaprikaBtcInrPrice(payload,now=Date.now()){
+ if(!Number.isSafeInteger(now)||now<0)throw Error('BTC_INR_CLOCK_INVALID');
+ if(!payload||typeof payload!=='object'||Array.isArray(payload)||
+  payload.id!=='btc-bitcoin'||payload.symbol!=='BTC'||
+  !payload.quotes||typeof payload.quotes!=='object'||
+  !payload.quotes.INR||typeof payload.quotes.INR!=='object')
+  return unavailable(now,'BTC_INR_PAPRIKA_INVALID');
+ const inr=number(payload.quotes.INR.price);
+ const sourceText=payload.last_updated;
+ if(typeof sourceText!=='string'||!/^\d{4}-\d{2}-\d{2}T/.test(sourceText))
+  return unavailable(now,'BTC_INR_PAPRIKA_TIMESTAMP_INVALID');
+ const timestamp=Date.parse(sourceText);
+ if(!reasonable(inr)||!Number.isSafeInteger(timestamp))
+  return unavailable(now,'BTC_INR_PAPRIKA_INVALID');
+ if(!fresh(timestamp,now,SOURCE_MAX_AGE_MS))
+  return unavailable(now,'BTC_INR_PAPRIKA_TIMESTAMP_STALE');
+ return quote(now,inr,timestamp,BTC_INR_PAPRIKA_SOURCE,
+  'INDICATIVE_MARKET_PRICE');
+}
+export async function fetchPublicCoinPaprikaBtcInr(){
+ const response=await fetch('https://api.coinpaprika.com/v1/tickers/btc-bitcoin?quotes=INR',{
+  method:'GET',headers:{Accept:'application/json'},
+  signal:AbortSignal.timeout(5000)
+ });
+ if(!response.ok)throw Error('BTC_INR_PAPRIKA_PROVIDER_UNAVAILABLE');
+ return response.json();
+}
 export async function fetchPublicCoinDcxBtcInrTicker(){
  const response=await fetch('https://api.coindcx.com/exchange/ticker',{
   method:'GET',headers:{Accept:'application/json'},
-  signal:AbortSignal.timeout(7500)
+  signal:AbortSignal.timeout(5000)
  });
  if(!response.ok)throw Error('BTC_INR_PROVIDER_UNAVAILABLE');
  return response.json();
@@ -62,16 +97,16 @@ export async function fetchPublicCoinDcxBtcInrTicker(){
 export async function fetchPublicCoinGeckoBtcInr(){
  const response=await fetch(
   'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=inr&include_last_updated_at=true',
-  {method:'GET',headers:{Accept:'application/json'},signal:AbortSignal.timeout(7500)}
+  {method:'GET',headers:{Accept:'application/json'},signal:AbortSignal.timeout(5000)}
  );
  if(!response.ok)throw Error('BTC_INR_INDICATIVE_PROVIDER_UNAVAILABLE');
  return response.json();
 }
 export function createBtcInrLivePriceFeed({
- fetchTicker,fetchIndicative,clock=()=>Date.now()
+ fetchTicker,fetchIndicative,fetchPaprika,clock=()=>Date.now()
 }={}){
  if(typeof fetchTicker!=='function'||typeof fetchIndicative!=='function'||
-  typeof clock!=='function')throw Error('BTC_INR_DEPENDENCIES_REQUIRED');
+  typeof fetchPaprika!=='function'||typeof clock!=='function')throw Error('BTC_INR_DEPENDENCIES_REQUIRED');
  let cached=null,pending=null;
  async function getLatest(){
   const now=clock();
@@ -87,16 +122,19 @@ export function createBtcInrLivePriceFeed({
   if(pending)return pending;
   pending=(async()=>{
    // Independent source failures are isolated. No stale source is promoted.
-   const [direct,indicative]=await Promise.allSettled([
-    fetchTicker(),fetchIndicative()
+   const [direct,indicative,paprika]=await Promise.allSettled([
+    fetchTicker(),fetchIndicative(),fetchPaprika()
    ]);
    const checkedAt=clock();
    const directQuote=direct.status==='fulfilled'?
     parseCoinDcxBtcInrTicker(direct.value,checkedAt):null;
    const indicativeQuote=indicative.status==='fulfilled'?
     parseCoinGeckoBtcInrPrice(indicative.value,checkedAt):null;
+   const paprikaQuote=paprika.status==='fulfilled'?
+    parseCoinPaprikaBtcInrPrice(paprika.value,checkedAt):null;
    const out=directQuote?.state==='LIVE_PRICE'?directQuote:
     indicativeQuote?.state==='LIVE_PRICE'?indicativeQuote:
+    paprikaQuote?.state==='LIVE_PRICE'?paprikaQuote:
     unavailable(checkedAt,'BTC_INR_LIVE_SOURCES_UNAVAILABLE_OR_STALE');
    cached={checkedAt:clock(),response:out};
    return out;
