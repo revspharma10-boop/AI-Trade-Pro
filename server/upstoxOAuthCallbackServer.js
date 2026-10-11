@@ -5,6 +5,8 @@ import { exchangeUpstoxAuthorizationCode } from '../src/upstox/upstoxOAuth.js';
 import {readOnlyCorsHeaders} from './readOnlyCorsPolicy.js';
 import {createPaperRecommendationFeed,RECOMMENDATION_MARKETS} from './paperRecommendationFeed.js';
 import {createCryptoPaperResearchFeed,fetchKrakenBtcUsdOhlc} from './cryptoPaperResearch.js';
+import {createBtcInrLivePriceFeed,fetchPublicCoinDcxBtcInrTicker}
+ from './btcInrLivePrice.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const CLIENT_ID = process.env.UPSTOX_CLIENT_ID || '';
@@ -489,9 +491,17 @@ const latestPaperRecommendations=createPaperRecommendationFeed({
 });
 
 const cryptoResearch=createCryptoPaperResearchFeed({fetchOhlc:fetchKrakenBtcUsdOhlc});
+const btcInrLivePrice=createBtcInrLivePriceFeed({
+ fetchTicker:fetchPublicCoinDcxBtcInrTicker
+});
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'https://oauth.invalid');
+    if (url.pathname === '/api/crypto-price/inr/latest' && req.method === 'GET') {
+      // Spot last-traded BTC/INR price, not a bid, ask, conversion or order.
+      // No client-supplied symbol or signed/private CoinDCX endpoint.
+      return json(res,200,await btcInrLivePrice.getLatest());
+    }
     if (url.pathname === '/api/crypto-research/latest' && req.method === 'GET') {
       // No client-supplied pair, instrument, exchange or order payload.
       // Upstox credentials are never involved with public Kraken research.
