@@ -34,6 +34,7 @@ jobs:
           node src/webRecommendationUIQualificationRunner.js
           node src/androidBottomNavigationQualificationRunner.js
           node server/paperRecommendationFeedQualificationRunner.js
+          node server/cryptoPaperResearchQualificationRunner.js
           node server/recommendationWaitDiagnosticsQualificationRunner.js
           node server/readOnlyCorsPolicyQualificationRunner.js
       - run: npm run build
