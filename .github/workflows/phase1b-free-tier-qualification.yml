@@ -26,6 +26,8 @@ jobs:
           node --check infra/cloudflare/free-tier-bot/qualificationRunner.js
       - name: Qualify synthetic market replay and D1 event rules
         run: node infra/cloudflare/free-tier-bot/qualificationRunner.js
+      - name: Validate D1 SQL schema constraints and immutable records
+        run: python3 infra/cloudflare/free-tier-bot/schemaQualificationRunner.py
       - name: Retain phase 0 and 1A paper-only gates
         run: |
           node server/phase1LocalPipelineQualificationRunner.js
