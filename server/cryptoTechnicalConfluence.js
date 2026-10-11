@@ -13,6 +13,12 @@ function ema(values,n){
  for(let i=n;i<values.length;i++)value=values[i]*k+value*(1-k);
  return value;
 }
+function emaAny(values,n){
+ if(values.length<n||values.some(x=>typeof x!=='number'||!Number.isFinite(x)))return null;
+ let v=mean(values.slice(0,n)),k=2/(n+1);
+ for(let i=n;i<values.length;i++)v=values[i]*k+v*(1-k);
+ return v;
+}
 function emaSeries(values,n){
  if(values.length<n)return [];
  let v=mean(values.slice(0,n)),out=[v],k=2/(n+1);
@@ -82,7 +88,7 @@ export function evaluateBtcTechnicalConfluence({candles=[],asOf=Date.now()}={}){
  const ema12=emaSeries(closes,12),ema26=emaSeries(closes,26);
  // Both EMA streams are aligned at the original candle index.
  const macd=ema12.slice(14).map((value,i)=>value-ema26[i]);
- const macdSignal=ema(macd.map(x=>x+1000000),9)-1000000;
+ const macdSignal=emaAny(macd,9);
  const histogram=macd.at(-1)-macdSignal;
  const hourCloses=completedHours(bars).map(x=>x.close);
  if(hourCloses.length<21)return no('CRYPTO_HOURLY_HISTORY_INSUFFICIENT');
