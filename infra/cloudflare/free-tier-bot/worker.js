@@ -22,8 +22,8 @@ const time=value=>{
  return typeof value==='string'?Date.parse(value):NaN;
 };
 const dateBar=a=>Array.isArray(a)?{
- datetime:String(a[0]??''),open:Number(a[1]),high:Number(a[2]),
- low:Number(a[3]),close:Number(a[4]),volume:Number(a[5])
+ datetime:String(a[0]??''),open:a[1],high:a[2],
+ low:a[3],close:a[4],volume:a[5]
 }:null;
 const validCandle=c=>c&&valid(Date.parse(c.datetime))&&
  [c.open,c.high,c.low,c.close,c.volume].every(valid)&&c.low>0&&
@@ -122,7 +122,9 @@ export async function brokerSnapshot({market,spec,env,now,fetchFn=fetch}){
  if(!barResp.ok||!quoteResp.ok)throw Error('BROKER_SOURCE_UNAVAILABLE');
  const [bars,quotes]=await Promise.all([barResp.json(),quoteResp.json()]);
  const rawBars=bars?.data?.candles;
- if(!Array.isArray(rawBars)||rawBars.length>120)throw Error('BROKER_CANDLES_UNAVAILABLE');
+ if(bars?.status!=='success'||quotes?.status!=='success'||
+    !Array.isArray(rawBars)||rawBars.length>120)
+  throw Error('BROKER_CANDLES_OR_QUOTES_UNAVAILABLE');
  const match=Object.values(quotes?.data??{}).find(q=>q?.instrument_token===key);
  if(!match)throw Error('BROKER_INDEX_QUOTE_UNAVAILABLE');
  const lastPrice=Number(match.last_price),timestamp=time(match.timestamp);
@@ -173,10 +175,23 @@ export async function runFreeResearch({env,market,now=Date.now(),fetchFn=fetch}=
   orderSubmissionAllowed:false,realOrderPlaced:false};
 }
 export async function settlePending({env,market,now=Date.now(),fetchFn=fetch}={}){
- // Results are independent of new forecasts; missing settlement is NOT a loss.
+ // Settlement is independently scheduled, including after the final permitted
+ // new-forecast slot. Never evaluate a previous day's forecast with today's
+ // candles or treat missing broker data as a loss.
+ const spec=MARKET[market];
+ if(!spec||!valid(now)||!env?.DB)return {checked:0,recorded:0};
+ const minute=minutes(now),official=await marketRow(env,market,now);
+ if(!official||official.market!==market||official.exchange!==spec.exchange||
+    official.session_date!==day(now)||official.verified!==1||
+    official.closed!==0||official.open_minute_ist!==555||
+    !Number.isInteger(official.close_minute_ist)||
+    official.close_minute_ist<600||official.close_minute_ist>930||
+    typeof official.source_id!=='string'||
+    !/^[A-Z0-9_-]{5,90}$/.test(official.source_id)||
+    minute<570||minute>official.close_minute_ist+5)
+  return {checked:0,recorded:0};
  const pending=(await getPending(env,market,now))?.results??[];
  if(!pending.length)return {checked:0,recorded:0};
- const spec=MARKET[market];if(!spec)return {checked:0,recorded:0};
  let snapshot=null;
  try{snapshot=await brokerSnapshot({market,spec,env,now,fetchFn});}
  catch(_e){/* Do not invent market outcomes. */}
@@ -211,13 +226,21 @@ export async function runCron({env,now=Date.now(),fetchFn=fetch}={}){
  const results=[];
  for(const market of Object.keys(MARKET)){
   const recording=await runFreeResearch({env,market,now,fetchFn});
-  let settlement={checked:0,recorded:0};
-  if(recording.status!=='SKIP'){
-   settlement=await settlePending({env,market,now,fetchFn});
-  }
+  // Settlements must run even after the 15:15 new-forecast cutoff, when
+  // runFreeResearch returns SKIP. Verified calendar still gates both paths.
+  const settlement=await settlePending({env,market,now,fetchFn});
   results.push({market,recording,settlement});
  }
  return results;
+}
+export function presentPublicShadowLatest(latest,now=Date.now()){
+ if(!latest)return {latest:null,freshness:'NO_FORECAST'};
+ const horizon=Date.parse(latest.horizon_end_utc??'');
+ const captured=Date.parse(latest.captured_at_utc??'');
+ const age=now-captured;
+ const fresh=valid(now)&&valid(horizon)&&valid(captured)&&
+  age>=0&&age<=FIVE&&now<horizon&&day(now)===day(captured);
+ return {latest,freshness:fresh?'CURRENT':'EXPIRED'};
 }
 export default {
  async scheduled(controller,env,ctx){
@@ -245,7 +268,7 @@ export default {
     'LEFT JOIN outcomes o ON o.forecast_id=f.id WHERE f.market=? '+
     'ORDER BY f.candle_end_utc DESC LIMIT 1'
    ).bind(market).first();
-   return respond({market,latest:latest??null,...SAFETY},200,origin);
+   return respond({market,...presentPublicShadowLatest(latest),...SAFETY},200,origin);
   }catch(_e){return respond({market,latest:null,reason:'DATA_UNAVAILABLE',
    ...SAFETY},503,origin);}
  }

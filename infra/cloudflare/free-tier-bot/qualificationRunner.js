@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import bot,{digest,dueSlot,directionFromSnapshot,brokerSnapshot,
- runFreeResearch,settlePending,runCron} from './worker.js';
+ runFreeResearch,settlePending,runCron,presentPublicShadowLatest} from './worker.js';
 
 const time=hhmm=>Date.parse('2026-10-09T'+hhmm+':00+05:30');
 const fmt=hhmm=>'2026-10-09T'+hhmm+':00+05:30';
@@ -72,11 +72,11 @@ const mockFetch=async(url,options)=>{
  assert.ok(!url.includes(secret),'Authorization must be sent only in request header');
  if(url.includes('/historical-candle/intraday/')){
   assert.ok(url.includes(encodeURIComponent(key)));
-  return {ok:true,json:async()=>({data:{candles}})};
+  return {ok:true,json:async()=>({status:'success',data:{candles}})};
  }
  if(url.includes('/market-quote/quotes?')){
   assert.ok(url.includes(encodeURIComponent(key)));
-  return {ok:true,json:async()=>({data:{
+  return {ok:true,json:async()=>({status:'success',data:{
    [key]:{instrument_token:key,last_price:102.85,
     timestamp:new Date(time('09:31')).toISOString()}
   }})};
@@ -164,6 +164,12 @@ const env={DB:db,NIFTY_INDEX_KEY:key,SENSEX_INDEX_KEY:'BSE_INDEX|Synthetic Sense
 const first=await runFreeResearch({env,market:'nifty',
  now:time('09:31'),fetchFn:mockFetch});
 assert.equal(first.status,'RECORDED');assert.equal(first.direction,'BULLISH');
+const persisted=db.forecasts[0];
+assert.equal(presentPublicShadowLatest(persisted,time('09:31')).freshness,'CURRENT',
+ 'An active forecast may be marked current only before its frozen horizon');
+assert.equal(presentPublicShadowLatest(persisted,time('09:35')).freshness,'EXPIRED',
+ 'The same forecast cannot remain current after its observation horizon');
+assert.equal(presentPublicShadowLatest(null,time('09:31')).freshness,'NO_FORECAST');
 assert.equal(db.forecasts.length,1);
 assert.equal(db.forecasts[0].paper_only,undefined,
  'Synthetic in-memory SQL simulator stores explicit bind variables only');
@@ -190,6 +196,8 @@ assert.equal(publicView.headers.get('access-control-allow-origin'),
 const publicData=await publicView.json();
 assert.equal(publicData.latest.direction,'BULLISH');
 assert.equal(publicData.latest.outcome,'INCORRECT');
+assert.equal(publicData.freshness,'EXPIRED',
+ 'Old saved forecasts must never appear as current live predictions');
 assert.equal(publicData.orderSubmissionAllowed,false);
 assert.ok(!JSON.stringify(publicData).includes(secret));
 assert.ok(!JSON.stringify(publicData).includes(key),
@@ -212,6 +220,70 @@ const noData=await runFreeResearch({env:noToken,market:'nifty',
 assert.equal(noData.direction,'ABSTAIN');
 assert.equal(noToken.DB.forecasts[0].reference_price,null);
 assert.equal(noToken.DB.forecasts[0].reason_code,'PROVIDER_SOURCE_UNAVAILABLE');
+
+// Closing-window outcomes must still be evaluated after new signal generation
+// stops at 15:15 IST, and must only use the matching verified index candle.
+const closingId=await digest('forecast|nifty|or15-shadow-v1|'+
+ new Date(time('15:10')).toISOString());
+db.forecasts.push({id:closingId,market:'nifty',exchange:'NSE',
+ strategy_version:'or15-shadow-v1',candle_end_utc:new Date(time('15:10')).toISOString(),
+ captured_at_utc:new Date(time('15:11')).toISOString(),
+ horizon_end_utc:new Date(time('15:15')).toISOString(),
+ underlying_instrument_key:key,reference_price:103.2,
+ direction:'BULLISH',data_quality:'VERIFIED',reason_code:'SYNTHETIC_TEST'});
+const closingFetch=async(url,opts)=>{
+ assert.ok(opts.headers.Authorization.startsWith('Bearer '));
+ if(url.includes('/historical-candle/intraday/'))
+  return {ok:true,json:async()=>({status:'success',data:{candles:[
+   b('15:10',103.2,103.8,103.1,103.7)
+  ]}})};
+ return {ok:true,json:async()=>({status:'success',data:{
+  [key]:{instrument_token:key,last_price:103.7,
+   timestamp:new Date(time('15:16')).toISOString()}
+ }})};
+};
+const closing=await runCron({env,now:time('15:16'),fetchFn:closingFetch});
+assert.equal(closing[0].recording.status,'SKIP',
+ 'New paper forecasts cannot be generated after the exchange cutoff');
+assert.equal(closing[0].settlement.recorded,1,
+ 'Outstanding existing forecast must still settle during the closing window');
+assert.equal(db.outcomes.find(o=>o.forecast_id===closingId).outcome,'CORRECT');
+assert.equal((await runCron({env,now:time('15:17'),fetchFn:closingFetch}))
+ [0].settlement.recorded,0,'Closed-window settlement must be idempotent');
+const closedDb=new FakeD1();
+closedDb.forecasts.push({...db.forecasts.find(x=>x.id===closingId)});
+closedDb.sessions[0]={...closedDb.sessions[0],closed:1};
+const holidayRun=await runCron({env:{...env,DB:closedDb},now:time('15:16'),
+ fetchFn:async()=>{throw Error('NO_BROKER_CALL_ON_HOLIDAY');}});
+assert.equal(holidayRun[0].settlement.recorded,0,
+ 'Holiday and unverified calendars must not trigger exchange settlement');
+assert.equal(closedDb.outcomes.length,0);
+
+// Provider data contract explicitly requires Upstox success, not just HTTP 200.
+// Reject missing numeric volume instead of silently treating null as zero.
+const invalidStatusFetch=async(url,opts)=>({
+ ok:true,json:async()=>url.includes('historical-candle')?
+  {status:'error',data:{candles}}:
+  {status:'success',data:{[key]:{instrument_token:key,last_price:102.85,
+   timestamp:new Date(time('09:31')).toISOString()}}}
+});
+await assert.rejects(brokerSnapshot({market:'nifty',spec:s.spec,
+ env,now:time('09:31'),fetchFn:invalidStatusFetch}),
+ /BROKER_CANDLES_OR_QUOTES_UNAVAILABLE/);
+const invalidVolumeFetch=async(url,opts)=>({
+ ok:true,json:async()=>url.includes('historical-candle')?
+  {status:'success',data:{candles:[
+   b('09:15',100,100.9,99.2,100.5).map((x,i)=>i===5?null:x),
+   ...candles.slice(1)
+  ]}}:
+  {status:'success',data:{[key]:{instrument_token:key,last_price:102.85,
+   timestamp:new Date(time('09:31')).toISOString()}}}
+});
+const invalidVolume=await brokerSnapshot({market:'nifty',spec:s.spec,
+ env,now:time('09:31'),fetchFn:invalidVolumeFetch});
+assert.equal(directionFromSnapshot({snapshot:invalidVolume,slot:s,
+ now:time('09:31'),market:'nifty'}).direction,'ABSTAIN',
+ 'Null volume is missing data, not a fabricated zero-volume candle');
 
 // Cron outside trading time must not attempt upstream calls.
 const beforeCount=db.forecasts.length;
