@@ -180,7 +180,7 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
    targets:[levels.target1,levels.target2,levels.target3]
   }:null,
   tag:active?'PAPER BUY':previous?'PAST PAPER IDEA':'WAIT',
-  contract:selectedTab==='crypto'?'BTC/INR · LAST TRADED PRICE':
+  contract:selectedTab==='crypto'?'BTC/INR · MARKET PRICE':
    (active||previous)?last.contract:hasCandidate?
    candidate.tradingSymbol:stage&&NOT_CHECKED_STAGES.has(stage)?
     'OPTION CONTRACT NOT CHECKED':'NO VERIFIED OPTION CONTRACT',
@@ -209,32 +209,36 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
 }
 export function safeBtcInrLivePrice(data,asOf=Date.now()){
  const unavailable={live:false,price:'₹ —',status:'INR price unavailable',
-  detail:'CoinDCX • checking BTC/INR last-traded price'};
+  detail:'Checking fresh BTC/INR price sources'};
  const validTimestamp=t=>typeof t==='string'&&
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(t)&&
   Number.isFinite(Date.parse(t));
+ const direct=data?.provider==='COINDCX_PUBLIC_SPOT'&&
+  data?.quoteType==='SPOT_LAST_TRADE';
+ const indicative=data?.provider==='COINGECKO_PUBLIC_INR'&&
+  data?.quoteType==='INDICATIVE_MARKET_PRICE';
  if(!data||data.tab!=='crypto'||data.symbol!=='BTC/INR'||
-  data.currency!=='INR'||data.provider!=='COINDCX_PUBLIC_SPOT'||
-  data.quoteType!=='SPOT_LAST_TRADE'||data.state!=='LIVE_LAST_TRADE'||
+  data.currency!=='INR'||!(direct||indicative)||
+  data.state!=='LIVE_PRICE'||
   data.paperOnly!==true||data.orderSubmissionAllowed!==false||
   data.realOrderPlaced!==false||data.productionRealTradingEnabled!==false||
-  typeof data.lastTradeInr!=='number'||!Number.isFinite(data.lastTradeInr)||
-  data.lastTradeInr<100000||data.lastTradeInr>1e9||
-  !validTimestamp(data.lastTradeAtUtc)||!validTimestamp(data.checkedAtUtc)||
+  typeof data.priceInr!=='number'||!Number.isFinite(data.priceInr)||
+  data.priceInr<100000||data.priceInr>1e9||
+  !validTimestamp(data.priceAtUtc)||!validTimestamp(data.checkedAtUtc)||
   !Number.isFinite(asOf))
   return unavailable;
- const tradeAt=Date.parse(data.lastTradeAtUtc);
+ const sourceAt=Date.parse(data.priceAtUtc);
  const checkedAt=Date.parse(data.checkedAtUtc);
- if(tradeAt>asOf+15000||checkedAt>asOf+15000||
-  asOf-tradeAt>90000||asOf-checkedAt>90000||
-  checkedAt<tradeAt-15000)
+ if(sourceAt>asOf+15000||checkedAt>asOf+15000||
+  asOf-sourceAt>(direct?90000:120000)||asOf-checkedAt>90000||
+  checkedAt<sourceAt-15000)
   return unavailable;
  return {live:true,
-  price:'₹'+data.lastTradeInr.toLocaleString('en-IN',{
+  price:'₹'+data.priceInr.toLocaleString('en-IN',{
    minimumFractionDigits:2,maximumFractionDigits:2}),
-  status:'Latest verified BTC/INR trade',
-  detail:'CoinDCX spot • last trade '+
-   new Date(tradeAt).toLocaleTimeString('en-IN',{
+  status:direct?'Fresh BTC/INR last trade':'Recent BTC/INR indicative price',
+  detail:(direct?'CoinDCX spot • last trade ':'CoinGecko • indicative update ')+
+   new Date(sourceAt).toLocaleTimeString('en-IN',{
     timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'
    })+' IST • refresh ~30s while visible'};
 }
@@ -269,14 +273,14 @@ export function mountAndroidBottomNavigation(){
  const inrQuote=make('section','android-simple-inr-quote');
  inrQuote.hidden=true;
  inrQuote.setAttribute('aria-label','Live Bitcoin spot price in Indian rupees');
- const inrLabel=make('span','android-simple-inr-kicker','BTC / INR · LAST TRADE');
+ const inrLabel=make('span','android-simple-inr-kicker','BTC / INR · RECENT PRICE');
  const inrAmount=make('strong','android-simple-inr-amount','₹ —');
  const inrStatus=make('span','android-simple-inr-status','INR price unavailable');
  const inrSource=make('span','android-simple-inr-source',
-  'CoinDCX • checking BTC/INR last-traded price');
+  'Checking fresh BTC/INR price sources');
  inrQuote.append(inrLabel,inrAmount,inrStatus,inrSource,
   make('p','android-simple-inr-note',
-   'Spot exchange last trade • not a guaranteed executable buy or sell quote.'));
+   'Last trade or indicative reference • not an executable buy/sell quote.'));
  const chips=make('div','android-simple-chips');
  const action=make('span','android-simple-action is-wait','WAIT');
  const contract=make('strong','android-simple-contract','NO VERIFIED OPTION CONTRACT');
@@ -478,7 +482,7 @@ export function mountAndroidBottomNavigation(){
   heading.querySelector('.android-simple-kicker').textContent=cryptoTab?
    '24/7 CRYPTO DIRECTION':'LAST RECOMMENDATION';
   title.textContent=cryptoTab?'Live Bitcoin Price':'Last Recommendation';
-  subtitle.textContent=cryptoTab?'BTC/INR • exchange last trade • no chart':
+  subtitle.textContent=cryptoTab?'BTC/INR • fresh price in ₹ • no chart':
    'Verified paper results only';
   facts.hidden=cryptoTab;details.hidden=cryptoTab;
   connect.hidden=cryptoTab;
