@@ -2,6 +2,12 @@ name: BTC Spot Shadow Journal - Free Schedule
 # Schedules are best effort: GitHub can delay/drop runs. Never reconstruct
 # an entry after the prediction horizon or treat these slots as guaranteed.
 on:
+  # One-time first-run proof on initial main-branch deployment. Subsequent
+  # edits to this workflow also qualify the worker, never trading.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/crypto-shadow-free-schedule.yml'
   schedule:
     # 1 minute into each 5m UTC slot avoids the busiest minute zero.
     - cron: '1-56/5 * * * *'
