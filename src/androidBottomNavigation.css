@@ -219,3 +219,23 @@ body.android-minimal-shell.web-recommendation-shell .android-simple-nav{
   box-shadow:0 12px 44px #123b3d24;
  }
 }
+
+/* Accessible manual read-only refresh; no trading or order action. */
+body.android-minimal-shell .android-simple-manual-refresh{
+ appearance:none;border:1px solid #baded7;background:#e6f6f1;
+ color:#086f63;border-radius:9px;padding:9px 12px;
+ font:inherit;font-size:12px;font-weight:800;cursor:pointer;
+ white-space:nowrap;
+}
+body.android-minimal-shell .android-simple-manual-refresh:focus-visible{
+ outline:2px solid #087d72;outline-offset:3px;
+}
+body.android-minimal-shell .android-simple-manual-refresh:disabled{
+ opacity:.55;cursor:progress;
+}
+body.android-minimal-shell .android-simple-footer{
+ flex-wrap:wrap;align-items:center;
+}
+body.android-minimal-shell .android-simple-footer p{
+ max-width:100%;flex-basis:100%;
+}
