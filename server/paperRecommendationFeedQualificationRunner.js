@@ -51,6 +51,21 @@ assert.equal(view.state,'PAPER_SETUP');
 assert.equal(view.orderSubmissionAllowed,false);
 assert.equal(view.realOrderPlaced,false);
 assert.equal(view.last.executionStatus,'NOT EXECUTED');
+for(const checkedAt of [null,'bad-time',
+ new Date(asOf-7*60000).toISOString(),
+ new Date(asOf+11000).toISOString(),
+ new Date(asOf-11000).toISOString()]){
+ const unsafe=presentRecommendation({tab:'nifty',last:qualified,
+  result:{state:'PAPER_SETUP',checkedAt},asOf});
+ assert.notEqual(unsafe.state,'PAPER_SETUP',
+  'Backend must not claim a current setup with unverified or contradictory research time');
+ assert.equal(unsafe.last.executionStatus,'NOT EXECUTED');
+ assert.equal(unsafe.orderSubmissionAllowed,false);
+}
+const freshFrozen=presentRecommendation({tab:'nifty',last:qualified,
+ result:{state:'PAPER_SETUP',checkedAt:new Date(asOf).toISOString()},asOf:asOf+30000});
+assert.equal(freshFrozen.state,'PAPER_SETUP',
+ 'Frozen 5-minute paper idea remains current within its original time slot');
 const later=presentRecommendation({tab:'nifty',last:qualified,
  result:{state:'WAIT',message:'No new setup'},asOf:asOf+6*60000});
 assert.equal(later.state,'PAST_PAPER_IDEA');
