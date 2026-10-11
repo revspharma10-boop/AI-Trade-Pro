@@ -209,13 +209,14 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
 }
 export function safeBtcInrLivePrice(data,asOf=Date.now()){
  const unavailable={live:false,price:'₹ —',status:'INR price unavailable',
-  detail:'Checking fresh BTC/INR price sources'};
+  detail:'No verified fresh INR price yet • retrying; tap Refresh now'};
  const validTimestamp=t=>typeof t==='string'&&
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(t)&&
   Number.isFinite(Date.parse(t));
  const direct=data?.provider==='COINDCX_PUBLIC_SPOT'&&
   data?.quoteType==='SPOT_LAST_TRADE';
- const indicative=data?.provider==='COINGECKO_PUBLIC_INR'&&
+ const indicative=(data?.provider==='COINGECKO_PUBLIC_INR'||
+  data?.provider==='COINPAPRIKA_PUBLIC_INR')&&
   data?.quoteType==='INDICATIVE_MARKET_PRICE';
  if(!data||data.tab!=='crypto'||data.symbol!=='BTC/INR'||
   data.currency!=='INR'||!(direct||indicative)||
@@ -237,7 +238,9 @@ export function safeBtcInrLivePrice(data,asOf=Date.now()){
   price:'₹'+data.priceInr.toLocaleString('en-IN',{
    minimumFractionDigits:2,maximumFractionDigits:2}),
   status:direct?'Fresh BTC/INR last trade':'Recent BTC/INR indicative price',
-  detail:(direct?'CoinDCX spot • last trade ':'CoinGecko • indicative update ')+
+  detail:(direct?'CoinDCX spot • last trade ':
+   data.provider==='COINPAPRIKA_PUBLIC_INR'?
+    'CoinPaprika • indicative update ':'CoinGecko • indicative update ')+
    new Date(sourceAt).toLocaleTimeString('en-IN',{
     timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'
    })+' IST • refresh ~30s while visible'};
@@ -383,7 +386,7 @@ export function mountAndroidBottomNavigation(){
   try{
    const r=await fetch(API+'/api/crypto-price/inr/latest',{
     method:'GET',headers:{Accept:'application/json'},cache:'no-store',
-    signal:AbortSignal.timeout(10000)
+    signal:AbortSignal.timeout(15000)
    });
    if(!r.ok)throw Error('BTC_INR_UNAVAILABLE');
    displayBtcInrPrice(await r.json(),version);
