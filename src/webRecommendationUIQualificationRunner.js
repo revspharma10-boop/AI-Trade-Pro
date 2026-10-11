@@ -30,9 +30,13 @@ assert.match(androidWorkflow,/on:\s*\n\s*workflow_dispatch:/,
 assert.doesNotMatch(androidWorkflow,/\n  pull_request:|\n  push:/,
  'Do not launch Android APK builds during ordinary web changes');
 assert.deepEqual(ANDROID_TABS.map(x=>x.label),
- ['Nifty','Sensex','Options Trade','Commodity','Crypto']);
+ ['Nifty','Sensex','Options Trade','Commodity','BTC']);
+assert.match(ui,/\/api\/crypto-price\/inr\/latest/,
+ 'Bitcoin tab must independently poll the validated CoinDCX INR spot price');
 assert.match(ui,/\/api\/crypto-research\/latest/,
  'Crypto tab must use isolated public-only spot research endpoint');
+assert.match(css,/android-simple-inr-amount/,
+ 'BTC screen should show a prominent numeric rupee value and not a graph');
 assert.match(css,/repeat\(5,minmax\(0,1fr\)\)/,
  'Navigation must accommodate five bottom tabs');
 assert.match(ui,/\/api\/paper-recommendations\/latest\?tab=/,

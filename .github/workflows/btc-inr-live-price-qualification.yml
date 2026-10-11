@@ -1,0 +1,40 @@
+name: BTC INR Live Price Qualification
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/btcInrLivePrice.js'
+      - 'server/btcInrLivePriceQualificationRunner.js'
+      - 'server/btcInrLiveProbe.js'
+      - '.github/workflows/btc-inr-live-price-qualification.yml'
+      - 'src/androidBottomNavigation.js'
+      - '.github/workflows/web-recommendation-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-price-safety:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Synthetic timestamp, symbol, no-order and frontend safety
+        run: |
+          node --check server/btcInrLivePrice.js
+          node --check server/btcInrLiveProbe.js
+          node server/btcInrLivePriceQualificationRunner.js
+          node src/androidBottomNavigationQualificationRunner.js
+          node src/webRecommendationUIQualificationRunner.js
+  live-direct-btc-inr:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Public CoinDCX spot BTC/INR price freshness (no key)
+        run: node server/btcInrLiveProbe.js

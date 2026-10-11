@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import {ANDROID_TABS,androidTabById,safeRecommendationCard} from './androidBottomNavigation.js';
+import {ANDROID_TABS,androidTabById,safeRecommendationCard,safeBtcInrLivePrice} from './androidBottomNavigation.js';
 import {readFileSync} from 'node:fs';
 
-assert.deepEqual(ANDROID_TABS.map(t=>t.label),['Nifty','Sensex','Options Trade','Commodity','Crypto']);
+assert.deepEqual(ANDROID_TABS.map(t=>t.label),['Nifty','Sensex','Options Trade','Commodity','BTC']);
 assert.deepEqual(ANDROID_TABS.map(t=>t.id),['nifty','sensex','options','commodity','crypto']);
 assert.equal(new Set(ANDROID_TABS.map(x=>x.id)).size,5);
 for(const tab of ANDROID_TABS)assert.equal(androidTabById(tab.id),tab);
@@ -178,14 +178,14 @@ const cryptoPayload={tab:'crypto',state:'WAIT',
   slippageVerified:false,marginVerified:false}};
 const cryptoCard=safeRecommendationCard(cryptoPayload,'crypto',cryptoAt);
 assert.equal(cryptoCard.tag,'WAIT');
-assert.equal(cryptoCard.contract,'BTC/USD · SPOT RESEARCH');
+assert.equal(cryptoCard.contract,'BTC/INR · MARKET PRICE');
 assert.equal(cryptoCard.provisionalDirection?.label,'BULLISH');
-assert.match(cryptoCard.cryptoPrice,/\$105\.00/);
+assert.equal(cryptoCard.cryptoPrice,null,'USD completed candle must not become INR price');
 assert.equal(cryptoCard.entry,'—');
 assert.equal(cryptoCard.stopLoss,'—');
 assert.equal(cryptoCard.target,'—');
 assert.equal(cryptoCard.status,'No crypto trade executed');
-assert.match(cryptoCard.cryptoTechnical.heading,/UNVALIDATED/);
+assert.match(cryptoCard.cryptoTechnical.heading,/NOT INR VALIDATED/);
 assert.equal(cryptoCard.cryptoTechnical.targets[2],120);
 assert.equal(cryptoCard.cryptoTechnical.invalidation,100);
 assert.equal(safeRecommendationCard({...cryptoPayload,paperLevels:{
@@ -211,6 +211,49 @@ assert.equal(safeRecommendationCard({...cryptoPayload,
 assert.equal(safeRecommendationCard(cryptoPayload,'crypto',cryptoAt+300000).provisionalDirection,null);
 assert.equal(safeRecommendationCard({...cryptoPayload,provisionalDirection:{
  ...cryptoEarly,entry:101}},'crypto',cryptoAt).provisionalDirection,null);
+const nav=readFileSync(new URL('./androidBottomNavigation.js',import.meta.url),'utf8');
+const liveNow=Date.parse('2026-10-11T09:30:20.000Z');
+const inrData={tab:'crypto',symbol:'BTC/INR',currency:'INR',
+ provider:'COINDCX_PUBLIC_SPOT',quoteType:'SPOT_LAST_TRADE',
+ state:'LIVE_PRICE',priceInr:9312345.67,
+ priceAtUtc:new Date(liveNow-15000).toISOString(),
+ checkedAtUtc:new Date(liveNow-2000).toISOString(),
+ paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false,
+ productionRealTradingEnabled:false};
+const inrPrice=safeBtcInrLivePrice(inrData,liveNow);
+assert.equal(inrPrice.live,true);
+assert.equal(inrPrice.price,'₹93,12,345.67');
+const indicativePrice=safeBtcInrLivePrice({
+ ...inrData,provider:'COINGECKO_PUBLIC_INR',
+ quoteType:'INDICATIVE_MARKET_PRICE'
+},liveNow);
+assert.equal(indicativePrice.live,true);
+assert.match(indicativePrice.status,/indicative/i);
+assert.match(indicativePrice.detail,/CoinGecko/);
+assert.match(inrPrice.detail,/CoinDCX/);
+assert.match(inrPrice.detail,/IST/);
+for(const bad of [
+ {...inrData,currency:'USD'}, {...inrData,symbol:'BTC/USD'},
+ {...inrData,priceInr:0},{...inrData,priceInr:'9312345.67'},
+ {...inrData,priceAtUtc:new Date(liveNow-95000).toISOString()},
+ {...inrData,priceAtUtc:new Date(liveNow+16000).toISOString()},
+ {...inrData,checkedAtUtc:new Date(liveNow-95000).toISOString()},
+ {...inrData,provider:'NOT_COINDCX'}, {...inrData,orderSubmissionAllowed:true},
+ {...inrData,realOrderPlaced:true},{...inrData,paperOnly:false}
+]){
+ const shown=safeBtcInrLivePrice(bad,liveNow);
+ assert.equal(shown.live,false,'Reject malformed, stale or spoofed BTC/INR price');
+ assert.equal(shown.price,'₹ —');
+}
+assert.match(nav,/\/api\/crypto-price\/inr\/latest/,
+ 'The browser must request direct INR market data');
+assert.match(nav,/if\(tab==='crypto'\)void refreshBtcInrPrice\(version\)/,
+ 'Crypto price fetch must run without waiting for longer Kraken technical research');
+assert.match(nav,/inrQuote\.hidden=!cryptoTab/,
+ 'BTC rupee quote must only appear in BTC tab');
+assert.doesNotMatch(nav,/\$'\+cryptoSpot\.lastCompletedClose/,
+ 'A USD Kraken candle must never become a displayed BTC INR price');
+
 const entry=readFileSync(new URL('./intradayRecommendationsUI.js',import.meta.url),'utf8');
 assert.match(entry,/VITE_ANDROID_APP!=='true'/,
  'Only legacy native Android builds should get extra status-bar spacing');
@@ -232,7 +275,7 @@ assert.match(layout,/max\(42px, calc\(18px/,'At least 42px separates the app hea
 assert.match(layout,/--safe-area-inset-bottom/);
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 assert.match(html,/viewport-fit=cover/,'WebView must expose real viewport safe areas');
-const nav=readFileSync(new URL('./androidBottomNavigation.js',import.meta.url),'utf8');
+
 assert.match(nav,/\/api\/paper-recommendations\/latest\?tab=/);
 assert.match(nav,/\/api\/crypto-research\/latest/,
  'Fifth tab must use isolated read-only crypto data endpoint');
@@ -247,7 +290,7 @@ assert.match(nav,/confluence\.hidden=!view\.cryptoTechnical/,
  'Do not show crypto paper levels when the UI confluence gate fails');
 assert.match(nav,/directional\.hidden=!view\.provisionalDirection/,
  'Only independently qualified provisional direction is shown to the user');
-assert.match(nav,/Not an entry or option order/,
+assert.match(nav,/Not an INR entry or option order/,
  'Directional research must explicitly disclaim an option entry');
 assert.match(nav,/backendChecked\.textContent=view\.backendStatus/,
  'Server research freshness must be displayed separately from browser polling');

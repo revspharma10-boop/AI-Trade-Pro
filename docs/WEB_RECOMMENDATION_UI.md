@@ -16,7 +16,7 @@ the layout and tabs stay centered in a phone-width column.
 - **Options Trade:** Currently INFY option research (not an open-ended symbol search).
 - **Commodity:** MCX GOLD; research remains WAIT unless independent MCX safety
   checks have been fulfilled.
-- **Crypto:** BTC/USD, Kraken public spot research. Shows only qualified five-minute/high-timeframe directional hypotheses, and always keeps real trading disabled.
+- **BTC:** A prominent source-timestamped **BTC/INR** price. A fresh CoinDCX public BTCINR trade is preferred; if stale/unavailable, a separately identified CoinGecko BTC/INR **indicative market price** is eligible. Refreshed about every 30 seconds while the browser is visible. No graph, no live order. Independent BTC/USD technical analysis is not an INR-specific order recommendation.
 
 The card shows the verified contract, entry premium, target, stop loss, date,
 paper status, and stage-specific **WHY WAIT?** blockers. When a setup is not
@@ -215,3 +215,48 @@ inconsistent higher timeframe or indicator disagreement all result in WAIT.
 No model confidence percentage or prediction accuracy is fabricated.
 The system remains on-demand/visible-browser research on free Render,
 not a separately scheduled 24/7 trading bot.
+
+
+## Live BTC/INR numeric display — no graph
+
+The fifth navigation tab is named **BTC**. Its primary readout is the
+**BTC/INR market price** with Indian rupee grouping
+(e.g., `₹93,12,345.67` is a **synthetic formatting illustration**, not
+a real BTC quote). It is **not** a converted USD price.
+
+Primary: [CoinDCX public ticker](https://docs.coindcx.com/),
+`GET https://api.coindcx.com/exchange/ticker`, exact `BTCINR` market,
+only if the **actual last-trade timestamp is fresh (at most 90 seconds)**.
+Fallback: CoinGecko public simple-price `bitcoin/inr` endpoint, with
+`last_updated_at` freshness at most 120 seconds. The fallback is an
+**indicative composite market price**, not a CoinDCX spot last trade.
+Both sources are unauthenticated and return INR directly. No user-side
+USD/INR conversion is performed.
+
+The fixed read-only backend route is `GET /api/crypto-price/inr/latest`;
+both feeds are briefly cached to limit traffic. On missing, stale or
+rate-limited sources the displayed BTC/INR price is unavailable.
+
+The browser independently fetches this endpoint around every 30 seconds
+**while the tab is visible**. A fresh exchange timestamp is mandatory;
+if absent, over 90 seconds old, future dated, mismatched, duplicated or
+malformed, the screen displays **₹ — / price unavailable** instead of
+claiming a stale quote is live. Every verified numeric price includes
+the source's last-trade timestamp in IST. This is **periodic near-real-time
+refresh**, not a streaming tick feed or guaranteed 24/7 service.
+
+A last-traded or indicative market price differs from an executable bid or ask and may differ
+between exchanges due to spread, liquidity, fees and market conditions.
+No chart is rendered. Existing Render sleeps/starts can delay access; the
+UI visibly fails closed until fresh market data return.
+
+**Research distinction:** the separately qualified BTC directional confluence
+and GitHub 5m shadow-history pipelines are built on **Kraken BTC/USD candles**.
+They are retained as *global BTC technical context* and are **not
+validated BTC/INR trading entry, stop or INR targets**. No currency
+conversion of the USD reference/ATR targets is shown or implied. A later
+BTC/INR-specific prediction requires independently qualified, complete
+historical INR candles; a last-traded-price ticker is not sufficient.
+No external brokerage or real crypto trades are enabled.
+
+Cash capital and real-order safety remain unchanged.

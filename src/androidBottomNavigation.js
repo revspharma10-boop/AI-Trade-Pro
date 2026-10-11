@@ -6,7 +6,7 @@ export const ANDROID_TABS=Object.freeze([
  Object.freeze({id:'sensex',label:'Sensex',heading:'SENSEX',caption:'BSE index option research',icon:'bars'}),
  Object.freeze({id:'options',label:'Options Trade',heading:'Stock Options',caption:'INFY option research',icon:'target'}),
  Object.freeze({id:'commodity',label:'Commodity',heading:'Commodity',caption:'MCX GOLD option research',icon:'layers'}),
- Object.freeze({id:'crypto',label:'Crypto',heading:'Bitcoin (BTC/USD)',caption:'24/7 Kraken spot research • USD',icon:'bitcoin'})
+ Object.freeze({id:'crypto',label:'BTC',heading:'Bitcoin (BTC/INR)',caption:'CoinDCX INR spot last trade • read-only',icon:'bitcoin'})
 ]);
 export function androidTabById(id){return ANDROID_TABS.find(t=>t.id===id)??ANDROID_TABS[0];}
 const ICONS=Object.freeze({
@@ -166,12 +166,11 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
    label:early.direction,observedAt:new Date(earlyTime).toLocaleTimeString('en-IN',{
     timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' IST'
   }:null,
-  cryptoPrice:earlySafe&&strongCrypto?
-   '$'+cryptoSpot.lastCompletedClose.toLocaleString('en-US',{
-    minimumFractionDigits:2,maximumFractionDigits:2
-   })+' · last completed 5m close (USD)':null,
+  // BTC/INR is quoted independently via the direct CoinDCX spot feed.
+  // Never substitute a completed Kraken BTC/USD close for an INR price.
+  cryptoPrice:null,
   cryptoTechnical:earlySafe&&strongCrypto?{
-   heading:'HIGH CONFLUENCE · UNVALIDATED',
+   heading:'GLOBAL BTC DIRECTION · NOT INR VALIDATED',
    trend5m:'EMA21 '+cryptoResearch.metrics.ema21+' / EMA50 '+cryptoResearch.metrics.ema50,
    trend1h:'1h EMA9 '+cryptoResearch.metrics.hourEma9+' / EMA21 '+cryptoResearch.metrics.hourEma21,
    momentum:'RSI14 '+cryptoResearch.metrics.rsi14+' · MACD agreement',
@@ -181,7 +180,7 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
    targets:[levels.target1,levels.target2,levels.target3]
   }:null,
   tag:active?'PAPER BUY':previous?'PAST PAPER IDEA':'WAIT',
-  contract:selectedTab==='crypto'?'BTC/USD · SPOT RESEARCH':
+  contract:selectedTab==='crypto'?'BTC/INR · MARKET PRICE':
    (active||previous)?last.contract:hasCandidate?
    candidate.tradingSymbol:stage&&NOT_CHECKED_STAGES.has(stage)?
     'OPTION CONTRACT NOT CHECKED':'NO VERIFIED OPTION CONTRACT',
@@ -207,6 +206,41 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
    matches&&typeof data.message==='string'?
     data.message:'Awaiting verified broker research'
  };
+}
+export function safeBtcInrLivePrice(data,asOf=Date.now()){
+ const unavailable={live:false,price:'₹ —',status:'INR price unavailable',
+  detail:'Checking fresh BTC/INR price sources'};
+ const validTimestamp=t=>typeof t==='string'&&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(t)&&
+  Number.isFinite(Date.parse(t));
+ const direct=data?.provider==='COINDCX_PUBLIC_SPOT'&&
+  data?.quoteType==='SPOT_LAST_TRADE';
+ const indicative=data?.provider==='COINGECKO_PUBLIC_INR'&&
+  data?.quoteType==='INDICATIVE_MARKET_PRICE';
+ if(!data||data.tab!=='crypto'||data.symbol!=='BTC/INR'||
+  data.currency!=='INR'||!(direct||indicative)||
+  data.state!=='LIVE_PRICE'||
+  data.paperOnly!==true||data.orderSubmissionAllowed!==false||
+  data.realOrderPlaced!==false||data.productionRealTradingEnabled!==false||
+  typeof data.priceInr!=='number'||!Number.isFinite(data.priceInr)||
+  data.priceInr<100000||data.priceInr>1e9||
+  !validTimestamp(data.priceAtUtc)||!validTimestamp(data.checkedAtUtc)||
+  !Number.isFinite(asOf))
+  return unavailable;
+ const sourceAt=Date.parse(data.priceAtUtc);
+ const checkedAt=Date.parse(data.checkedAtUtc);
+ if(sourceAt>asOf+15000||checkedAt>asOf+15000||
+  asOf-sourceAt>(direct?90000:120000)||asOf-checkedAt>90000||
+  checkedAt<sourceAt-15000)
+  return unavailable;
+ return {live:true,
+  price:'₹'+data.priceInr.toLocaleString('en-IN',{
+   minimumFractionDigits:2,maximumFractionDigits:2}),
+  status:direct?'Fresh BTC/INR last trade':'Recent BTC/INR indicative price',
+  detail:(direct?'CoinDCX spot • last trade ':'CoinGecko • indicative update ')+
+   new Date(sourceAt).toLocaleTimeString('en-IN',{
+    timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'
+   })+' IST • refresh ~30s while visible'};
 }
 export function mountAndroidBottomNavigation(){
  const root=document.querySelector('#intraday-recommendation-app');
@@ -236,6 +270,17 @@ export function mountAndroidBottomNavigation(){
  const marketName=make('strong','','NIFTY 50');
  const marketCaption=make('span','','NSE index option research');
  market.append(marketName,marketCaption);
+ const inrQuote=make('section','android-simple-inr-quote');
+ inrQuote.hidden=true;
+ inrQuote.setAttribute('aria-label','Live Bitcoin spot price in Indian rupees');
+ const inrLabel=make('span','android-simple-inr-kicker','BTC / INR · RECENT PRICE');
+ const inrAmount=make('strong','android-simple-inr-amount','₹ —');
+ const inrStatus=make('span','android-simple-inr-status','INR price unavailable');
+ const inrSource=make('span','android-simple-inr-source',
+  'Checking fresh BTC/INR price sources');
+ inrQuote.append(inrLabel,inrAmount,inrStatus,inrSource,
+  make('p','android-simple-inr-note',
+   'Last trade or indicative reference • not an executable buy/sell quote.'));
  const chips=make('div','android-simple-chips');
  const action=make('span','android-simple-action is-wait','WAIT');
  const contract=make('strong','android-simple-contract','NO VERIFIED OPTION CONTRACT');
@@ -267,10 +312,10 @@ export function mountAndroidBottomNavigation(){
  const directionalTime=make('span','android-simple-direction-time');
  const directionalPrice=make('span','android-simple-direction-price');
  directional.append(
-  make('span','android-simple-direction-title','COMPLETED 5M CANDLES · DIRECTION ONLY'),
+  make('span','android-simple-direction-title','GLOBAL BTC DATA · DIRECTION ONLY'),
   directionalLabel,directionalTime,directionalPrice,
   make('p','android-simple-direction-note',
-   'Unvalidated market hypothesis • Not an entry or option order • No recorded outcome'));
+   'Unvalidated directional context only • Not an INR entry or option order • No recorded outcome'));
  const confluence=make('section','android-simple-direction');
  confluence.hidden=true;
  confluence.setAttribute('aria-label','Crypto technical confluence and non-executable research levels');
@@ -278,7 +323,7 @@ export function mountAndroidBottomNavigation(){
  const technicalMetrics=make('p','android-simple-direction-note');
  const technicalLevels=make('p','android-simple-direction-note');
  const technicalDisclaimer=make('p','android-simple-direction-note',
-  'USD candle illustrations ONLY. No executable entry, SL, targets, fees, slippage, position sizing, FX or verified profitability.');
+  'Global BTC/USD trend data only; not a verified BTC/INR entry, exit, risk level or profitable trade.');
  confluence.append(technicalTitle,technicalMetrics,technicalLevels,technicalDisclaimer);
  const diagnostics=make('section','android-simple-diagnostics');
  diagnostics.setAttribute('aria-label','Why the paper recommendation is waiting');
@@ -288,7 +333,7 @@ export function mountAndroidBottomNavigation(){
  const diagnosticList=make('ul','android-simple-diagnostic-list');
  const diagnosticMore=make('p','android-simple-diagnostic-more');
  diagnostics.append(diagnosticHeading,diagnosticStage,diagnosticList,diagnosticMore);
- card.append(market,chips,facts,details,explanation,directional,confluence,diagnostics);
+ card.append(market,inrQuote,chips,facts,details,explanation,directional,confluence,diagnostics);
 
  const foot=make('footer','android-simple-footer');
  const refreshed=make('p','','Read-only updates every 30 seconds while visible');
@@ -326,6 +371,24 @@ export function mountAndroidBottomNavigation(){
   buttons.set(tab.id,button);nav.append(button);
  }
  document.body.append(nav);
+ function displayBtcInrPrice(data,version){
+  if(version!==sequence||current!=='crypto'||document.hidden)return;
+  const price=safeBtcInrLivePrice(data);
+  inrAmount.textContent=price.price;
+  inrStatus.textContent=price.status;
+  inrSource.textContent=price.detail;
+  inrQuote.dataset.verified=price.live?'true':'false';
+ }
+ async function refreshBtcInrPrice(version){
+  try{
+   const r=await fetch(API+'/api/crypto-price/inr/latest',{
+    method:'GET',headers:{Accept:'application/json'},cache:'no-store',
+    signal:AbortSignal.timeout(10000)
+   });
+   if(!r.ok)throw Error('BTC_INR_UNAVAILABLE');
+   displayBtcInrPrice(await r.json(),version);
+  }catch(_){displayBtcInrPrice(null,version);}
+ }
  function display(data){
   const view=safeRecommendationCard(data,current);
   action.textContent=view.tag;
@@ -349,18 +412,12 @@ export function mountAndroidBottomNavigation(){
   directionalPrice.textContent=view.cryptoPrice??'';
   confluence.hidden=!view.cryptoTechnical;
   technicalTitle.textContent=view.cryptoTechnical?.heading??'';
-  technicalMetrics.textContent=view.cryptoTechnical?[
-   view.cryptoTechnical.trend5m,view.cryptoTechnical.trend1h,
-   view.cryptoTechnical.momentum,view.cryptoTechnical.volatility
-  ].join(' • '):'';
-  const usd=n=>'$'+Number(n).toLocaleString('en-US',{
-   minimumFractionDigits:2,maximumFractionDigits:2});
-  technicalLevels.textContent=view.cryptoTechnical?
-   'Reference '+usd(view.cryptoTechnical.reference)+
-   ' · Invalidation '+usd(view.cryptoTechnical.invalidation)+
-   ' · Illustrative T1 '+usd(view.cryptoTechnical.targets[0])+
-   ' · T2 '+usd(view.cryptoTechnical.targets[1])+
-   ' · T3 '+usd(view.cryptoTechnical.targets[2]):'';
+  technicalMetrics.textContent=view.cryptoTechnical?
+   'BTC global technical context: '+view.cryptoTechnical.momentum+
+   ' • other trend filters passed • INR-specific levels not verified':'';
+   // The confluence engine is still fed by non-INR Kraken candles.
+  // Do NOT display or convert its USD prices as if they were INR levels.
+  technicalLevels.textContent='No verified BTC/INR entry, stop or targets';
   diagnostics.hidden=view.state!=='WAIT'||view.failedChecks.length===0;
   diagnosticStage.textContent=view.diagnosticStage??'RESEARCH DATA';
   diagnosticList.replaceChildren();
@@ -381,6 +438,9 @@ export function mountAndroidBottomNavigation(){
   if(!force&&Date.now()-lastPoll<25000)return;
   const tab=current,version=sequence;
   loading=true;lastPoll=Date.now();
+  // Fetch INR price independently so slow Kraken technical research cannot
+  // delay the visible last-traded rupee value.
+  if(tab==='crypto')void refreshBtcInrPrice(version);
   manualRefresh.disabled=true;
   try{
    const endpoint=tab==='crypto'?'/api/crypto-research/latest':
@@ -417,14 +477,17 @@ export function mountAndroidBottomNavigation(){
   const tab=androidTabById(id);current=tab.id;sequence++;lastPoll=0;
   marketName.textContent=tab.heading;marketCaption.textContent=tab.caption;
   const cryptoTab=tab.id==='crypto';
+  inrQuote.hidden=!cryptoTab;
+  displayBtcInrPrice(null,sequence);
   heading.querySelector('.android-simple-kicker').textContent=cryptoTab?
    '24/7 CRYPTO DIRECTION':'LAST RECOMMENDATION';
-  title.textContent=cryptoTab?'Crypto Market Research':'Last Recommendation';
-  subtitle.textContent=cryptoTab?'BTC/USD • 5-minute confirmed candles • No trade':
+  title.textContent=cryptoTab?'Live Bitcoin Price':'Last Recommendation';
+  subtitle.textContent=cryptoTab?'BTC/INR • fresh price in ₹ • no chart':
    'Verified paper results only';
   facts.hidden=cryptoTab;details.hidden=cryptoTab;
   connect.hidden=cryptoTab;
-  refreshed.textContent='Checking broker research · Paper-only mode';
+  refreshed.textContent=cryptoTab?'Checking BTC/INR price · Paper only':
+   'Checking broker research · Paper-only mode';
   manualRefresh.disabled=loading;
   for(const [tabId,button] of buttons){
    const active=tab.id===tabId;

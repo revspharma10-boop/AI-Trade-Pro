@@ -275,3 +275,34 @@ body.android-minimal-shell .android-simple-direction-price{
  body.android-minimal-shell .android-simple-tab{padding-left:1px;padding-right:1px}
  body.android-minimal-shell .android-simple-tab span{font-size:9px;letter-spacing:-.03em}
 }
+
+/* Prominent real BTC/INR spot last trade; no plot, converted USD or chart. */
+body.android-minimal-shell .android-simple-inr-quote{
+ margin:17px 0 18px;padding:19px 16px 16px;
+ border:1px solid #c7e5d9;border-radius:16px;background:#edf8f3;
+ display:flex;flex-direction:column;gap:8px;min-width:0;
+}
+body.android-minimal-shell .android-simple-inr-quote[hidden]{display:none}
+body.android-minimal-shell .android-simple-inr-kicker{
+ font-size:11px;font-weight:850;letter-spacing:.07em;color:#336b59;
+}
+body.android-minimal-shell .android-simple-inr-amount{
+ font-size:clamp(26px,6.4vw,39px);font-variant-numeric:tabular-nums;
+ font-weight:850;letter-spacing:-.04em;color:#105f4a;line-height:1.16;
+ overflow-wrap:anywhere;
+}
+body.android-minimal-shell .android-simple-inr-status{
+ font-size:12px;font-weight:750;color:#26735d;
+}
+body.android-minimal-shell .android-simple-inr-source{
+ font-size:11px;color:#477566;line-height:1.45;
+}
+body.android-minimal-shell .android-simple-inr-note{
+ font-size:10px;color:#617c72;line-height:1.45;margin:0;
+}
+body.android-minimal-shell .android-simple-inr-quote[data-verified="false"]{
+ background:#f7f8f8;border-color:#e2e7e7;
+}
+body.android-minimal-shell .android-simple-inr-quote[data-verified="false"] .android-simple-inr-amount{
+ color:#5b6f75;
+}

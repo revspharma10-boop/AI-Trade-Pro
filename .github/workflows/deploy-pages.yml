@@ -36,6 +36,7 @@ jobs:
           node server/paperRecommendationFeedQualificationRunner.js
           node --check server/cryptoTechnicalConfluence.js
           node server/cryptoPaperResearchQualificationRunner.js
+          node server/btcInrLivePriceQualificationRunner.js
           node server/recommendationWaitDiagnosticsQualificationRunner.js
           node server/readOnlyCorsPolicyQualificationRunner.js
       - run: npm run build

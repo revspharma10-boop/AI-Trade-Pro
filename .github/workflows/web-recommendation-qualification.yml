@@ -6,6 +6,8 @@ on:
       - 'src/**'
       - 'server/paperRecommendationFeed.js'
       - 'server/cryptoPaperResearch.js'
+      - 'server/btcInrLivePrice.js'
+      - 'server/btcInrLivePriceQualificationRunner.js'
       - 'server/cryptoTechnicalConfluence.js'
       - 'server/cryptoPaperResearchQualificationRunner.js'
       - 'server/upstoxOAuthCallbackServer.js'
@@ -43,6 +45,7 @@ jobs:
           node server/paperRecommendationFeedQualificationRunner.js
           node --check server/cryptoTechnicalConfluence.js
           node server/cryptoPaperResearchQualificationRunner.js
+          node server/btcInrLivePriceQualificationRunner.js
           node server/recommendationWaitDiagnosticsQualificationRunner.js
           node server/readOnlyCorsPolicyQualificationRunner.js
           node src/openingRangeQualificationRunner.js
@@ -55,4 +58,5 @@ jobs:
           grep -q 'AI Trade Pro' dist/index.html
           grep -Rql 'paper-recommendations/latest' dist/assets
           grep -Rql 'crypto-research/latest' dist/assets
+          grep -Rql 'crypto-price/inr/latest' dist/assets
           ! grep -Rql 'UPSTOX_CLIENT_SECRET' dist/assets
