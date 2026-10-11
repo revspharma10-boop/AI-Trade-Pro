@@ -70,7 +70,7 @@ export function presentRecommendation({tab,last=null,result=null,asOf=Date.now()
  // A fresh HTTP response can be backed by an old in-memory result.
  // Require a coherent, dated backend observation before asserting PAPER_SETUP.
  const checkedAt=typeof result?.checkedAt==='string'&&
-  /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$/.test(result.checkedAt)?
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(result.checkedAt)?
   Date.parse(result.checkedAt):NaN;
  const capturedAt=typeof last?.capturedAt==='string'?Date.parse(last.capturedAt):NaN;
  const verifiedFresh=Number.isFinite(asOf)&&Number.isFinite(checkedAt)&&
