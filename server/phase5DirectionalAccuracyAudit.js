@@ -138,3 +138,47 @@ export function accuracyPromotionReview(report,{minimumEvaluable=100,minimumSess
  return {status:'BLOCKED_PENDING_INDEPENDENT_REVIEW',
   autoPromotionAllowed:false,realOrdersAllowed:false,reasons};
 }
+
+
+// Explicit chronological train/validation/test partition with an embargo at
+// each boundary. Outcomes (not only forecast captures) must have settled
+// before a split is used to develop a model. This function never tunes a
+// strategy on the test partition.
+export function chronologicalAccuracyHoldout({
+ forecasts=[],outcomes=[],trainEndUtc,validationEndUtc,asOf=Date.now(),
+ provenance='UNVERIFIED'
+}={}){
+ const now=Number(new Date(asOf)),trainEnd=Date.parse(trainEndUtc??''),
+  validationEnd=Date.parse(validationEndUtc??'');
+ if(!finite(now)||!finite(trainEnd)||!finite(validationEnd)||
+  trainEnd>=validationEnd||validationEnd>=now)
+  throw Error('ACCURACY_HOLDOUT_BOUNDARIES_INVALID');
+ // Audit ALL rows before filtering so corrupt records cannot disappear merely
+ // because they were excluded from a chosen period.
+ evaluateDirectionalHistory({forecasts,outcomes,asOf:now,provenance});
+ const groups={training:[],validation:[],test:[]},censored=[];
+ for(const f of forecasts){
+  const capture=Date.parse(f.capturedAtUtc);
+  const horizon=Date.parse(f.horizonEndUtc);
+  if(horizon<=trainEnd)groups.training.push(f);
+  else if(capture>=trainEnd&&horizon<=validationEnd)
+   groups.validation.push(f);
+  else if(capture>=validationEnd&&horizon<=now)
+   groups.test.push(f);
+  else censored.push(f);
+ }
+ const report=Object.fromEntries(Object.entries(groups).map(([key,events])=>{
+  const eventIds=new Set(events.map(x=>x.id));
+  return [key,evaluateDirectionalHistory({
+   forecasts:events,
+   outcomes:outcomes.filter(x=>eventIds.has(x.forecastId)),
+   asOf:now,provenance
+  })];
+ }));
+ return {status:'OFFLINE_CHRONOLOGICAL_HOLDOUT_ONLY',
+  trainEndUtc:new Date(trainEnd).toISOString(),
+  validationEndUtc:new Date(validationEnd).toISOString(),
+  censoredOverlapCount:censored.length,
+  train:report.training,validation:report.validation,test:report.test,
+  autoPromotionAllowed:false,realOrdersAllowed:false};
+}
