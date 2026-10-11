@@ -67,9 +67,19 @@ export function qualifyPaperRecommendation(plan,contract,asOf=Date.now()){
 export function presentRecommendation({tab,last=null,result=null,asOf=Date.now()}={}){
  const market=RECOMMENDATION_MARKETS[tab];
  if(!market)throw Error('UNSUPPORTED_RECOMMENDATION_TAB');
- const isCurrent=!!last&&
+ // A fresh HTTP response can be backed by an old in-memory result.
+ // Require a coherent, dated backend observation before asserting PAPER_SETUP.
+ const checkedAt=typeof result?.checkedAt==='string'&&
+  /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$/.test(result.checkedAt)?
+  Date.parse(result.checkedAt):NaN;
+ const capturedAt=typeof last?.capturedAt==='string'?Date.parse(last.capturedAt):NaN;
+ const verifiedFresh=Number.isFinite(asOf)&&Number.isFinite(checkedAt)&&
+  checkedAt<=asOf+10000&&asOf-checkedAt<=6*60000&&
+  Number.isFinite(capturedAt)&&capturedAt<=asOf+10000&&
+  checkedAt>=capturedAt-10000;
+ const isCurrent=!!last&&verifiedFresh&&
   last.date===dayIST(asOf)&&
-  fiveMinuteSlot(Date.parse(last.capturedAt))===fiveMinuteSlot(asOf)&&
+  fiveMinuteSlot(capturedAt)===fiveMinuteSlot(asOf)&&
   result?.state==='PAPER_SETUP';
  const state=isCurrent?'PAPER_SETUP':last?'PAST_PAPER_IDEA':'WAIT';
  return {
