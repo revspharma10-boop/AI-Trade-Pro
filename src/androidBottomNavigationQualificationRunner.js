@@ -226,7 +226,7 @@ assert.match(nav,/Browser received/,
  'Browser polling status must not imply fresh broker analysis');
 assert.match(nav,/directional\.hidden=!view\.provisionalDirection/,
  'Only independently qualified provisional direction is shown to the user');
-assert.match(nav,/Not a CE\/PE entry/,
+assert.match(nav,/Not an entry or option order/,
  'Directional research must explicitly disclaim an option entry');
 assert.match(nav,/backendChecked\.textContent=view\.backendStatus/,
  'Server research freshness must be displayed separately from browser polling');
