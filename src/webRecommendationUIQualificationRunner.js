@@ -16,7 +16,7 @@ assert.match(entry,/VITE_ANDROID_APP!=='true'/,
 assert.doesNotMatch(entry,/autoOptionResearchUI\.js/,
  'Detailed technical dashboard must not be imported into the production browser bundle');
 assert.match(entry,/mountAndroidBottomNavigation\(\)/,
- 'Browser site must mount the same four tabs used on Android');
+ 'Browser site must mount the same five tabs used on Android');
 assert.match(entry,/web-recommendation-shell/,
  'Web layout must distinguish browser chrome from Android status-bar insets');
 assert.doesNotMatch(pageWorkflow,/VITE_ANDROID_APP: 'true'/,
@@ -30,7 +30,11 @@ assert.match(androidWorkflow,/on:\s*\n\s*workflow_dispatch:/,
 assert.doesNotMatch(androidWorkflow,/\n  pull_request:|\n  push:/,
  'Do not launch Android APK builds during ordinary web changes');
 assert.deepEqual(ANDROID_TABS.map(x=>x.label),
- ['Nifty','Sensex','Options Trade','Commodity']);
+ ['Nifty','Sensex','Options Trade','Commodity','Crypto']);
+assert.match(ui,/\/api\/crypto-research\/latest/,
+ 'Crypto tab must use isolated public-only spot research endpoint');
+assert.match(css,/repeat\(5,minmax\(0,1fr\)\)/,
+ 'Navigation must accommodate five bottom tabs');
 assert.match(ui,/\/api\/paper-recommendations\/latest\?tab=/,
  'Only server-qualified paper recommendations belong in the browser UI');
 assert.match(ui,/document\.hidden/,'Refresh only while browser page is visible');
@@ -109,4 +113,4 @@ assert.match(ui,/pendingTabRefresh/,
  'Tab changes during an in-flight request must trigger a fresh fetch');
 assert.match(ui,/timeZone:'Asia\/Kolkata'/,
  'Refresh timestamp must show IST, not ambiguous browser-local time');
-console.log('WEB RECOMMENDATION UI QUALIFICATION PASSED: four tabs, responsive browser layout, 30-sec read-only updates, verified WAIT, zero real orders');
+console.log('WEB RECOMMENDATION UI QUALIFICATION PASSED: five tabs, responsive browser layout, 30-sec read-only updates, verified WAIT, zero real orders');
