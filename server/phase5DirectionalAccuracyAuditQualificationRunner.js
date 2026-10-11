@@ -1,7 +1,8 @@
 // Synthetic-fixture validation ONLY; never interpreted as historical market edge.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {evaluateDirectionalHistory,accuracyPromotionReview,wilson95}
+import {evaluateDirectionalHistory,accuracyPromotionReview,wilson95,
+ chronologicalAccuracyHoldout}
  from './phase5DirectionalAccuracyAudit.js';
 import {selectiveOpeningRangeCandidate,SELECTIVE_CANDIDATE_VERSION}
  from './phase5SelectiveResearchCandidate.js';
@@ -82,6 +83,24 @@ assert.equal(wilson95(0,0),null);
 assert.deepEqual(Object.keys(evaluateDirectionalHistory({}).models),[]);
 assert.equal(evaluateDirectionalHistory({}).total.evaluatedAccuracyPct,null);
 assert.equal(evaluateDirectionalHistory({}).status,'NO_RECORDED_FORECASTS');
+const separated=chronologicalAccuracyHoldout({...input,
+ trainEndUtc:utc(advance(1)+60000),validationEndUtc:utc(advance(3)+60000)});
+assert.equal(separated.status,'OFFLINE_CHRONOLOGICAL_HOLDOUT_ONLY');
+assert.equal(separated.censoredOverlapCount,0);
+assert.equal(separated.train.total.eligibleDecisions,1);
+assert.equal(separated.validation.total.eligibleDecisions,2);
+assert.equal(separated.test.total.eligibleDecisions,3);
+assert.equal(separated.train.total.correct,1);
+assert.equal(separated.test.total.pending,1);
+assert.equal(separated.autoPromotionAllowed,false);
+const delayed=chronologicalAccuracyHoldout({...input,
+ trainEndUtc:utc(advance(1)+10000),validationEndUtc:utc(advance(3)+60000)});
+assert.equal(delayed.train.total.eligibleDecisions,0,
+ 'Outcome reported after training cutoff must not leak into training');
+assert.ok(delayed.censoredOverlapCount>=1);
+assert.throws(()=>chronologicalAccuracyHoldout({...input,
+ trainEndUtc:utc(advance(2)),validationEndUtc:utc(advance(1))}),
+ /ACCURACY_HOLDOUT_BOUNDARIES_INVALID/);
 const gate=accuracyPromotionReview(report);
 assert.equal(gate.autoPromotionAllowed,false);
 assert.ok(gate.reasons.includes('FORWARD_DATA_NOT_INDEPENDENTLY_VERIFIED'));
