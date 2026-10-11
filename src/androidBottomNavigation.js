@@ -164,10 +164,15 @@ export function mountAndroidBottomNavigation(){
 
  const foot=make('footer','android-simple-footer');
  const refreshed=make('p','','Read-only updates every 30 seconds while visible');
+ refreshed.setAttribute('role','status');
+ const manualRefresh=make('button','android-simple-manual-refresh','Refresh now');
+ manualRefresh.type='button';
+ manualRefresh.setAttribute('aria-label','Refresh current market research now');
+ manualRefresh.addEventListener('click',()=>{void refresh(true);});
  const connect=make('a','','Connect Upstox');
  connect.href=API+'/auth/upstox/start';
  connect.target='_blank';connect.rel='noopener noreferrer';
- foot.append(refreshed,connect);
+ foot.append(refreshed,manualRefresh,connect);
  app.append(header,heading,card,foot);
  root.append(app);
 
@@ -224,6 +229,7 @@ export function mountAndroidBottomNavigation(){
   if(!force&&Date.now()-lastPoll<25000)return;
   const tab=current,version=sequence;
   loading=true;lastPoll=Date.now();
+  manualRefresh.disabled=true;
   try{
    const response=await fetch(API+'/api/paper-recommendations/latest?tab='+encodeURIComponent(tab),
     {method:'GET',headers:{Accept:'application/json'},cache:'no-store',
@@ -244,6 +250,7 @@ export function mountAndroidBottomNavigation(){
    }
   }finally{
    loading=false;
+   manualRefresh.disabled=false;
    // One pending tab/visibility change is replayed after the in-flight request.
    // Avoid recursive polling loops when an upstream request is slow.
    if(version!==sequence||pendingTabRefresh){
@@ -256,6 +263,7 @@ export function mountAndroidBottomNavigation(){
   const tab=androidTabById(id);current=tab.id;sequence++;lastPoll=0;
   marketName.textContent=tab.heading;marketCaption.textContent=tab.caption;
   refreshed.textContent='Checking broker research · Paper-only mode';
+  manualRefresh.disabled=loading;
   for(const [tabId,button] of buttons){
    const active=tab.id===tabId;
    button.classList.toggle('is-active',active);
