@@ -6,6 +6,7 @@ on:
       - 'server/btcInrLivePrice.js'
       - 'server/btcInrLivePriceQualificationRunner.js'
       - 'server/btcInrLiveProbe.js'
+      - 'server/btcInrProductionDiagnostic.js'
       - '.github/workflows/btc-inr-live-price-qualification.yml'
       - 'src/androidBottomNavigation.js'
       - '.github/workflows/web-recommendation-qualification.yml'
@@ -38,3 +39,14 @@ jobs:
           node-version: '22'
       - name: Public CoinDCX spot BTC/INR price freshness (no key)
         run: node server/btcInrLiveProbe.js
+
+  production-public-price-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Diagnose existing live INR endpoint and free provider freshness
+        run: node server/btcInrProductionDiagnostic.js
