@@ -52,6 +52,9 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   last.stopLoss<last.entry&&last.entry<last.target&&
   last.executionStatus==='NOT EXECUTED'&&last.approvedLots===0&&last.paperOnly===true;
  const hasLast=matches&&pricesValid;
+ const lastObserved=hasLast?Date.parse(last.capturedAt):NaN;
+ const lastTimestampValid=Number.isFinite(lastObserved)&&
+  Number.isFinite(asOf)&&lastObserved<=asOf+10000;
  // Broker-confirmed exchange metadata may be shown during WAIT, but never
  // interpreted as verified option premium, entry, SL, target, or trade approval.
  const candidate=matches&&!hasLast&&data.state==='WAIT'?data.verifiedContract:null;
@@ -62,12 +65,12 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   typeof candidate.tradingSymbol==='string'&&candidate.tradingSymbol.trim().length>0&&
   typeof candidate.strike==='number'&&candidate.strike>0&&
   /^\d{4}-\d{2}-\d{2}$/.test(candidate.expiry??'')&&candidate.expiry>marketDate;
- const observed=hasLast?Date.parse(last.capturedAt):NaN;
- const current=Number.isFinite(observed)&&Number.isFinite(asOf)&&
-  observed<=asOf+10000&&Math.floor((observed-12000)/300000)===
+ const current=lastTimestampValid&&
+  Math.floor((lastObserved-12000)/300000)===
     Math.floor((asOf-12000)/300000);
  const active=hasLast&&current&&data.state==='PAPER_SETUP';
- const previous=hasLast&&(data.state==='PAST_PAPER_IDEA'||data.state==='PAPER_SETUP'&&!current);
+ const previous=hasLast&&lastTimestampValid&&
+  (data.state==='PAST_PAPER_IDEA'||data.state==='PAPER_SETUP'&&!current);
  const activeWait=matches&&!active&&!previous;
  const stage=activeWait&&Object.hasOwn(STAGE_LABELS,data.stage??'')?data.stage:null;
  const failures=activeWait&&Array.isArray(data.blockers)?
@@ -79,13 +82,13 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
  return {
   state:active?'PAPER_SETUP':previous?'PAST_PAPER_IDEA':'WAIT',
   tag:active?'PAPER BUY':previous?'PAST PAPER IDEA':'WAIT',
-  contract:hasLast?last.contract:hasCandidate?
+  contract:(active||previous)?last.contract:hasCandidate?
    candidate.tradingSymbol:stage&&NOT_CHECKED_STAGES.has(stage)?
     'OPTION CONTRACT NOT CHECKED':'NO VERIFIED OPTION CONTRACT',
-  entry:hasLast?money(last.entry):'—',
-  target:hasLast?money(last.target):'—',
-  stopLoss:hasLast?money(last.stopLoss):'—',
-  date:hasLast?date(last.date):'—',
+  entry:(active||previous)?money(last.entry):'—',
+  target:(active||previous)?money(last.target):'—',
+  stopLoss:(active||previous)?money(last.stopLoss):'—',
+  date:(active||previous)?date(last.date):'—',
   status:active?'Paper idea · Not executed':
    previous?'Previous idea · Not executed':hasCandidate?
     'Contract verified · Setup WAIT':'No paper trade executed',
@@ -159,7 +162,7 @@ export function mountAndroidBottomNavigation(){
  card.append(market,chips,facts,details,explanation,diagnostics);
 
  const foot=make('footer','android-simple-footer');
- const refreshed=make('p','','Automatic read-only refresh while the app is open');
+ const refreshed=make('p','','Read-only updates every 30 seconds while visible');
  const connect=make('a','','Connect Upstox');
  connect.href=API+'/auth/upstox/start';
  connect.target='_blank';connect.rel='noopener noreferrer';
@@ -172,6 +175,7 @@ export function mountAndroidBottomNavigation(){
  nav.setAttribute('aria-label','AI Trade Pro main navigation');
  const buttons=new Map();
  let current='nifty',sequence=0,loading=false,lastPoll=0;
+ let pendingTabRefresh=false;
  for(const tab of ANDROID_TABS){
   const button=make('button','android-simple-tab');
   button.type='button';button.dataset.tab=tab.id;
@@ -211,28 +215,46 @@ export function mountAndroidBottomNavigation(){
    ' recorded by the backend':'';
  }
  async function refresh(force=false){
-  if(document.hidden||loading)return;
+  if(document.hidden)return;
+  if(loading){
+   if(force)pendingTabRefresh=true;
+   return;
+  }
   if(!force&&Date.now()-lastPoll<25000)return;
   const tab=current,version=sequence;
   loading=true;lastPoll=Date.now();
   try{
    const response=await fetch(API+'/api/paper-recommendations/latest?tab='+encodeURIComponent(tab),
-    {method:'GET',headers:{Accept:'application/json'},cache:'no-store'});
+    {method:'GET',headers:{Accept:'application/json'},cache:'no-store',
+     signal:AbortSignal.timeout(12000)});
    if(!response.ok)throw Error('BROKER_BACKEND_UNAVAILABLE');
    const payload=await response.json();
-   if(version===sequence)display(payload);
+   if(version===sequence){
+    display(payload);
+    refreshed.textContent='Last checked '+new Date().toLocaleTimeString('en-IN',{
+     hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Kolkata'
+    })+' IST · 30-second refresh while visible';
+   }
   }catch(_e){
-   if(version===sequence)display({tab,state:'WAIT',last:null,message:'Broker data unavailable — WAIT',
-    paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false});
+   if(version===sequence){
+    display({tab,state:'WAIT',last:null,message:'Broker unavailable or timed out — WAIT',
+     paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false});
+    refreshed.textContent='Broker connection unavailable · Retrying automatically';
+   }
   }finally{
    loading=false;
-   // A tab switch during a request should not strand the new tab on "Loading".
-   if(version!==sequence)void refresh(true);
+   // One pending tab/visibility change is replayed after the in-flight request.
+   // Avoid recursive polling loops when an upstream request is slow.
+   if(version!==sequence||pendingTabRefresh){
+    pendingTabRefresh=false;
+    void refresh(true);
+   }
   }
  }
  function activate(id){
   const tab=androidTabById(id);current=tab.id;sequence++;lastPoll=0;
   marketName.textContent=tab.heading;marketCaption.textContent=tab.caption;
+  refreshed.textContent='Checking broker research · Paper-only mode';
   for(const [tabId,button] of buttons){
    const active=tab.id===tabId;
    button.classList.toggle('is-active',active);
