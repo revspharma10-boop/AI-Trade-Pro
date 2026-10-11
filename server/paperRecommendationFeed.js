@@ -31,6 +31,36 @@ const safeError=e=>{
  return /^[A-Z0-9_]{4,110}$/.test(value)?value:'UPSTOX_RESEARCH_DATA_UNAVAILABLE';
 };
 const fail=(state,message,more={})=>({state,message,...more});
+const validIso=value=>typeof value==='string'&&
+ /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)&&
+ Number.isFinite(Date.parse(value));
+// An opening-range hypothesis is not an option signal or paper fill.
+// Server verification of the exchange key, read-only quote, completed candles
+// and current source-clock is necessary before publishing a direction preview.
+export function qualifyProvisionalDirection({early,quote,underlyingKey,asOf}={}){
+ const observed=Number(new Date(asOf));
+ const completed=Date.parse(early?.lastCompletedAt??'');
+ if(!Number.isFinite(observed)||!early?.valid||
+   early.strategy!=='OPENING_RANGE_15M'||
+   early.status!=='PROVISIONAL_OPENING_BIAS'||
+   !['CE','PE'].includes(early.direction)||early.optionPlanQualified!==false||
+   early.paperOnly!==true||early.orderSubmissionAllowed!==false||
+   early.realOrderPlaced!==false||
+   !/^(NSE_INDEX|BSE_INDEX)\|[A-Za-z0-9 _-]{1,75}$/.test(underlyingKey??'')||
+   quote?.mode!=='READ_ONLY'||quote.instrumentKey!==underlyingKey||
+   !positive(quote.lastPrice)||!Number.isFinite(quote.timestamp)||
+   quote.timestamp>observed+10000||observed-quote.timestamp>120000||
+   !Number.isFinite(completed)||completed+5*60000+12000>observed||
+   dayIST(completed)!==dayIST(observed))return null;
+ return Object.freeze({
+  kind:'PROVISIONAL_DIRECTION',strategy:'OPENING_RANGE_15M',
+  direction:early.direction==='CE'?'BULLISH':'BEARISH',
+  observedAt:asIso(observed),lastCompletedAt:asIso(completed),
+  source:'UPSTOX_READ_ONLY',recordedDurably:false,
+  optionPlanQualified:false,paperOnly:true,orderSubmissionAllowed:false,
+  realOrderPlaced:false
+ });
+}
 
 export function qualifyPaperRecommendation(plan,contract,asOf=Date.now()){
  if(plan?.status!=='UNVALIDATED_PAPER_LEVELS'||!contract||
@@ -82,9 +112,27 @@ export function presentRecommendation({tab,last=null,result=null,asOf=Date.now()
   fiveMinuteSlot(capturedAt)===fiveMinuteSlot(asOf)&&
   result?.state==='PAPER_SETUP';
  const state=isCurrent?'PAPER_SETUP':last?'PAST_PAPER_IDEA':'WAIT';
+ const preview=result?.provisionalDirection;
+ const previewAt=validIso(preview?.observedAt)?Date.parse(preview.observedAt):NaN;
+ // Distinct provisional directions depend on their own valid read-only
+ // observation and do not inherit any price/order fields from paper setup.
+ const directionValid=state==='WAIT'&&['nifty','sensex'].includes(tab)&&
+  result?.stage==='OPENING_RANGE'&&
+  preview?.kind==='PROVISIONAL_DIRECTION'&&
+  preview.strategy==='OPENING_RANGE_15M'&&
+  ['BULLISH','BEARISH'].includes(preview.direction)&&
+  preview.source==='UPSTOX_READ_ONLY'&&
+  preview.recordedDurably===false&&
+  preview.paperOnly===true&&preview.optionPlanQualified===false&&
+  preview.orderSubmissionAllowed===false&&preview.realOrderPlaced===false&&
+  Number.isFinite(previewAt)&&previewAt<=asOf+10000&&
+  checkedAt>=previewAt-10000&&asOf-checkedAt<=6*60000&&
+  fiveMinuteSlot(previewAt)===fiveMinuteSlot(asOf)&&
+  dayIST(previewAt)===dayIST(asOf);
  return {
   tab,symbol:market.symbol,marketName:market.name,
   state,last:last??null,
+  provisionalDirection:directionValid?preview:null,
   // Underlying/contract metadata is shown only when independently verified;
   // WAIT never authorizes entering, stopping or exiting a trade.
   verifiedContract:result?.verifiedContract??null,
@@ -186,10 +234,14 @@ export function createPaperRecommendationFeed({
   if(direction.direction==='WAIT'){
    if(market.kind==='INDEX'&&technical.completedBars<35){
     const early=deriveOpeningRangeBias({candles,quote,session,asOf});
+    const provisionalDirection=qualifyProvisionalDirection({
+     early,quote,underlyingKey:key,asOf});
     return rejected('OPENING_RANGE',
-     ['CE','PE'].includes(early.direction)?['OPENING_RANGE_BIAS_ONLY']:
+     provisionalDirection?['OPENING_RANGE_BIAS_ONLY']:
       ['OPENING_RANGE_NOT_CONFIRMED',...((technical.reasons??[]).slice(0,1))],
-     {fallback:'OPENING_RANGE_NOT_CONFIRMED'});
+     {fallback:'OPENING_RANGE_NOT_CONFIRMED',
+      extra:provisionalDirection?{provisionalDirection}:{}});
+
    }
    return rejected('UNDERLYING_TECHNICAL',
     direction.reasons?.length?direction.reasons:['NO_CLEAR_TECHNICAL_DIRECTION'],
@@ -238,8 +290,12 @@ export function createPaperRecommendationFeed({
   const now=Number(new Date(asOf));
   if(!Number.isFinite(now))throw Error('INVALID_RECOMMENDATION_CLOCK');
   const slot=fiveMinuteSlot(now),previous=cache.get(tab);
+  // Freeze each successfully captured early hypothesis for its five-minute
+  // window. This is process-local, NOT a durable forecast ledger.
   if(previous?.slot===slot&&
-     (previous.result.state==='PAPER_SETUP'||now-previous.checkedAt<45000)){
+     (previous.result.state==='PAPER_SETUP'||
+      previous.result.provisionalDirection||
+      now-previous.checkedAt<45000)){
    return presentRecommendation({tab,last:lastByTab.get(tab)??null,result:previous.result,asOf:now});
   }
   if(pending.has(tab))return pending.get(tab);
