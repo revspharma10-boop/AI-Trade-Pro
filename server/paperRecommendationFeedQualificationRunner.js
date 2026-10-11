@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {RECOMMENDATION_MARKETS,RECOMMENDATION_FEED_SAFETY,
- qualifyPaperRecommendation,presentRecommendation,createPaperRecommendationFeed}
+ qualifyPaperRecommendation,presentRecommendation,createPaperRecommendationFeed,qualifyProvisionalDirection}
  from './paperRecommendationFeed.js';
 import {readFileSync} from 'node:fs';
 import {publishedEquitySession2026,EQUITY_CALENDAR_2026_VERSION}
@@ -162,12 +162,99 @@ await assert.rejects(feed.getLatest('unverified-tab',asOf),/UNSUPPORTED_RECOMMEN
 assert.equal(RECOMMENDATION_FEED_SAFETY.orderSubmissionAllowed,false);
 assert.equal(RECOMMENDATION_FEED_SAFETY.realOrderPlaced,false);
 assert.equal(RECOMMENDATION_FEED_SAFETY.approvedLots,0);
+// Synthetic-only integrated qualification of post-09:30 read-only direction.
+const earlyAt=atIST('2026-10-09','09:30:18');
+const idxKey='NSE_INDEX|Nifty 50';
+const openingBars=[
+ ['09:15:00',25000,25030,24990,25025],
+ ['09:20:00',25025,25060,25020,25050],
+ ['09:25:00',25050,25090,25045,25083]
+].map(([clock,open,high,low,close])=>({
+ datetime:new Date(atIST('2026-10-09',clock)).toISOString(),
+ open,high,low,close,volume:123}));
+let brokerReads=0,optionLookups=0,quoteIdentity=idxKey;
+const directionalMock={
+ searchIndex:async()=>{brokerReads++;return {instrumentKey:idxKey,tradingSymbol:'NIFTY'};},
+ searchEquity:async()=>{throw Error('NOT_REQUESTED');},
+ searchDerivatives:async()=>({contracts:[]}),
+ getContracts:async()=>{optionLookups++;return [];},
+ getCandles:async()=>({candles:openingBars}),
+ getQuote:async()=>({mode:'READ_ONLY',instrumentKey:quoteIdentity,
+  lastPrice:25085,timestamp:earlyAt}),
+ getMargin:async()=>{throw Error('NOT_REQUESTED');}
+};
+const directionFeed=createPaperRecommendationFeed(directionalMock);
+const first=await directionFeed.getLatest('nifty',earlyAt);
+assert.equal(first.state,'WAIT','Early direction must not qualify a paper option setup');
+assert.equal(first.stage,'OPENING_RANGE');
+assert.equal(first.provisionalDirection?.direction,'BULLISH');
+assert.equal(first.provisionalDirection?.kind,'PROVISIONAL_DIRECTION');
+assert.equal(first.provisionalDirection?.optionPlanQualified,false);
+assert.equal(first.provisionalDirection?.orderSubmissionAllowed,false);
+assert.equal(first.provisionalDirection?.recordedDurably,false);
+assert.equal(first.last,null);
+assert.equal(first.verifiedContract,null);
+assert.equal(first.realOrderPlaced,false);
+assert.equal(optionLookups,0,'Early bias never invokes option contract selection');
+assert.equal(brokerReads,1);
+const frozen=await directionFeed.getLatest('nifty',earlyAt+61000);
+assert.equal(frozen.provisionalDirection?.observedAt,first.provisionalDirection.observedAt,
+ 'Early directional snapshot freezes in its five-minute window');
+assert.equal(brokerReads,1,'Frozen five-minute window does not requery broker');
+const staleEarly=await directionFeed.getLatest('nifty',earlyAt+6*60000);
+assert.equal(staleEarly.provisionalDirection,null,
+ 'Stale quote cannot be replayed as a new five-minute forecast');
+assert.equal(staleEarly.state,'WAIT');
+const beforeWeekend=brokerReads;
+const closedEarly=await directionFeed.getLatest('nifty',atIST('2026-10-11','09:30:18'));
+assert.equal(closedEarly.provisionalDirection,null);
+assert.equal(brokerReads,beforeWeekend,'Closed market should not make broker calls');
+quoteIdentity='BSE_INDEX|SENSEX';
+const mismatchFeed=createPaperRecommendationFeed(directionalMock);
+const mismatch=await mismatchFeed.getLatest('nifty',earlyAt);
+assert.equal(mismatch.provisionalDirection,null,
+ 'Quote instrument mismatch must not be published as verified direction');
+quoteIdentity=idxKey;
+const forged={kind:'PROVISIONAL_DIRECTION',strategy:'OPENING_RANGE_15M',
+ direction:'BEARISH',source:'UPSTOX_READ_ONLY',recordedDurably:false,
+ observedAt:new Date(earlyAt).toISOString(),paperOnly:true,
+ optionPlanQualified:false,orderSubmissionAllowed:false,realOrderPlaced:false};
+const safePreview=presentRecommendation({tab:'nifty',result:{
+ state:'WAIT',stage:'OPENING_RANGE',checkedAt:new Date(earlyAt).toISOString(),
+ provisionalDirection:forged},asOf:earlyAt});
+assert.equal(safePreview.provisionalDirection?.direction,'BEARISH');
+for(const unsafe of [
+ {...forged,orderSubmissionAllowed:true},
+ {...forged,entry:99},
+ {...forged,direction:'CE'},
+ {...forged,observedAt:new Date(earlyAt-600000).toISOString()}
+]){
+ const bad=presentRecommendation({tab:'nifty',result:{
+  state:'WAIT',stage:'OPENING_RANGE',checkedAt:new Date(earlyAt).toISOString(),
+  provisionalDirection:unsafe},asOf:earlyAt});
+ assert.equal(bad.provisionalDirection,null,'Forged or expired hypothesis must fail closed');
+}
+assert.equal(presentRecommendation({tab:'commodity',result:{
+ state:'WAIT',stage:'OPENING_RANGE',checkedAt:new Date(earlyAt).toISOString(),
+ provisionalDirection:forged},asOf:earlyAt}).provisionalDirection,null);
+assert.equal(qualifyProvisionalDirection({
+ early:{valid:true,strategy:'OPENING_RANGE_15M',status:'PROVISIONAL_OPENING_BIAS',
+  direction:'CE',lastCompletedAt:openingBars[2].datetime,optionPlanQualified:false,
+  paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false},
+ quote:{mode:'READ_ONLY',instrumentKey:'BSE_INDEX|SENSEX',
+  lastPrice:25085,timestamp:earlyAt},underlyingKey:idxKey,asOf:earlyAt
+}),null,'Cross-instrument read-only quotes must be rejected before publication');
+
 const source=readFileSync(new URL('./paperRecommendationFeed.js',import.meta.url),'utf8');
 assert.match(source,/let marginLookupFailed=false/);
 assert.match(source,/marginLookupFailed\?\['BROKER_MARGIN_ESTIMATE_UNAVAILABLE'\]/);
 assert.match(source,/describePaperRejection\(\{stage:'UPSTOX_DATA'/);
 
 const server=readFileSync(new URL('./upstoxOAuthCallbackServer.js',import.meta.url),'utf8');
+assert.match(server,/body\?\.status!=='success'/,
+ 'Provider quote and candle endpoints must require actual successful Upstox responses');
+assert.match(server,/const numberValue=/,
+ 'Provider must not coerce null OHLCV into valid numeric data');
 assert.match(server,/\/api\/paper-recommendations\/latest/);
 assert.match(server,/latestPaperRecommendations\.getLatest\(tab\)/);
 assert.doesNotMatch(server,/\/v2\/order\/place|\/v3\/order\/place/);

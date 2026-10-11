@@ -86,3 +86,39 @@ calendar before attempting regular paper research.
 The GitHub Pages workflow checks the four navigation tabs, 30-second
 foreground polling, server-authoritative option values, paper-only safety,
 broker-rejection explanations and exact-origin CORS before each deployment.
+
+
+## Phase 2: provisional opening-range direction (index tabs only)
+
+The Nifty and Sensex screens have a **separate read-only opening-range
+direction card** when the backend validates three completed 09:15, 09:20,
+and 09:25 IST 5-minute candles, the post-09:30 session clock, fresh
+instrument-matched Upstox quotes, a clear predeclared opening-range
+hypothesis and the regular-session schedule. The separate label reads
+**BULLISH** or **BEARISH**, never a CALL or PUT option buy.
+
+- A provisional directional hypothesis does **not** authorize an option
+  trade, indicate a strike/expiry/premium, or satisfy the stricter 35-candle
+  full paper-option setup and ₹500 risk/margin/liquidity checks.
+- The first independently validated early direction is frozen for the
+  current five-minute decision slot (12-second feed grace). A broker quote
+  that is stale, has the wrong instrument key, or has invalid provider
+  status results in no early direction.
+- The browser independently validates read-only flags, backend timestamp
+  consistency, market identity and the forecast slot, before displaying
+  the card. Options Trade (INFY) and Commodity never inherit an index
+  direction from another tab.
+- This is a **transient process-memory observation only**, not a
+  continuously scheduled or durably recorded forecast. Render Free restarts
+  can erase the preview. No success-rate, trade outcome, guaranteed signal
+  frequency, real-time background monitoring or paper P&L can be claimed
+  from this card.
+- No price, target, order execution, account position, secret or personal
+  trading record is exposed by the new directional payload.
+- Sunday/weekends, published equity holidays, stale broker research and
+  absent authorization still correctly show WAIT/no preview.
+
+Automated CI fixtures use **synthetic** broker-like prices. Qualification
+does not prove Upstox live entitlements, exchange availability, or market
+prediction accuracy. True forward outcome tracking still requires separate
+immutable event storage and next-session evidence.

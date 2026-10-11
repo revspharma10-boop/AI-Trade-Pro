@@ -85,6 +85,22 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
  const blockedStaleSetup=hasLast&&current&&data.state==='PAPER_SETUP'&&!active;
  const previous=hasLast&&lastTimestampValid&&
   (data.state==='PAST_PAPER_IDEA'||data.state==='PAPER_SETUP'&&!current);
+ const early=matches&&data.state==='WAIT'?data.provisionalDirection:null;
+ const earlyTime=typeof early?.observedAt==='string'&&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(early.observedAt)?
+  Date.parse(early.observedAt):NaN;
+ const earlySafe=backendFresh&&checkedClockValid&&!previous&&!active&&
+  ['nifty','sensex'].includes(selectedTab)&&
+  early?.kind==='PROVISIONAL_DIRECTION'&&
+  early.strategy==='OPENING_RANGE_15M'&&
+  ['BULLISH','BEARISH'].includes(early.direction)&&
+  early.source==='UPSTOX_READ_ONLY'&&early.recordedDurably===false&&
+  early.optionPlanQualified===false&&early.paperOnly===true&&
+  early.orderSubmissionAllowed===false&&early.realOrderPlaced===false&&
+  !['contract','strike','expiry','entry','stopLoss','target','lots'].some(k=>Object.hasOwn(early,k))&&
+  Number.isFinite(earlyTime)&&earlyTime<=asOf+10000&&
+  checkedAt>=earlyTime-10000&&
+  Math.floor((earlyTime-12000)/300000)===Math.floor((asOf-12000)/300000);
  const activeWait=matches&&!active&&!previous;
  const stage=activeWait&&Object.hasOwn(STAGE_LABELS,data.stage??'')?data.stage:null;
  const failures=activeWait&&Array.isArray(data.blockers)?
@@ -95,6 +111,10 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   data.blockerCount:failures.length;
  return {
   state:active?'PAPER_SETUP':previous?'PAST_PAPER_IDEA':'WAIT',
+  provisionalDirection:earlySafe?{
+   label:early.direction,observedAt:new Date(earlyTime).toLocaleTimeString('en-IN',{
+    timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' IST'
+  }:null,
   tag:active?'PAPER BUY':previous?'PAST PAPER IDEA':'WAIT',
   contract:(active||previous)?last.contract:hasCandidate?
    candidate.tradingSymbol:stage&&NOT_CHECKED_STAGES.has(stage)?
@@ -173,6 +193,16 @@ export function mountAndroidBottomNavigation(){
  const explanation=make('p','android-simple-message','Waiting for verified broker data');
  explanation.setAttribute('role','status');
  explanation.setAttribute('aria-live','polite');
+ const directional=make('section','android-simple-direction');
+ directional.setAttribute('aria-label','Provisional market direction without option trade');
+ directional.hidden=true;
+ const directionalLabel=make('strong','android-simple-direction-value');
+ const directionalTime=make('span','android-simple-direction-time');
+ directional.append(
+  make('span','android-simple-direction-title','OPENING RANGE · DIRECTION ONLY'),
+  directionalLabel,directionalTime,
+  make('p','android-simple-direction-note',
+   'Unvalidated market hypothesis • Not a CE/PE entry • No option order or recorded result'));
  const diagnostics=make('section','android-simple-diagnostics');
  diagnostics.setAttribute('aria-label','Why the paper recommendation is waiting');
  diagnostics.hidden=true;
@@ -181,7 +211,7 @@ export function mountAndroidBottomNavigation(){
  const diagnosticList=make('ul','android-simple-diagnostic-list');
  const diagnosticMore=make('p','android-simple-diagnostic-more');
  diagnostics.append(diagnosticHeading,diagnosticStage,diagnosticList,diagnosticMore);
- card.append(market,chips,facts,details,explanation,diagnostics);
+ card.append(market,chips,facts,details,explanation,directional,diagnostics);
 
  const foot=make('footer','android-simple-footer');
  const refreshed=make('p','','Read-only updates every 30 seconds while visible');
@@ -232,6 +262,12 @@ export function mountAndroidBottomNavigation(){
   tradeStatus.textContent=view.status;
   explanation.textContent=view.explanation;
   backendChecked.textContent=view.backendStatus;
+  directional.hidden=!view.provisionalDirection;
+  directionalLabel.textContent=view.provisionalDirection?.label??'';
+  directionalLabel.className='android-simple-direction-value '+(
+   view.provisionalDirection?.label==='BULLISH'?'is-bullish':
+   view.provisionalDirection?.label==='BEARISH'?'is-bearish':'');
+  directionalTime.textContent=view.provisionalDirection?.observedAt??'';
   diagnostics.hidden=view.state!=='WAIT'||view.failedChecks.length===0;
   diagnosticStage.textContent=view.diagnosticStage??'RESEARCH DATA';
   diagnosticList.replaceChildren();

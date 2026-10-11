@@ -57,16 +57,20 @@ const feed=createPaperRecommendationFeed({
   },
   getQuote:async key=>{
    assert.equal(key,underlyingKey);called.quote++;
-   return quote;
+   return {...quote,mode:'READ_ONLY',instrumentKey:underlyingKey};
   },
   getMargin:async()=>{called.margin++;throw Error('MARGIN_NOT_REACHED_FOR_EARLY_BIAS');}
 });
 const response=await feed.getLatest('nifty',asOf);
 assert.equal(response.state,'WAIT',
- 'Current backend hides the positive opening-range direction from its output');
+ 'An early opening-range direction cannot qualify a paper option trade');
 assert.equal(response.stage,'OPENING_RANGE');
 assert.ok(response.blockers.some(x=>x.code==='OPENING_RANGE_BIAS_ONLY'),
- 'Current backend acknowledges early CE bias only as a WAIT blocker');
+ 'Provisional hypothesis still blocks a fully qualified option recommendation');
+assert.equal(response.provisionalDirection?.direction,'BULLISH',
+ 'Read-only 09:40 early bias is distinct from an option paper setup');
+assert.equal(response.provisionalDirection?.orderSubmissionAllowed,false);
+assert.equal(response.provisionalDirection?.recordedDurably,false);
 assert.equal(response.last,null);
 assert.equal(response.orderSubmissionAllowed,false);
 assert.equal(response.realOrderPlaced,false);
@@ -115,4 +119,4 @@ assert.match(uiSource,/if\(version===sequence&&!document\.hidden\)/,
 assert.match(serverSource,/\/api\/paper-recommendations\/latest/,
  'Baseline: read-only request-triggered recommendation endpoint exists');
 assert.doesNotMatch(feedSource,/\/v2\/order\/place|\/v3\/order\/place/);
-console.log('PHASE 0 BASELINE PASSED: synthetic 09:40 confirmed CE opening bias hidden behind WAIT, 35-bar full gate, separate risk/margin qualification, transient in-memory results, browser-led polling, paper-only');
+console.log('PHASE 0 BASELINE PASSED: synthetic 09:40 opening-range hypothesis separated from WAIT paper trade, 35-bar full gate, separate risk/margin qualification, transient in-memory preview, browser-led polling, paper-only');
