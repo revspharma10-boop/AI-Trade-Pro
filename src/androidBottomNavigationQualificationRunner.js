@@ -96,6 +96,10 @@ assert.equal(safeRecommendationCard({...paper,realOrderPlaced:true},'options',ti
 assert.equal(safeRecommendationCard({...paper,orderSubmissionAllowed:true},'options',time).state,'WAIT');
 assert.equal(safeRecommendationCard({...paper,last:{...paper.last,executionStatus:'Executed'}},'options',time).state,'WAIT');
 assert.equal(safeRecommendationCard({...paper,last:{...paper.last,approvedLots:1}},'options',time).state,'WAIT');
+assert.equal(safeRecommendationCard({...paper,last:{...paper.last,orderSubmissionAllowed:true}},
+ 'options',time).state,'WAIT','Nested order capability flag must suppress paper BUY');
+assert.equal(safeRecommendationCard({...paper,last:{...paper.last,realOrderPlaced:true}},
+ 'options',time).state,'WAIT','Nested execution flag must suppress paper BUY');
 assert.equal(safeRecommendationCard({...paper,last:{...paper.last,entry:0}},'options',time).state,'WAIT');
 assert.equal(safeRecommendationCard({...paper,last:{...paper.last,stopLoss:61}},'options',time).state,'WAIT');
 assert.equal(safeRecommendationCard({tab:'sensex',state:'WAIT',paperOnly:true,
@@ -124,6 +128,12 @@ assert.match(html,/viewport-fit=cover/,'WebView must expose real viewport safe a
 const nav=readFileSync(new URL('./androidBottomNavigation.js',import.meta.url),'utf8');
 assert.match(nav,/\/api\/paper-recommendations\/latest\?tab=/);
 assert.match(nav,/document\.hidden/);
+assert.match(nav,/if\(version===sequence&&!document\.hidden\)/,
+ 'A hidden browser must never render an obsolete broker response');
+assert.match(nav,/if\(!document\.hidden\)void refresh\(true\)/,
+ 'A hidden browser must not recursively launch a stale tab refresh');
+assert.match(nav,/Paused while browser is hidden/,
+ 'The user should see an explicit paused refresh status');
 assert.match(nav,/document\.addEventListener\('visibilitychange'/);
 assert.doesNotMatch(nav,/getUpstoxIntradayCandles|deriveAutoOptionDirection|calculateAutoOptionPaperPlan/,
  'Sensitive engine calculations should be server-side, not in the APK interface');
