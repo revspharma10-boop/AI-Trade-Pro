@@ -126,6 +126,7 @@ export function presentRecommendation({tab,last=null,result=null,asOf=Date.now()
   preview.paperOnly===true&&preview.optionPlanQualified===false&&
   preview.orderSubmissionAllowed===false&&preview.realOrderPlaced===false&&
   Number.isFinite(previewAt)&&previewAt<=asOf+10000&&
+  Number.isFinite(checkedAt)&&checkedAt<=asOf+10000&&
   checkedAt>=previewAt-10000&&asOf-checkedAt<=6*60000&&
   fiveMinuteSlot(previewAt)===fiveMinuteSlot(asOf)&&
   dayIST(previewAt)===dayIST(asOf);
