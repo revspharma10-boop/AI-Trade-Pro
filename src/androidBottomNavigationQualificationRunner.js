@@ -245,6 +245,7 @@ assert.match(nav,/inrQuote\.hidden=!cryptoTab/,
  'BTC rupee quote must only appear in BTC tab');
 assert.doesNotMatch(nav,/\$'\+cryptoSpot\.lastCompletedClose/,
  'A USD Kraken candle must never become a displayed BTC INR price');
+const nav=readFileSync(new URL('./androidBottomNavigation.js',import.meta.url),'utf8');
 const entry=readFileSync(new URL('./intradayRecommendationsUI.js',import.meta.url),'utf8');
 assert.match(entry,/VITE_ANDROID_APP!=='true'/,
  'Only legacy native Android builds should get extra status-bar spacing');
@@ -266,7 +267,7 @@ assert.match(layout,/max\(42px, calc\(18px/,'At least 42px separates the app hea
 assert.match(layout,/--safe-area-inset-bottom/);
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 assert.match(html,/viewport-fit=cover/,'WebView must expose real viewport safe areas');
-const nav=readFileSync(new URL('./androidBottomNavigation.js',import.meta.url),'utf8');
+
 assert.match(nav,/\/api\/paper-recommendations\/latest\?tab=/);
 assert.match(nav,/\/api\/crypto-research\/latest/,
  'Fifth tab must use isolated read-only crypto data endpoint');
