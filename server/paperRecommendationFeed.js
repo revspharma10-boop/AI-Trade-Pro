@@ -315,7 +315,9 @@ export function createPaperRecommendationFeed({
    result={...result,checkedAt};
    if(result.qualified)lastByTab.set(tab,result.qualified);
    cache.set(tab,{slot,checkedAt:now,result});
-   return presentRecommendation({tab,last:lastByTab.get(tab)??null,result,asOf:Date.now()});
+   // Same observation clock as the broker snapshot: deterministic replay and
+   // no accidental comparison of a historical fixture to host wall-clock time.
+   return presentRecommendation({tab,last:lastByTab.get(tab)??null,result,asOf:now});
   })();
   pending.set(tab,promise);
   try{return await promise;}finally{pending.delete(tab);}
