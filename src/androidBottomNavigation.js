@@ -50,7 +50,8 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   typeof last.contract==='string'&&last.contract.trim().length>0&&
   [last.entry,last.stopLoss,last.target].every(n=>typeof n==='number'&&Number.isFinite(n)&&n>0)&&
   last.stopLoss<last.entry&&last.entry<last.target&&
-  last.executionStatus==='NOT EXECUTED'&&last.approvedLots===0&&last.paperOnly===true;
+  last.executionStatus==='NOT EXECUTED'&&last.approvedLots===0&&last.paperOnly===true&&
+  last.orderSubmissionAllowed!==true&&last.realOrderPlaced!==true;
  const hasLast=matches&&pricesValid;
  const lastObserved=hasLast?Date.parse(last.capturedAt):NaN;
  const lastTimestampValid=Number.isFinite(lastObserved)&&
@@ -229,14 +230,14 @@ export function mountAndroidBottomNavigation(){
      signal:AbortSignal.timeout(12000)});
    if(!response.ok)throw Error('BROKER_BACKEND_UNAVAILABLE');
    const payload=await response.json();
-   if(version===sequence){
+   if(version===sequence&&!document.hidden){
     display(payload);
     refreshed.textContent='Last checked '+new Date().toLocaleTimeString('en-IN',{
      hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Kolkata'
     })+' IST · 30-second refresh while visible';
    }
   }catch(_e){
-   if(version===sequence){
+   if(version===sequence&&!document.hidden){
     display({tab,state:'WAIT',last:null,message:'Broker unavailable or timed out — WAIT',
      paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false});
     refreshed.textContent='Broker connection unavailable · Retrying automatically';
@@ -247,7 +248,7 @@ export function mountAndroidBottomNavigation(){
    // Avoid recursive polling loops when an upstream request is slow.
    if(version!==sequence||pendingTabRefresh){
     pendingTabRefresh=false;
-    void refresh(true);
+    if(!document.hidden)void refresh(true);
    }
   }
  }
@@ -265,7 +266,10 @@ export function mountAndroidBottomNavigation(){
   void refresh(true);
  }
  setInterval(()=>{void refresh();},30000);
- document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh(true);});
+ document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden)void refresh(true);
+  else refreshed.textContent='Paused while browser is hidden · PAPER ONLY';
+ });
  activate('nifty');
  return true;
 }
