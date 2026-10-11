@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 
 assert.deepEqual(ANDROID_TABS.map(t=>t.label),['Nifty','Sensex','Options Trade','Commodity','Crypto']);
 assert.deepEqual(ANDROID_TABS.map(t=>t.id),['nifty','sensex','options','commodity','crypto']);
-assert.equal(new Set(ANDROID_TABS.map(x=>x.id)).size,4);
+assert.equal(new Set(ANDROID_TABS.map(x=>x.id)).size,5);
 for(const tab of ANDROID_TABS)assert.equal(androidTabById(tab.id),tab);
 assert.equal(androidTabById('missing').id,'nifty');
 const time=Date.parse('2026-10-09T12:30:18+05:30');
