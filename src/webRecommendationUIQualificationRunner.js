@@ -66,12 +66,15 @@ assert.equal(safeRecommendationCard({...sample,orderSubmissionAllowed:true},'nif
 const qualified={
  tab:'nifty',state:'PAPER_SETUP',paperOnly:true,
  realOrderPlaced:false,orderSubmissionAllowed:false,
+ lastCheckedAt:new Date(now).toISOString(),
  last:{optionType:'CE',contract:'NIFTY SYNTHETIC 25000 CE',
   entry:100,stopLoss:90,target:120,date:'2026-10-09',
   capturedAt:new Date(now).toISOString(),
   executionStatus:'NOT EXECUTED',approvedLots:0,paperOnly:true}
 };
 assert.equal(safeRecommendationCard(qualified,'nifty',now).tag,'PAPER BUY');
+assert.equal(safeRecommendationCard({...qualified,lastCheckedAt:null},'nifty',now).tag,'WAIT',
+ 'Browser qualification must reject a current paper BUY with no backend check time');
 for(const capturedAt of ['not-a-timestamp',
  new Date(now+60000).toISOString(),null]){
  const bad=safeRecommendationCard({...qualified,last:{

@@ -56,6 +56,17 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
  const lastObserved=hasLast?Date.parse(last.capturedAt):NaN;
  const lastTimestampValid=Number.isFinite(lastObserved)&&
   Number.isFinite(asOf)&&lastObserved<=asOf+10000;
+ // A successful browser fetch is NOT proof that server-side market research
+ // was freshly evaluated. The read-only backend supplies lastCheckedAt.
+ const checkedText=matches?data.lastCheckedAt:null;
+ const checkedAt=typeof checkedText==='string'&&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(checkedText)?
+  Date.parse(checkedText):NaN;
+ const checkedClockValid=Number.isFinite(asOf)&&Number.isFinite(checkedAt)&&
+  checkedAt<=asOf+10000;
+ // Allow one frozen five-minute research slot, but fail closed on old cache.
+ const backendFresh=checkedClockValid&&asOf-checkedAt<=6*60000;
+ const backendConsistent=!hasLast||checkedAt>=lastObserved-10000;
  // Broker-confirmed exchange metadata may be shown during WAIT, but never
  // interpreted as verified option premium, entry, SL, target, or trade approval.
  const candidate=matches&&!hasLast&&data.state==='WAIT'?data.verifiedContract:null;
@@ -69,7 +80,9 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
  const current=lastTimestampValid&&
   Math.floor((lastObserved-12000)/300000)===
     Math.floor((asOf-12000)/300000);
- const active=hasLast&&current&&data.state==='PAPER_SETUP';
+ const active=hasLast&&current&&data.state==='PAPER_SETUP'&&
+  backendFresh&&backendConsistent;
+ const blockedStaleSetup=hasLast&&current&&data.state==='PAPER_SETUP'&&!active;
  const previous=hasLast&&lastTimestampValid&&
   (data.state==='PAST_PAPER_IDEA'||data.state==='PAPER_SETUP'&&!current);
  const activeWait=matches&&!active&&!previous;
@@ -96,8 +109,16 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   diagnosticStage:stage?STAGE_LABELS[stage]:null,
   failedChecks:failures.slice(0,3).map(x=>({code:x.code,message:x.message})),
   otherChecks:Math.max(0,count-Math.min(3,failures.length)),
-  explanation:matches&&typeof data.message==='string'?
-   data.message:'Awaiting verified broker research'
+  backendStatus:!checkedClockValid?'Backend research time: unverified':
+   !backendFresh?'Backend research: stale · WAIT':
+   !backendConsistent?'Backend research: timestamp mismatch · WAIT':
+   'Backend research checked '+new Date(checkedAt).toLocaleString('en-IN',{
+    timeZone:'Asia/Kolkata',day:'2-digit',month:'short',
+    hour:'2-digit',minute:'2-digit',second:'2-digit'})+' IST',
+  explanation:blockedStaleSetup?
+   'Backend research timestamp missing, stale, or inconsistent — WAIT until revalidated':
+   matches&&typeof data.message==='string'?
+    data.message:'Awaiting verified broker research'
  };
 }
 export function mountAndroidBottomNavigation(){
@@ -165,6 +186,7 @@ export function mountAndroidBottomNavigation(){
  const foot=make('footer','android-simple-footer');
  const refreshed=make('p','','Read-only updates every 30 seconds while visible');
  refreshed.setAttribute('role','status');
+ const backendChecked=make('p','','Backend research time: unverified');
  const manualRefresh=make('button','android-simple-manual-refresh','Refresh now');
  manualRefresh.type='button';
  manualRefresh.setAttribute('aria-label','Refresh current market research now');
@@ -172,7 +194,7 @@ export function mountAndroidBottomNavigation(){
  const connect=make('a','','Connect Upstox');
  connect.href=API+'/auth/upstox/start';
  connect.target='_blank';connect.rel='noopener noreferrer';
- foot.append(refreshed,manualRefresh,connect);
+ foot.append(refreshed,backendChecked,manualRefresh,connect);
  app.append(header,heading,card,foot);
  root.append(app);
 
@@ -209,6 +231,7 @@ export function mountAndroidBottomNavigation(){
   observedDate.textContent=view.date;
   tradeStatus.textContent=view.status;
   explanation.textContent=view.explanation;
+  backendChecked.textContent=view.backendStatus;
   diagnostics.hidden=view.state!=='WAIT'||view.failedChecks.length===0;
   diagnosticStage.textContent=view.diagnosticStage??'RESEARCH DATA';
   diagnosticList.replaceChildren();
@@ -238,7 +261,7 @@ export function mountAndroidBottomNavigation(){
    const payload=await response.json();
    if(version===sequence&&!document.hidden){
     display(payload);
-    refreshed.textContent='Last checked '+new Date().toLocaleTimeString('en-IN',{
+    refreshed.textContent='Browser received '+new Date().toLocaleTimeString('en-IN',{
      hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Kolkata'
     })+' IST · 30-second refresh while visible';
    }
