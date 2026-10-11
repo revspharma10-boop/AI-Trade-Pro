@@ -1,0 +1,65 @@
+name: BTC Spot Shadow Journal - Free Schedule
+# Schedules are best effort: GitHub can delay/drop runs. Never reconstruct
+# an entry after the prediction horizon or treat these slots as guaranteed.
+on:
+  # One-time first-run proof on initial main-branch deployment. Subsequent
+  # edits to this workflow also qualify the worker, never trading.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/crypto-shadow-free-schedule.yml'
+  schedule:
+    # 1 minute into each 5m UTC slot avoids the busiest minute zero.
+    - cron: '1-56/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: btc-shadow-journal-single-writer
+  cancel-in-progress: false
+jobs:
+  shadow-observe:
+    # IMPORTANT: public repository only. Do not consume private billed minutes.
+    if: github.event.repository.private == false && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout default branch with token for dedicated journal branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 1
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Create or use dedicated append-only journal worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git ls-remote --exit-code --heads origin crypto-shadow-history >/dev/null; then
+            git fetch --no-tags origin '+refs/heads/crypto-shadow-history:refs/remotes/origin/crypto-shadow-history'
+            git worktree add -b crypto-shadow-history "$RUNNER_TEMP/crypto-shadow-history" origin/crypto-shadow-history
+          else
+            git worktree add -b crypto-shadow-history "$RUNNER_TEMP/crypto-shadow-history" HEAD
+          fi
+      - name: Observe BTC with real Kraken 5-minute completed candles
+        env:
+          NODE_ENV: production
+        run: |
+          node server/cryptoShadowScheduledJob.js "$RUNNER_TEMP/crypto-shadow-history"
+      - name: Commit and persist research observations (no secret or order)
+        shell: bash
+        run: |
+          set -euo pipefail
+          worktree="$RUNNER_TEMP/crypto-shadow-history"
+          git -C "$worktree" add -- data/crypto/btc-usd
+          if git -C "$worktree" diff --cached --quiet; then
+            echo "BTC_SHADOW_NO_NEW_EVENTS"
+          else
+            git -C "$worktree" commit -m 'btc shadow: append verified paper research and fixed-horizon outcomes'
+            git -C "$worktree" push origin HEAD:refs/heads/crypto-shadow-history
+            echo "BTC_SHADOW_PERSISTED_TO_GITHUB_HISTORY"
+          fi

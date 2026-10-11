@@ -1,0 +1,52 @@
+name: BTC Free Shadow Journal Qualification
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/crypto*'
+      - '.github/workflows/crypto-shadow-free-schedule.yml'
+      - '.github/workflows/crypto-shadow-qualification.yml'
+      - 'docs/CRYPTO_SHADOW_JOURNAL.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-ledger-qualification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Node syntax
+        run: |
+          node --check server/cryptoShadowLedger.js
+          node --check server/cryptoShadowScheduledJob.js
+          node --check server/cryptoShadowLedgerQualificationRunner.js
+          node --check server/cryptoKrakenLiveProbe.js
+      - name: Test immutable BTC outcome ledger, cron delays, provider failures, restart and tampering
+        run: node server/cryptoShadowLedgerQualificationRunner.js
+      - name: Verify previous crypto confluence and paper safety
+        run: |
+          node server/cryptoPaperResearchQualificationRunner.js
+          node src/androidBottomNavigationQualificationRunner.js
+          node server/paperRecommendationFeedQualificationRunner.js
+          node src/webRecommendationUIQualificationRunner.js
+      - name: Verify read-only live backend and public web bundle are unchanged
+        run: |
+          ! grep -q 'cryptoShadowLedger\|cryptoShadowScheduledJob' server/upstoxOAuthCallbackServer.js
+          ! grep -q 'cryptoShadowLedger\|cryptoShadowScheduledJob' src/androidBottomNavigation.js
+          npm ci
+          npm run build
+  live-kraken-one-time-probe:
+    # Provider accessibility from GitHub Actions, not a simulated market feed.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read real Kraken 30h spot OHLC without credentials or orders
+        run: node server/cryptoKrakenLiveProbe.js
