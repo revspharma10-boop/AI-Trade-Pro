@@ -83,6 +83,26 @@ export function deriveOpeningRangeBias({candles=[],quote=null,session=null,asOf=
  // Do not accept quote-only spikes: both completed close and fresh broker quote
  // must be on the breakout side, with a candle body in the move direction.
  const breakoutBuffer=Math.max(open*0.00005,range*0.03);
+ const breakoutDiagnostics={
+  candleAt:lastPost?.datetime??null,
+  candleOHLC:lastPost?{open:round(lastPost.open),high:round(lastPost.high),
+   low:round(lastPost.low),close:round(lastPost.close)}:null,
+  upsideCloseThreshold:round(high+breakoutBuffer),
+  downsideCloseThreshold:round(low-breakoutBuffer),
+  breakoutBuffer:round(breakoutBuffer),
+  quotePrice:quote.lastPrice,
+  quoteAgeSeconds:round((now-quote.timestamp)/1000),
+  candleAgeAfterCompletionSeconds:lastPost?round((now-lastPost.timestamp-300000)/1000):null,
+  checks:{
+   postOpeningCompletedCandleAvailable:!!lastPost,
+   bullishCloseBeyondBuffer:!!lastPost&&lastPost.close>high+breakoutBuffer,
+   bullishCandleBody:!!lastPost&&lastPost.close>lastPost.open,
+   bullishQuoteAboveRange:quote.lastPrice>high,
+   bearishCloseBeyondBuffer:!!lastPost&&lastPost.close<low-breakoutBuffer,
+   bearishCandleBody:!!lastPost&&lastPost.close<lastPost.open,
+   bearishQuoteBelowRange:quote.lastPrice<low
+  }
+ };
  const bullBreakout=!!lastPost&&lastPost.close>high+breakoutBuffer&&
   lastPost.close>lastPost.open&&quote.lastPrice>high&&quote.lastPrice>=mid;
  const bearBreakout=!!lastPost&&lastPost.close<low-breakoutBuffer&&
@@ -101,13 +121,16 @@ export function deriveOpeningRangeBias({candles=[],quote=null,session=null,asOf=
  return {...snapshot,direction,status:direction==='WAIT'?'OPENING_RANGE_WAIT':'PROVISIONAL_OPENING_BIAS',
   openingRangeHigh:round(high),openingRangeLow:round(low),indexPriceAtCapture:quote.lastPrice,
   breakoutConfirmedByQuote:confirmedBreak,
-  breakoutConfirmedByCompletedCandle:bullBreakout||bearBreakout,signalBasis,
+  breakoutConfirmedByCompletedCandle:bullBreakout||bearBreakout,signalBasis,breakoutDiagnostics,
   evidence:[...snapshot.evidence,
    'Opening close position '+round(position*100)+'% of range',
    'Opening candle net body '+round(body*100)+'% of range',
    'Monotonic 5m closes '+(upCloses?'UP':downCloses?'DOWN':'MIXED'),
    'Latest fresh broker index quote '+quote.lastPrice+' • quote-only breakout '+(confirmedBreak?'YES':'NO'),
    'Most recent completed post-opening candle '+(lastPost?.datetime??'NONE'),
+   'Post-opening candle OHLC '+(lastPost?`${lastPost.open} / ${lastPost.high} / ${lastPost.low} / ${lastPost.close}`:'NOT AVAILABLE'),
+   'Breakout thresholds CE > '+round(high+breakoutBuffer)+' / PE < '+round(low-breakoutBuffer),
+   'Breakout checks '+JSON.stringify(breakoutDiagnostics.checks),
    'Completed 5-minute breakout '+(bullBreakout?'UP':bearBreakout?'DOWN':'NOT CONFIRMED'),
    'Signal basis '+(signalBasis??'NO CONFIRMED DIRECTION')],
   reasons:direction==='WAIT'?['OPENING_RANGE_HAS_NO_CLEAR_DIRECTION','POST_OPENING_5M_BREAKOUT_NOT_CONFIRMED']:[
