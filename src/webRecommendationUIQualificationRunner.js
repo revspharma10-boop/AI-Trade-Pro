@@ -61,4 +61,39 @@ assert.equal(view.diagnosticStage,'OPTION PREMIUM AND RISK');
 assert.equal(view.failedChecks.length,1);
 assert.notEqual(view.status,'Executed');
 assert.equal(safeRecommendationCard({...sample,orderSubmissionAllowed:true},'nifty',now).tag,'WAIT');
+// A malformed/future-dated record must never show prices as a current
+// paper BUY, even if the broker payload claims PAPER_SETUP.
+const qualified={
+ tab:'nifty',state:'PAPER_SETUP',paperOnly:true,
+ realOrderPlaced:false,orderSubmissionAllowed:false,
+ last:{optionType:'CE',contract:'NIFTY SYNTHETIC 25000 CE',
+  entry:100,stopLoss:90,target:120,date:'2026-10-09',
+  capturedAt:new Date(now).toISOString(),
+  executionStatus:'NOT EXECUTED',approvedLots:0,paperOnly:true}
+};
+assert.equal(safeRecommendationCard(qualified,'nifty',now).tag,'PAPER BUY');
+for(const capturedAt of ['not-a-timestamp',
+ new Date(now+60000).toISOString(),null]){
+ const bad=safeRecommendationCard({...qualified,last:{
+  ...qualified.last,capturedAt
+ }},'nifty',now);
+ assert.equal(bad.tag,'WAIT','Malformed or future timestamp cannot claim active BUY');
+ assert.equal(bad.entry,'—','Unverified time must hide the displayed entry');
+ assert.equal(bad.target,'—');
+ assert.equal(bad.stopLoss,'—');
+ assert.equal(bad.contract,'NO VERIFIED OPTION CONTRACT');
+}
+const past=safeRecommendationCard({...qualified,last:{
+ ...qualified.last,capturedAt:new Date(now-300000).toISOString()
+}},'nifty',now);
+assert.equal(past.tag,'PAST PAPER IDEA');
+assert.equal(past.status,'Previous idea · Not executed');
+assert.equal(safeRecommendationCard({...qualified,realOrderPlaced:true},
+ 'nifty',now).tag,'WAIT');
+assert.match(ui,/AbortSignal\.timeout\(12000\)/,
+ 'A stalled Render request must time out instead of freezing tab updates');
+assert.match(ui,/pendingTabRefresh/,
+ 'Tab changes during an in-flight request must trigger a fresh fetch');
+assert.match(ui,/timeZone:'Asia\/Kolkata'/,
+ 'Refresh timestamp must show IST, not ambiguous browser-local time');
 console.log('WEB RECOMMENDATION UI QUALIFICATION PASSED: four tabs, responsive browser layout, 30-sec read-only updates, verified WAIT, zero real orders');
