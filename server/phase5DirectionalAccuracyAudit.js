@@ -157,11 +157,16 @@ export function chronologicalAccuracyHoldout({
  // because they were excluded from a chosen period.
  evaluateDirectionalHistory({forecasts,outcomes,asOf:now,provenance});
  const groups={training:[],validation:[],test:[]},censored=[];
+ const outcomesById=new Map(outcomes.map(o=>[o.forecastId,o]));
  for(const f of forecasts){
   const capture=Date.parse(f.capturedAtUtc);
   const horizon=Date.parse(f.horizonEndUtc);
-  if(horizon<=trainEnd)groups.training.push(f);
-  else if(capture>=trainEnd&&horizon<=validationEnd)
+  const settledAt=outcomesById.has(f.id)?
+   Date.parse(outcomesById.get(f.id).capturedAtUtc):null;
+  if(horizon<=trainEnd&&(settledAt===null||settledAt<=trainEnd))
+   groups.training.push(f);
+  else if(capture>=trainEnd&&horizon<=validationEnd&&
+    (settledAt===null||settledAt<=validationEnd))
    groups.validation.push(f);
   else if(capture>=validationEnd&&horizon<=now)
    groups.test.push(f);
