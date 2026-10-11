@@ -319,7 +319,7 @@ export function mountAndroidBottomNavigation(){
  const technicalMetrics=make('p','android-simple-direction-note');
  const technicalLevels=make('p','android-simple-direction-note');
  const technicalDisclaimer=make('p','android-simple-direction-note',
-  'USD candle illustrations ONLY. No executable entry, SL, targets, fees, slippage, position sizing, FX or verified profitability.');
+  'Global BTC/USD trend data only; not a verified BTC/INR entry, exit, risk level or profitable trade.');
  confluence.append(technicalTitle,technicalMetrics,technicalLevels,technicalDisclaimer);
  const diagnostics=make('section','android-simple-diagnostics');
  diagnostics.setAttribute('aria-label','Why the paper recommendation is waiting');
