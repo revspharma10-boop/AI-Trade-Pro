@@ -119,11 +119,10 @@ for(const date of ['2026-10-11','2026-10-20','2027-01-04']){
  assert.equal(searches,priorSearches,'Closed/unverified schedule must not call broker');
  assert.equal(result.orderSubmissionAllowed,false);
 }
+const weekend=await feed.getLatest('sensex',atIST('2026-10-11'));
+assert.equal(weekend.blockers[0].code,'EQUITY_MARKET_WEEKEND');
 const bseHoliday=await feed.getLatest('sensex',atIST('2026-10-20'));
 assert.equal(bseHoliday.blockers[0].code,'EQUITY_EXCHANGE_HOLIDAY');
-const regularDay=await feed.getLatest('sensex',atIST('2026-10-12'));
-assert.equal(regularDay.stage,'UPSTOX_DATA',
- 'Planned weekday may proceed to broker preflight, not fabricate a prediction');
 
 assert.equal(a.state,'WAIT');assert.equal(b.state,'WAIT');
 assert.equal(a.last,null);
@@ -137,6 +136,10 @@ assert.equal((await feed.getLatest('nifty',asOf+30000)).state,'WAIT');
 assert.equal(searches,1,'30-second polling uses cached data instead of repeated upstream calls');
 assert.equal((await feed.getLatest('nifty',asOf+47000)).state,'WAIT');
 assert.equal(searches,2,'retry after cache TTL');
+const regularDay=await feed.getLatest('sensex',atIST('2026-10-12'));
+assert.equal(regularDay.stage,'UPSTOX_DATA',
+ 'Planned weekday may proceed to broker preflight, not fabricate a prediction');
+
 assert.equal((await feed.getLatest('commodity',asOf)).state,'WAIT');
 assert.equal((await feed.getLatest('sensex',Date.parse('2026-10-09T08:00:00+05:30'))).state,'WAIT');
 await assert.rejects(feed.getLatest('unverified-tab',asOf),/UNSUPPORTED_RECOMMENDATION_TAB/);
