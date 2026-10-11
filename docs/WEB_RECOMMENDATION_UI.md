@@ -122,3 +122,47 @@ Automated CI fixtures use **synthetic** broker-like prices. Qualification
 does not prove Upstox live entitlements, exchange availability, or market
 prediction accuracy. True forward outcome tracking still requires separate
 immutable event storage and next-session evidence.
+
+
+## Fifth bottom tab: Crypto / BTC/USD (public Kraken spot, paper-only)
+
+The existing four-tab mobile-style web interface gains a **Crypto** tab.
+This initial market is **BTC/USD (US dollars)**, not BTC/INR, MCX,
+a crypto derivative, a real Upstox instrument or an exchange account.
+
+- Backend-only public GET:
+  `https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=5`
+  via `GET /api/crypto-research/latest`. No Kraken API key, paid
+  subscription, or order authorization is configured.
+- Operates on a 24/7 clock, including weekends. A rolling 15-minute
+  reference range consists of **three consecutive completed** five-minute
+  bars. A **fourth completed bar** with sufficient observed activity must
+  close beyond the range (with a predeclared buffer) to yield provisional
+  **BULLISH** or **BEARISH** research.
+- Kraken's last OHLC entry is **uncommitted**. It is deliberately excluded,
+  and all candle times, continuity, OHLC bounds, volume, provider errors,
+  exchange pair identity, and 12-second close grace are checked.
+- The displayed dollar value is the **last completed five-minute close**,
+  explicitly *not* a live/executable bid, ask or guaranteed entry.
+- Status remains **WAIT** for crypto trade setup regardless of the directional
+  research result. The crypto screen hides option price/stop/target blocks
+  and the irrelevant Upstox connection button.
+- A hypothesis freezes for its current five-minute decision slot. The browser
+  polls the backend every 30 seconds only **while visible**; Render Free
+  sleeps/restarts are possible. This is **not** unattended 24/7 monitoring.
+- Unknown, stale, malformed, missing, provider-blocked or mismatched candles
+  give WAIT and no directional preview. No fabricated confidence score,
+  crypto order, recorded forecast outcome, option-chain selection or P&L.
+- NIFTY, SENSEX, Options Trade and Commodity research retain their prior
+  broker-backed checks. Real trading remains disabled everywhere.
+
+Public reference: Kraken spot OHLC documentation states that the last
+entry is current and uncommitted:
+https://docs.kraken.com/api/docs/rest-api/get-ohlc-data/
+Kraken's public market-data API is available without a Kraken account, with
+rate limits. Crypto prices are volatile and individual exchange prices may
+differ. Crypto taxation, eligibility, currency conversions and jurisdictional
+requirements are outside this read-only research experiment.
+
+The qualification uses synthetic BTC/USD market examples. **No historical
+or live forward crypto prediction accuracy has been established.**

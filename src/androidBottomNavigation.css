@@ -135,7 +135,7 @@ body.android-minimal-shell .android-simple-footer a{
 }
 body.android-minimal-shell .android-simple-nav{
  position:fixed;bottom:0;left:0;right:0;z-index:100;
- display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+ display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
  gap:4px;padding:9px max(8px,var(--safe-area-inset-right, env(safe-area-inset-right, 0px)))
   calc(11px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)))
   max(8px,var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
@@ -261,4 +261,17 @@ body.android-minimal-shell .android-simple-direction-time{
 }
 body.android-minimal-shell .android-simple-direction-note{
  color:#617d87;font-size:11px;line-height:1.5;margin:0;
+}
+
+/* Fifth Crypto tab: directional spot-only surface, no entry/SL/target cards. */
+body.android-minimal-shell .android-simple-facts[hidden],
+body.android-minimal-shell .android-simple-details[hidden],
+body.android-minimal-shell .android-simple-direction-price[hidden],
+body.android-minimal-shell .android-simple-footer a[hidden]{display:none}
+body.android-minimal-shell .android-simple-direction-price{
+ display:block;font-weight:750;font-size:13px;color:#294853;line-height:1.45;
+}
+@media(max-width:390px){
+ body.android-minimal-shell .android-simple-tab{padding-left:1px;padding-right:1px}
+ body.android-minimal-shell .android-simple-tab span{font-size:9px;letter-spacing:-.03em}
 }

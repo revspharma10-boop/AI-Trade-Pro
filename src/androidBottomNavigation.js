@@ -1,18 +1,20 @@
-// Personal Android edition: four minimalist last-recommendation screens.
+// Five-tab responsive web research: four original markets and read-only BTC/USD spot.
 // All candle/technical/contract/option-margin research is calculated on Render.
 // The device receives a read-only summary; no trade orders or fake premiums.
 export const ANDROID_TABS=Object.freeze([
  Object.freeze({id:'nifty',label:'Nifty',heading:'NIFTY 50',caption:'NSE index option research',icon:'trend'}),
  Object.freeze({id:'sensex',label:'Sensex',heading:'SENSEX',caption:'BSE index option research',icon:'bars'}),
  Object.freeze({id:'options',label:'Options Trade',heading:'Stock Options',caption:'INFY option research',icon:'target'}),
- Object.freeze({id:'commodity',label:'Commodity',heading:'Commodity',caption:'MCX GOLD option research',icon:'layers'})
+ Object.freeze({id:'commodity',label:'Commodity',heading:'Commodity',caption:'MCX GOLD option research',icon:'layers'}),
+ Object.freeze({id:'crypto',label:'Crypto',heading:'Bitcoin (BTC/USD)',caption:'24/7 Kraken spot research • USD',icon:'bitcoin'})
 ]);
 export function androidTabById(id){return ANDROID_TABS.find(t=>t.id===id)??ANDROID_TABS[0];}
 const ICONS=Object.freeze({
  trend:'<path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/>',
  bars:'<path d="M4 20V12M10 20V6M16 20v-9M22 20V3"/>',
  target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/>',
- layers:'<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5M3 16l9 5 9-5"/>'
+ layers:'<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5M3 16l9 5 9-5"/>',
+ bitcoin:'<path d="M9 3v18m4-18v18M7 6h7a3 3 0 0 1 0 6H7m0 0h8a3 3 0 0 1 0 6H7"/>'
 });
 const API=import.meta.env?.VITE_UPSTOX_READONLY_API_BASE||
  'https://ai-trade-pro-oauth.onrender.com';
@@ -35,7 +37,8 @@ const STAGE_LABELS=Object.freeze({
  MCX_UNDERLYING:'COMMODITY UNDERLYING',
  MCX_TECHNICAL:'COMMODITY TECHNICAL SIGNAL',
  MCX_CONTRACT:'COMMODITY OPTION CONTRACT',
- MCX_OPTION_QUALIFICATION:'COMMODITY PREMIUM AND RISK'
+ MCX_OPTION_QUALIFICATION:'COMMODITY PREMIUM AND RISK',
+ CRYPTO_SPOT_RESEARCH:'CRYPTO COMPLETED CANDLE RESEARCH'
 });
 const NOT_CHECKED_STAGES=new Set([
  'MARKET_SESSION','UNDERLYING','UPSTOX_DATA','OPENING_RANGE',
@@ -89,12 +92,28 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
  const earlyTime=typeof early?.observedAt==='string'&&
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(early.observedAt)?
   Date.parse(early.observedAt):NaN;
+ const cryptoSpot=matches&&selectedTab==='crypto'?data.spot:null;
+ const cryptoSpotValid=!!cryptoSpot&&cryptoSpot.market==='BTC/USD'&&
+  cryptoSpot.currency==='USD'&&cryptoSpot.source==='KRAKEN_PUBLIC_SPOT'&&
+  typeof cryptoSpot.lastCompletedClose==='number'&&
+  Number.isFinite(cryptoSpot.lastCompletedClose)&&cryptoSpot.lastCompletedClose>0&&
+  typeof cryptoSpot.completedAt==='string'&&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(cryptoSpot.completedAt)&&
+  Number.isFinite(Date.parse(cryptoSpot.completedAt));
+ const cryptoDirection=selectedTab==='crypto'&&cryptoSpotValid&&
+  early?.strategy==='CRYPTO_ROLLING_RANGE_15M'&&
+  early?.source==='KRAKEN_PUBLIC_SPOT'&&
+  early?.lastCompletedAt===cryptoSpot.completedAt&&
+  Number.isFinite(Date.parse(early.lastCompletedAt))&&
+  Date.parse(early.lastCompletedAt)<=asOf&&
+  asOf-Date.parse(early.lastCompletedAt)<300000;
+ const indexDirection=['nifty','sensex'].includes(selectedTab)&&
+  early?.strategy==='OPENING_RANGE_15M'&&early?.source==='UPSTOX_READ_ONLY';
  const earlySafe=backendFresh&&checkedClockValid&&!previous&&!active&&
-  ['nifty','sensex'].includes(selectedTab)&&
+  (indexDirection||cryptoDirection)&&
   early?.kind==='PROVISIONAL_DIRECTION'&&
-  early.strategy==='OPENING_RANGE_15M'&&
   ['BULLISH','BEARISH'].includes(early.direction)&&
-  early.source==='UPSTOX_READ_ONLY'&&early.recordedDurably===false&&
+  early.recordedDurably===false&&
   early.optionPlanQualified===false&&early.paperOnly===true&&
   early.orderSubmissionAllowed===false&&early.realOrderPlaced===false&&
   !['contract','strike','expiry','entry','stopLoss','target','lots'].some(k=>Object.hasOwn(early,k))&&
@@ -115,8 +134,13 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
    label:early.direction,observedAt:new Date(earlyTime).toLocaleTimeString('en-IN',{
     timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' IST'
   }:null,
+  cryptoPrice:earlySafe&&cryptoDirection?
+   '$'+cryptoSpot.lastCompletedClose.toLocaleString('en-US',{
+    minimumFractionDigits:2,maximumFractionDigits:2
+   })+' · last completed 5m close (USD)':null,
   tag:active?'PAPER BUY':previous?'PAST PAPER IDEA':'WAIT',
-  contract:(active||previous)?last.contract:hasCandidate?
+  contract:selectedTab==='crypto'?'BTC/USD · SPOT RESEARCH':
+   (active||previous)?last.contract:hasCandidate?
    candidate.tradingSymbol:stage&&NOT_CHECKED_STAGES.has(stage)?
     'OPTION CONTRACT NOT CHECKED':'NO VERIFIED OPTION CONTRACT',
   entry:(active||previous)?money(last.entry):'—',
@@ -124,7 +148,8 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   stopLoss:(active||previous)?money(last.stopLoss):'—',
   date:(active||previous)?date(last.date):'—',
   status:active?'Paper idea · Not executed':
-   previous?'Previous idea · Not executed':hasCandidate?
+   previous?'Previous idea · Not executed':selectedTab==='crypto'?
+    'No crypto trade executed':hasCandidate?
     'Contract verified · Setup WAIT':'No paper trade executed',
   diagnosticStage:stage?STAGE_LABELS[stage]:null,
   failedChecks:failures.slice(0,3).map(x=>({code:x.code,message:x.message})),
@@ -198,11 +223,12 @@ export function mountAndroidBottomNavigation(){
  directional.hidden=true;
  const directionalLabel=make('strong','android-simple-direction-value');
  const directionalTime=make('span','android-simple-direction-time');
+ const directionalPrice=make('span','android-simple-direction-price');
  directional.append(
-  make('span','android-simple-direction-title','OPENING RANGE · DIRECTION ONLY'),
-  directionalLabel,directionalTime,
+  make('span','android-simple-direction-title','COMPLETED 5M CANDLES · DIRECTION ONLY'),
+  directionalLabel,directionalTime,directionalPrice,
   make('p','android-simple-direction-note',
-   'Unvalidated market hypothesis • Not a CE/PE entry • No option order or recorded result'));
+   'Unvalidated market hypothesis • Not an entry or option order • No recorded outcome'));
  const diagnostics=make('section','android-simple-diagnostics');
  diagnostics.setAttribute('aria-label','Why the paper recommendation is waiting');
  diagnostics.hidden=true;
@@ -268,6 +294,8 @@ export function mountAndroidBottomNavigation(){
    view.provisionalDirection?.label==='BULLISH'?'is-bullish':
    view.provisionalDirection?.label==='BEARISH'?'is-bearish':'');
   directionalTime.textContent=view.provisionalDirection?.observedAt??'';
+  directionalPrice.hidden=!view.cryptoPrice;
+  directionalPrice.textContent=view.cryptoPrice??'';
   diagnostics.hidden=view.state!=='WAIT'||view.failedChecks.length===0;
   diagnosticStage.textContent=view.diagnosticStage??'RESEARCH DATA';
   diagnosticList.replaceChildren();
@@ -290,7 +318,9 @@ export function mountAndroidBottomNavigation(){
   loading=true;lastPoll=Date.now();
   manualRefresh.disabled=true;
   try{
-   const response=await fetch(API+'/api/paper-recommendations/latest?tab='+encodeURIComponent(tab),
+   const endpoint=tab==='crypto'?'/api/crypto-research/latest':
+    '/api/paper-recommendations/latest?tab='+encodeURIComponent(tab);
+   const response=await fetch(API+endpoint,
     {method:'GET',headers:{Accept:'application/json'},cache:'no-store',
      signal:AbortSignal.timeout(12000)});
    if(!response.ok)throw Error('BROKER_BACKEND_UNAVAILABLE');
@@ -321,6 +351,14 @@ export function mountAndroidBottomNavigation(){
  function activate(id){
   const tab=androidTabById(id);current=tab.id;sequence++;lastPoll=0;
   marketName.textContent=tab.heading;marketCaption.textContent=tab.caption;
+  const cryptoTab=tab.id==='crypto';
+  heading.querySelector('.android-simple-kicker').textContent=cryptoTab?
+   '24/7 CRYPTO DIRECTION':'LAST RECOMMENDATION';
+  title.textContent=cryptoTab?'Crypto Market Research':'Last Recommendation';
+  subtitle.textContent=cryptoTab?'BTC/USD • 5-minute confirmed candles • No trade':
+   'Verified paper results only';
+  facts.hidden=cryptoTab;details.hidden=cryptoTab;
+  connect.hidden=cryptoTab;
   refreshed.textContent='Checking broker research · Paper-only mode';
   manualRefresh.disabled=loading;
   for(const [tabId,button] of buttons){
