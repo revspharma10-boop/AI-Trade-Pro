@@ -3,6 +3,8 @@ import {RECOMMENDATION_MARKETS,RECOMMENDATION_FEED_SAFETY,
  qualifyPaperRecommendation,presentRecommendation,createPaperRecommendationFeed}
  from './paperRecommendationFeed.js';
 import {readFileSync} from 'node:fs';
+import {publishedEquitySession2026,EQUITY_CALENDAR_2026_VERSION}
+ from '../src/services/intradayMarketClock.js';
 
 const asOf=Date.parse('2026-10-09T12:30:18+05:30');
 const contract={underlyingSymbol:'NIFTY',segment:'NSE_FO',instrumentType:'CE',
@@ -70,6 +72,31 @@ const zero=presentRecommendation({tab:'options',asOf});
 assert.equal(zero.state,'WAIT');
 assert.equal(zero.last,null);
 
+// Published regular-session calendar is only a schedule; it does not imply
+// that Upstox is authenticated or that the market is actually open.
+const atIST=(date,clock='12:30:18')=>Date.parse(date+'T'+clock+'+05:30');
+const planned=publishedEquitySession2026({segment:'NSE_INDEX',asOf:atIST('2026-10-12')});
+assert.equal(planned.regularSessionPlanned,true);
+assert.equal(planned.liveSessionVerified,false);
+assert.equal(planned.sourceVersion,EQUITY_CALENDAR_2026_VERSION);
+assert.equal(publishedEquitySession2026({segment:'BSE_INDEX',asOf:atIST('2026-10-12')}).regularSessionPlanned,true);
+for(const [day,reason] of [
+ ['2026-10-11','EQUITY_MARKET_WEEKEND'],
+ ['2026-10-20','EQUITY_EXCHANGE_HOLIDAY'],
+ ['2026-11-08','EQUITY_SPECIAL_SESSION_UNVERIFIED'],
+ ['2026-12-25','EQUITY_EXCHANGE_HOLIDAY'],
+ ['2027-01-04','EQUITY_CALENDAR_YEAR_UNVERIFIED']
+]){
+ for(const segment of ['NSE_INDEX','BSE_INDEX']){
+  const status=publishedEquitySession2026({segment,asOf:atIST(day)});
+  assert.equal(status.regularSessionPlanned,false,day+' must fail closed');
+  assert.equal(status.reason,reason);
+ }
+}
+assert.equal(publishedEquitySession2026({segment:'MCX_FO',asOf}).reason,
+ 'EQUITY_CALENDAR_SEGMENT_UNSUPPORTED');
+assert.equal(publishedEquitySession2026({segment:'NSE_EQ',asOf:'invalid'}).regularSessionPlanned,false);
+
 let searches=0;
 const mock={
  searchIndex:async()=>{searches++;throw Error('UPSTOX_REAUTHENTICATION_REQUIRED');},
@@ -83,6 +110,21 @@ const mock={
 const feed=createPaperRecommendationFeed(mock);
 const [a,b]=await Promise.all([feed.getLatest('nifty',asOf),feed.getLatest('nifty',asOf)]);
 assert.equal(searches,1,'concurrent requests share one backend call');
+// When closed, no broker instrument/quote request should even start.
+for(const date of ['2026-10-11','2026-10-20','2027-01-04']){
+ const priorSearches=searches;
+ const result=await feed.getLatest('nifty',atIST(date));
+ assert.equal(result.state,'WAIT');
+ assert.equal(result.stage,'MARKET_SESSION');
+ assert.equal(searches,priorSearches,'Closed/unverified schedule must not call broker');
+ assert.equal(result.orderSubmissionAllowed,false);
+}
+const bseHoliday=await feed.getLatest('sensex',atIST('2026-10-20'));
+assert.equal(bseHoliday.blockers[0].code,'EQUITY_EXCHANGE_HOLIDAY');
+const regularDay=await feed.getLatest('sensex',atIST('2026-10-12'));
+assert.equal(regularDay.stage,'UPSTOX_DATA',
+ 'Planned weekday may proceed to broker preflight, not fabricate a prediction');
+
 assert.equal(a.state,'WAIT');assert.equal(b.state,'WAIT');
 assert.equal(a.last,null);
 assert.equal(a.stage,'UPSTOX_DATA');
