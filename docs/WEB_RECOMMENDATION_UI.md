@@ -27,6 +27,14 @@ contract name while keeping entry/target/stop blank.
 The frontend calls **Render backend**:
 `https://ai-trade-pro-oauth.onrender.com/api/paper-recommendations/latest?tab=nifty`
 (and the other tabs) every approximately 30 seconds **while visible**.
+The footer now distinguishes the browser's most recent successful fetch
+("Browser received") from the backend's own `lastCheckedAt` research time,
+shown in IST. A browser refresh does **not** imply a new candle or fresh
+backend analysis. Current **PAPER BUY** cards fail closed to WAIT if the
+backend timestamp is missing, malformed, future-dated, over six minutes old,
+or inconsistent with the recorded idea's capture time; past cards remain
+clearly labeled previous paper ideas. This does not upgrade market-data access.
+
 All market data, option-contract qualification, technical indicators, and
 risk calculations remain on Render. Upstox credentials must stay server-side.
 
