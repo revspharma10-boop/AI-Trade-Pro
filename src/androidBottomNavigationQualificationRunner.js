@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import {ANDROID_TABS,androidTabById,safeRecommendationCard} from './androidBottomNavigation.js';
 import {readFileSync} from 'node:fs';
 
-assert.deepEqual(ANDROID_TABS.map(t=>t.label),['Nifty','Sensex','Options Trade','Commodity']);
-assert.deepEqual(ANDROID_TABS.map(t=>t.id),['nifty','sensex','options','commodity']);
+assert.deepEqual(ANDROID_TABS.map(t=>t.label),['Nifty','Sensex','Options Trade','Commodity','Crypto']);
+assert.deepEqual(ANDROID_TABS.map(t=>t.id),['nifty','sensex','options','commodity','crypto']);
 assert.equal(new Set(ANDROID_TABS.map(x=>x.id)).size,4);
 for(const tab of ANDROID_TABS)assert.equal(androidTabById(tab.id),tab);
 assert.equal(androidTabById('missing').id,'nifty');
@@ -153,6 +153,45 @@ assert.equal(safeRecommendationCard(forecastFeed,'nifty',time+5*60000)
  .provisionalDirection,null,'Old five-minute preview must expire');
 assert.equal(safeRecommendationCard({...forecastFeed,realOrderPlaced:true},
  'nifty',time).provisionalDirection,null);
+const cryptoAt=Date.parse('2026-10-11T09:30:20Z');
+const cryptoEarly={kind:'PROVISIONAL_DIRECTION',strategy:'CRYPTO_ROLLING_RANGE_15M',
+ direction:'BULLISH',source:'KRAKEN_PUBLIC_SPOT',
+ observedAt:new Date(cryptoAt).toISOString(),
+ lastCompletedAt:'2026-10-11T09:30:00.000Z',
+ recordedDurably:false,optionPlanQualified:false,paperOnly:true,
+ orderSubmissionAllowed:false,realOrderPlaced:false};
+const cryptoPayload={tab:'crypto',state:'WAIT',
+ paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false,
+ lastCheckedAt:new Date(cryptoAt).toISOString(),
+ provisionalDirection:cryptoEarly,
+ spot:{market:'BTC/USD',currency:'USD',source:'KRAKEN_PUBLIC_SPOT',
+  completedAt:cryptoEarly.lastCompletedAt,lastCompletedClose:105}};
+const cryptoCard=safeRecommendationCard(cryptoPayload,'crypto',cryptoAt);
+assert.equal(cryptoCard.tag,'WAIT');
+assert.equal(cryptoCard.contract,'BTC/USD · SPOT RESEARCH');
+assert.equal(cryptoCard.provisionalDirection?.label,'BULLISH');
+assert.match(cryptoCard.cryptoPrice,/\$105\.00/);
+assert.equal(cryptoCard.entry,'—');
+assert.equal(cryptoCard.stopLoss,'—');
+assert.equal(cryptoCard.target,'—');
+assert.equal(cryptoCard.status,'No crypto trade executed');
+assert.equal(safeRecommendationCard({...cryptoPayload,
+ provisionalDirection:{...cryptoEarly,direction:'BEARISH'}},
+ 'crypto',cryptoAt).provisionalDirection?.label,'BEARISH');
+assert.equal(safeRecommendationCard(cryptoPayload,'nifty',cryptoAt).provisionalDirection,null);
+assert.equal(safeRecommendationCard({...cryptoPayload,
+ orderSubmissionAllowed:true},'crypto',cryptoAt).provisionalDirection,null);
+assert.equal(safeRecommendationCard({...cryptoPayload,spot:{
+ ...cryptoPayload.spot,source:'WRONG_FEED'}},'crypto',cryptoAt).provisionalDirection,null);
+assert.equal(safeRecommendationCard({...cryptoPayload,spot:{
+ ...cryptoPayload.spot,completedAt:'2026-10-11T09:25:00.000Z'}},
+ 'crypto',cryptoAt).provisionalDirection,null);
+assert.equal(safeRecommendationCard({...cryptoPayload,
+ lastCheckedAt:new Date(cryptoAt-7*60000).toISOString()},
+ 'crypto',cryptoAt).provisionalDirection,null);
+assert.equal(safeRecommendationCard(cryptoPayload,'crypto',cryptoAt+300000).provisionalDirection,null);
+assert.equal(safeRecommendationCard({...cryptoPayload,provisionalDirection:{
+ ...cryptoEarly,entry:101}},'crypto',cryptoAt).provisionalDirection,null);
 const entry=readFileSync(new URL('./intradayRecommendationsUI.js',import.meta.url),'utf8');
 assert.match(entry,/VITE_ANDROID_APP!=='true'/,
  'Only legacy native Android builds should get extra status-bar spacing');
@@ -176,6 +215,8 @@ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 assert.match(html,/viewport-fit=cover/,'WebView must expose real viewport safe areas');
 const nav=readFileSync(new URL('./androidBottomNavigation.js',import.meta.url),'utf8');
 assert.match(nav,/\/api\/paper-recommendations\/latest\?tab=/);
+assert.match(nav,/\/api\/crypto-research\/latest/,
+ 'Fifth tab must use isolated read-only crypto data endpoint');
 assert.match(nav,/document\.hidden/);
 assert.match(nav,/if\(version===sequence&&!document\.hidden\)/,
  'A hidden browser must never render an obsolete broker response');
@@ -194,4 +235,4 @@ assert.match(nav,/Paused while browser is hidden/,
 assert.match(nav,/document\.addEventListener\('visibilitychange'/);
 assert.doesNotMatch(nav,/getUpstoxIntradayCandles|deriveAutoOptionDirection|calculateAutoOptionPaperPlan/,
  'Sensitive engine calculations should be server-side, not in the APK interface');
-console.log('ANDROID MINIMAL UI QUALIFICATION PASSED: four tabs, last recommendation, genuine paper prices, fail-closed, backend-only analysis');
+console.log('ANDROID MINIMAL UI QUALIFICATION PASSED: five tabs, original recommendations, genuine paper prices, fail-closed, backend-only analysis');
