@@ -6,7 +6,8 @@ import {readOnlyCorsHeaders} from './readOnlyCorsPolicy.js';
 import {createPaperRecommendationFeed,RECOMMENDATION_MARKETS} from './paperRecommendationFeed.js';
 import {createCryptoPaperResearchFeed,fetchKrakenBtcUsdOhlc} from './cryptoPaperResearch.js';
 import {createBtcInrLivePriceFeed,fetchPublicCoinDcxBtcInrTicker,
- fetchPublicCoinGeckoBtcInr} from './btcInrLivePrice.js';
+ fetchPublicCoinGeckoBtcInr,fetchPublicCoinPaprikaBtcInr}
+ from './btcInrLivePrice.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const CLIENT_ID = process.env.UPSTOX_CLIENT_ID || '';
@@ -493,7 +494,8 @@ const latestPaperRecommendations=createPaperRecommendationFeed({
 const cryptoResearch=createCryptoPaperResearchFeed({fetchOhlc:fetchKrakenBtcUsdOhlc});
 const btcInrLivePrice=createBtcInrLivePriceFeed({
  fetchTicker:fetchPublicCoinDcxBtcInrTicker,
- fetchIndicative:fetchPublicCoinGeckoBtcInr
+ fetchIndicative:fetchPublicCoinGeckoBtcInr,
+ fetchPaprika:fetchPublicCoinPaprikaBtcInr
 });
 const server = http.createServer(async (req, res) => {
   try {
