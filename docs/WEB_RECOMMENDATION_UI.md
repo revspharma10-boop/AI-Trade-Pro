@@ -6,7 +6,7 @@ The supported everyday interface is the web app:
 
 It uses the same clean, touch-friendly UI formerly packaged in the private
 Android APK. The browser is enough — no install, APK, app store, or Android
-build is required. On mobile the four tabs stay at the bottom; on desktop
+build is required. On mobile the five tabs stay at the bottom; on desktop
 the layout and tabs stay centered in a phone-width column.
 
 ## What each tab displays
@@ -16,6 +16,7 @@ the layout and tabs stay centered in a phone-width column.
 - **Options Trade:** Currently INFY option research (not an open-ended symbol search).
 - **Commodity:** MCX GOLD; research remains WAIT unless independent MCX safety
   checks have been fulfilled.
+- **Crypto:** BTC/USD, Kraken public spot research. Shows only qualified five-minute/high-timeframe directional hypotheses, and always keeps real trading disabled.
 
 The card shows the verified contract, entry premium, target, stop loss, date,
 paper status, and stage-specific **WHY WAIT?** blockers. When a setup is not
