@@ -205,10 +205,10 @@ const staleEarly=await directionFeed.getLatest('nifty',earlyAt+6*60000);
 assert.equal(staleEarly.provisionalDirection,null,
  'Stale quote cannot be replayed as a new five-minute forecast');
 assert.equal(staleEarly.state,'WAIT');
+const beforeWeekend=brokerReads;
 const closedEarly=await directionFeed.getLatest('nifty',atIST('2026-10-11','09:30:18'));
 assert.equal(closedEarly.provisionalDirection,null);
-const callsOnWeekend=brokerReads;
-assert.equal(brokerReads,callsOnWeekend,'Closed market should not make broker calls');
+assert.equal(brokerReads,beforeWeekend,'Closed market should not make broker calls');
 quoteIdentity='BSE_INDEX|SENSEX';
 const mismatchFeed=createPaperRecommendationFeed(directionalMock);
 const mismatch=await mismatchFeed.getLatest('nifty',earlyAt);
@@ -251,6 +251,10 @@ assert.match(source,/marginLookupFailed\?\['BROKER_MARGIN_ESTIMATE_UNAVAILABLE'\
 assert.match(source,/describePaperRejection\(\{stage:'UPSTOX_DATA'/);
 
 const server=readFileSync(new URL('./upstoxOAuthCallbackServer.js',import.meta.url),'utf8');
+assert.match(server,/body\?\.status!=='success'/,
+ 'Provider quote and candle endpoints must require actual successful Upstox responses');
+assert.match(server,/const numberValue=/,
+ 'Provider must not coerce null OHLCV into valid numeric data');
 assert.match(server,/\/api\/paper-recommendations\/latest/);
 assert.match(server,/latestPaperRecommendations\.getLatest\(tab\)/);
 assert.doesNotMatch(server,/\/v2\/order\/place|\/v3\/order\/place/);
