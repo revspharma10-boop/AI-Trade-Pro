@@ -132,11 +132,22 @@ async function readOnlyIntradayCandles(instrumentKey, interval){
  const body=await response.json().catch(()=>({}));
  if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
  if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
- if(!response.ok)throw new Error('UPSTOX_INTRADAY_REQUEST_FAILED');
+ if(!response.ok||body?.status!=='success')throw new Error('UPSTOX_INTRADAY_REQUEST_FAILED');
   markUpstoxReadVerified();
  const raw=body?.data?.candles;
  if(!Array.isArray(raw)||!raw.length)throw new Error('UPSTOX_INTRADAY_DATA_EMPTY');
- const candles=raw.map(x=>({datetime:String(x?.[0]||''),open:Number(x?.[1]),high:Number(x?.[2]),low:Number(x?.[3]),close:Number(x?.[4]),volume:Number(x?.[5])})).filter(x=>Number.isFinite(Date.parse(x.datetime))&&[x.open,x.high,x.low,x.close,x.volume].every(Number.isFinite)&&x.volume>=0&&x.low>0&&x.high>=x.low).sort((a,b)=>Date.parse(a.datetime)-Date.parse(b.datetime));
+ // Null/missing OHLCV must not be silently coerced into a valid zero.
+ const numberValue=x=>(typeof x==='number'||(typeof x==='string'&&x.trim()!==''))&&
+   Number.isFinite(Number(x))?Number(x):NaN;
+ const candles=raw.filter(Array.isArray).map(x=>({
+  datetime:typeof x[0]==='string'?x[0]:'',
+  open:numberValue(x[1]),high:numberValue(x[2]),
+  low:numberValue(x[3]),close:numberValue(x[4]),volume:numberValue(x[5])
+ })).filter(x=>Number.isFinite(Date.parse(x.datetime))&&
+  [x.open,x.high,x.low,x.close,x.volume].every(Number.isFinite)&&
+  x.volume>=0&&x.low>0&&x.high>=x.low&&
+  x.open>=x.low&&x.open<=x.high&&x.close>=x.low&&x.close<=x.high)
+  .sort((a,b)=>Date.parse(a.datetime)-Date.parse(b.datetime));
  if(!candles.length)throw new Error('UPSTOX_INTRADAY_DATA_EMPTY');
  return candles;
 }
@@ -402,7 +413,7 @@ async function readOnlyFullMarketQuote(instrumentKey){
   const body=await response.json().catch(()=>({}));
   if(response.status===401||response.status===403)onUpstoxUnauthorized(response.status);
   if(response.status===429)throw new Error('UPSTOX_RATE_LIMITED');
-  if(!response.ok)throw new Error('UPSTOX_LIVE_QUOTE_FAILED');
+  if(!response.ok||body?.status!=='success')throw new Error('UPSTOX_LIVE_QUOTE_FAILED');
   markUpstoxReadVerified();
   const raw=body?.data;
   if(!raw||typeof raw!=='object')throw new Error('UPSTOX_LIVE_QUOTE_EMPTY');
