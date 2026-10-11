@@ -16,7 +16,7 @@ the layout and tabs stay centered in a phone-width column.
 - **Options Trade:** Currently INFY option research (not an open-ended symbol search).
 - **Commodity:** MCX GOLD; research remains WAIT unless independent MCX safety
   checks have been fulfilled.
-- **BTC:** A prominent source-timestamped **BTC/INR** price. A fresh CoinDCX public BTCINR trade is preferred; if stale/unavailable, a separately identified CoinGecko BTC/INR **indicative market price** is eligible. Refreshed about every 30 seconds while the browser is visible. No graph, no live order. Independent BTC/USD technical analysis is not an INR-specific order recommendation.
+- **BTC:** A prominent source-timestamped **BTC/INR** price. A fresh CoinDCX public BTCINR trade is preferred; if stale/unavailable, separately identified CoinGecko or CoinPaprika BTC/INR **indicative market prices** are eligible. Refreshed about every 30 seconds while the browser is visible. No graph, no live order. Independent BTC/USD technical analysis is not an INR-specific order recommendation.
 
 The card shows the verified contract, entry premium, target, stop loss, date,
 paper status, and stage-specific **WHY WAIT?** blockers. When a setup is not
@@ -260,3 +260,32 @@ historical INR candles; a last-traded-price ticker is not sufficient.
 No external brokerage or real crypto trades are enabled.
 
 Cash capital and real-order safety remain unchanged.
+
+
+## October 11 BTC price availability qualification
+
+The initial BTC/INR screenshot showed `₹ —`. Public backend diagnostics
+verified CoinGecko live INR availability, with CoinDCX trade timestamp
+initially rejected. Root cause in the CoinDCX parser: its exchange ticker
+reports Unix **seconds**, but the old parser mistakenly compared those values
+directly against JavaScript milliseconds. The updated parser normalizes only
+unambiguous Unix seconds (10-digit) or milliseconds (13-digit) and rejects
+invalid, future, stale and ambiguous timestamps.
+
+A third free fallback is now `GET
+https://api.coinpaprika.com/v1/tickers/btc-bitcoin?quotes=INR`.
+Its `id`, `symbol`, `quotes.INR.price` and `last_updated`
+must pass strict type, identity and <=120-second freshness checks before any
+display. CoinPaprika is tagged **indicative**, never an executable CoinDCX
+trade. There are now three explicitly attributed sources in priority order:
+fresh CoinDCX BTCINR last trade; fresh CoinGecko INR indicative; fresh
+CoinPaprika INR indicative.
+
+All three feeds are fetched independently with bounded timeouts so a
+single provider outage cannot indefinitely block a numeric price.
+The browser has a 15-second request timeout and a 30-second visible-only
+refresh. If no source is fresh, the correct UI is `₹ —` plus an
+unavailable explanation; never show a stale quote as live. This is
+near-real-time polling, **not exchange streaming**, and can still fail during
+provider restrictions, connectivity outages or Render Free cold starts.
+No paid services, FX conversion, trade orders or graphs.
