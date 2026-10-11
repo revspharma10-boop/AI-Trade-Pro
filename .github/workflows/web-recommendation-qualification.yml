@@ -6,6 +6,7 @@ on:
       - 'src/**'
       - 'server/paperRecommendationFeed.js'
       - 'server/cryptoPaperResearch.js'
+      - 'server/cryptoTechnicalConfluence.js'
       - 'server/cryptoPaperResearchQualificationRunner.js'
       - 'server/upstoxOAuthCallbackServer.js'
       - 'server/recommendationWaitDiagnostics.js'
@@ -40,6 +41,7 @@ jobs:
           node src/webRecommendationUIQualificationRunner.js
           node src/androidBottomNavigationQualificationRunner.js
           node server/paperRecommendationFeedQualificationRunner.js
+          node --check server/cryptoTechnicalConfluence.js
           node server/cryptoPaperResearchQualificationRunner.js
           node server/recommendationWaitDiagnosticsQualificationRunner.js
           node server/readOnlyCorsPolicyQualificationRunner.js
