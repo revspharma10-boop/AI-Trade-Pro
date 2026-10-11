@@ -90,6 +90,16 @@ assert.equal(past.tag,'PAST PAPER IDEA');
 assert.equal(past.status,'Previous idea · Not executed');
 assert.equal(safeRecommendationCard({...qualified,realOrderPlaced:true},
  'nifty',now).tag,'WAIT');
+assert.match(ui,/android-simple-manual-refresh/,
+ 'Web research must offer a clearly labeled manual refresh');
+assert.match(ui,/manualRefresh\.addEventListener\('click',\(\)=>\{void refresh\(true\);\}\)/,
+ 'Manual refresh must request read-only research, never submit a broker order');
+assert.match(ui,/manualRefresh\.disabled=true/,
+ 'Disable repeated clicks while broker request is in flight');
+assert.match(ui,/manualRefresh\.disabled=false/,
+ 'Re-enable manual refresh after request completion or timeout');
+assert.match(css,/android-simple-manual-refresh:focus-visible/,
+ 'Keyboard users must see manual refresh focus');
 assert.match(ui,/AbortSignal\.timeout\(12000\)/,
  'A stalled Render request must time out instead of freezing tab updates');
 assert.match(ui,/pendingTabRefresh/,
