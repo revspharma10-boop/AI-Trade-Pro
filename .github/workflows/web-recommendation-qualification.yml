@@ -5,6 +5,9 @@ on:
     paths:
       - 'src/**'
       - 'server/paperRecommendationFeed.js'
+      - 'server/cryptoPaperResearch.js'
+      - 'server/cryptoPaperResearchQualificationRunner.js'
+      - 'server/upstoxOAuthCallbackServer.js'
       - 'server/recommendationWaitDiagnostics.js'
       - 'server/readOnlyCorsPolicy.js'
       - 'index.html'
@@ -37,6 +40,7 @@ jobs:
           node src/webRecommendationUIQualificationRunner.js
           node src/androidBottomNavigationQualificationRunner.js
           node server/paperRecommendationFeedQualificationRunner.js
+          node server/cryptoPaperResearchQualificationRunner.js
           node server/recommendationWaitDiagnosticsQualificationRunner.js
           node server/readOnlyCorsPolicyQualificationRunner.js
           node src/openingRangeQualificationRunner.js
@@ -48,4 +52,5 @@ jobs:
           test -s dist/index.html
           grep -q 'AI Trade Pro' dist/index.html
           grep -Rql 'paper-recommendations/latest' dist/assets
+          grep -Rql 'crypto-research/latest' dist/assets
           ! grep -Rql 'UPSTOX_CLIENT_SECRET' dist/assets
