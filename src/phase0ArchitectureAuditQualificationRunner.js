@@ -106,8 +106,12 @@ assert.match(feedSource,/const lastByTab=new Map\(\),cache=new Map\(\),pending=n
 assert.match(feedSource,/if\(!session\.open\)return rejected/);
 assert.match(uiSource,/setInterval\(\(\)=>\{void refresh\(\);\},30000\)/,
  'Baseline: frontend initiates 30-second polling');
-assert.match(uiSource,/if\(document\.hidden\|\|loading\)return/,
- 'Baseline: closed/hidden web page does not poll');
+assert.match(uiSource,/if\(document\.hidden\)return;/,
+ 'Baseline: hidden browser page does not initiate polling');
+assert.match(uiSource,/if\(loading\)\{/,
+ 'Baseline: requests already in flight prevent parallel broker polling');
+assert.match(uiSource,/if\(version===sequence&&!document\.hidden\)/,
+ 'Baseline: late broker responses cannot update a hidden web page');
 assert.match(serverSource,/\/api\/paper-recommendations\/latest/,
  'Baseline: read-only request-triggered recommendation endpoint exists');
 assert.doesNotMatch(feedSource,/\/v2\/order\/place|\/v3\/order\/place/);

@@ -3,6 +3,12 @@
 // reason codes. No prices, trades, or authorization can be created here.
 const LABELS=Object.freeze({
  MARKET_SESSION_CLOSED:'Exchange session is closed or not verified',
+ EQUITY_EXCHANGE_HOLIDAY:'Exchange holiday: no regular equity or index paper research',
+ EQUITY_MARKET_WEEKEND:'Saturday or Sunday: regular equity session is closed',
+ EQUITY_SPECIAL_SESSION_UNVERIFIED:'Special or Muhurat trading session is not verified for regular paper research',
+ EQUITY_CALENDAR_YEAR_UNVERIFIED:'Regular equity calendar not published for this year in the application',
+ EQUITY_CALENDAR_INVALID_CLOCK:'Exchange calendar time could not be verified',
+ EQUITY_CALENDAR_SEGMENT_UNSUPPORTED:'Exchange calendar segment is unsupported',
  UPSTOX_REAUTHENTICATION_REQUIRED:'Upstox login has expired; reconnect before paper research can continue',
  UPSTOX_ANALYTICS_TOKEN_INVALID_OR_EXPIRED:'Read-only Upstox analytics token is invalid or expired',
  UPSTOX_ANALYTICS_PERMISSION_DENIED:'Upstox has not permitted the required read-only market-data endpoint',

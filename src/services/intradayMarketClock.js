@@ -50,3 +50,34 @@ export function marketClockState({segment='NSE_EQ',underlyingSymbol='',asOf=Date
   reason:!clockOpen?'MCX_CLOCK_CLOSED':!open?'NEAR_MARKET_CLOSE':'CLOCK_OPEN_HOLIDAY_UNVERIFIED',
   holidayCalendarVerified:false,brokerSquareOffVerified:false};
 }
+
+
+// Source-versioned published 2026 NSE/BSE equity closure calendar.
+// Planned open dates DO NOT verify actual market availability, Upstox feed,
+// emergency exchange circulars or broker square-off times.
+export const EQUITY_CALENDAR_2026_VERSION='NSE_BSE_EQUITY_2026_V1';
+const EQUITY_HOLIDAYS_2026=new Set([
+ '2026-01-15','2026-01-26','2026-03-03','2026-03-26',
+ '2026-03-31','2026-04-03','2026-04-14','2026-05-01',
+ '2026-05-28','2026-06-26','2026-09-14','2026-10-02',
+ '2026-10-20','2026-11-10','2026-11-24','2026-12-25'
+]);
+const EQUITY_EXCHANGES=Object.freeze({
+ NSE_EQ:'NSE',NSE_INDEX:'NSE',NSE_FO:'NSE',
+ BSE_INDEX:'BSE',BSE_FO:'BSE'
+});
+export function publishedEquitySession2026({segment,asOf=Date.now()}={}){
+ const exchange=EQUITY_EXCHANGES[segment]??null;
+ const now=Number(new Date(asOf));
+ const base={exchange,date:null,regularSessionPlanned:false,
+  sourceVersion:EQUITY_CALENDAR_2026_VERSION,liveSessionVerified:false};
+ if(!exchange)return {...base,reason:'EQUITY_CALENDAR_SEGMENT_UNSUPPORTED'};
+ if(!Number.isFinite(now))return {...base,reason:'EQUITY_CALENDAR_INVALID_CLOCK'};
+ const local=new Date(now+330*60000),date=local.toISOString().slice(0,10);
+ const state={...base,date};
+ if(!date.startsWith('2026-'))return {...state,reason:'EQUITY_CALENDAR_YEAR_UNVERIFIED'};
+ if(date==='2026-11-08')return {...state,reason:'EQUITY_SPECIAL_SESSION_UNVERIFIED'};
+ if([0,6].includes(local.getUTCDay()))return {...state,reason:'EQUITY_MARKET_WEEKEND'};
+ if(EQUITY_HOLIDAYS_2026.has(date))return {...state,reason:'EQUITY_EXCHANGE_HOLIDAY'};
+ return {...state,regularSessionPlanned:true,reason:'EQUITY_REGULAR_DAY_SCHEDULED'};
+}

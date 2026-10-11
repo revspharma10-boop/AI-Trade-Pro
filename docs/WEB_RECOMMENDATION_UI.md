@@ -43,6 +43,25 @@ read-only CORS policy. There are no trade-order endpoints in the UI. Trading
 capital is ₹50,000 and the research risk budget is ₹500 per trade; production
 real orders are disabled.
 
+## 2026 equity-session preflight (Phase 2 safety qualification)
+
+The read-only backend now checks published NSE/BSE 2026 regular-session
+closures for NIFTY, SENSEX and the NSE stock-options research tab **before**
+calling Upstox. Sundays, Saturdays, exchange holidays, the unverified
+special Muhurat session, and dates beyond the versioned calendar fail closed
+to WAIT with human-readable reasons. MCX keeps its separate commodity guard.
+
+Calendar sources: [NSE published 2026 equity holidays](https://www.nseindia.com/resources/exchange-communication-holidays)
+and [BSE's equity/equity-derivatives holiday notice 20251212-8](https://ebs.publicnow.com/view/D4BE5C5CC7A53646FD58A2FB3A2C7ABA58C8CFC9).
+
+**Important:** This is an offline published regular-day calendar, not a
+live exchange-status API. A published weekday may still have an emergency
+closure, changed exchange notice, market-data outage, or Upstox permission
+failure. The planner reports `liveSessionVerified:false`; it never claims
+a live session, validates live broker credentials, or turns an opening-range
+bias into an option order. Beyond 2026, update and independently qualify the
+calendar before attempting regular paper research.
+
 ## Operational limitations
 
 - GitHub Pages is a **publicly accessible** website; the paper feed is also
