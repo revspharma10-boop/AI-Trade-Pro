@@ -10,6 +10,7 @@ assert.equal(androidTabById('missing').id,'nifty');
 const time=Date.parse('2026-10-09T12:30:18+05:30');
 const paper={tab:'options',state:'PAPER_SETUP',message:'Backend paper setup',
  paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false,
+ lastCheckedAt:new Date(time).toISOString(),
  last:{contract:'INFY OCT 960 CE',optionType:'CE',entry:59,target:70,stopLoss:52,
   capturedAt:new Date(time).toISOString(),date:'2026-10-09',
   executionStatus:'NOT EXECUTED',approvedLots:0,paperOnly:true}};
@@ -22,6 +23,24 @@ assert.equal(card.stopLoss,'₹52.00');
 assert.equal(card.date,'09/10/2026');
 assert.equal(card.contract,'INFY OCT 960 CE');
 assert.match(card.status,/Not executed/);
+assert.match(card.backendStatus,/Backend research checked/);
+assert.equal(safeRecommendationCard(paper,'options',time+30000).state,'PAPER_SETUP',
+ 'Frozen idea remains valid during the same five-minute slot');
+assert.equal(safeRecommendationCard({...paper,lastCheckedAt:null},'options',time).state,'WAIT',
+ 'Missing backend research timestamp must never show PAPER BUY');
+assert.equal(safeRecommendationCard({...paper,lastCheckedAt:'invalid'},'options',time).state,'WAIT',
+ 'Malformed backend research timestamp must fail closed');
+assert.equal(safeRecommendationCard({...paper,
+ lastCheckedAt:new Date(time+15000).toISOString()},'options',time).state,'WAIT',
+ 'Future-dated backend research must fail closed');
+assert.equal(safeRecommendationCard({...paper,
+ lastCheckedAt:new Date(time-7*60000).toISOString()},'options',time).state,'WAIT',
+ 'Stale backend research must not be branded as freshly refreshed');
+assert.equal(safeRecommendationCard({...paper,
+ lastCheckedAt:new Date(time-11000).toISOString()},'options',time).state,'WAIT',
+ 'Server check before signal capture indicates inconsistent research chronology');
+assert.match(safeRecommendationCard({...paper,lastCheckedAt:null},'options',time).explanation,
+ /timestamp missing, stale, or inconsistent/);
 const historical=safeRecommendationCard({...paper,state:'PAST_PAPER_IDEA'},'options',time);
 assert.equal(historical.state,'PAST_PAPER_IDEA');
 assert.equal(historical.tag,'PAST PAPER IDEA');
@@ -132,6 +151,10 @@ assert.match(nav,/if\(version===sequence&&!document\.hidden\)/,
  'A hidden browser must never render an obsolete broker response');
 assert.match(nav,/if\(!document\.hidden\)void refresh\(true\)/,
  'A hidden browser must not recursively launch a stale tab refresh');
+assert.match(nav,/Browser received/,
+ 'Browser polling status must not imply fresh broker analysis');
+assert.match(nav,/backendChecked\.textContent=view\.backendStatus/,
+ 'Server research freshness must be displayed separately from browser polling');
 assert.match(nav,/Paused while browser is hidden/,
  'The user should see an explicit paused refresh status');
 assert.match(nav,/document\.addEventListener\('visibilitychange'/);
