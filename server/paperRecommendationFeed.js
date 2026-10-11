@@ -104,15 +104,15 @@ export function createPaperRecommendationFeed({
    ...describePaperRejection({stage,codes,contract:more.contract,asOf,
     fallback:more.fallback}),...(more.extra??{})
   });
-  if(!session.open)return rejected('MARKET_SESSION',['MARKET_SESSION_CLOSED']);
   // A weekday within market hours is not automatically a trading session.
-  // Only the published 2026 regular equity schedule can pass this preflight.
+  // Check published closures first so holiday/weekend WAIT has an exact reason.
   // Valid option quotes, contract metadata and paper risk gates still apply.
   if(market.kind!=='MCX'){
    const schedule=publishedEquitySession2026({segment:market.segment,asOf});
    if(!schedule.regularSessionPlanned)
     return rejected('MARKET_SESSION',[schedule.reason]);
   }
+  if(!session.open)return rejected('MARKET_SESSION',['MARKET_SESSION_CLOSED']);
   let contract=null,plan=null;
   if(market.kind==='MCX'){
    const [f,c,p]=await Promise.all([
