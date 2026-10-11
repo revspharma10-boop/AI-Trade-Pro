@@ -55,15 +55,14 @@ try{
  assert.deepEqual(restart.list(),ledger.list(),'Checksum journal must survive process restart');
  // Evaluate predetermined NEXT candle, not the uncommitted 09:35 candle.
  const later=series(epoch+F);
- later.splice(0,1);
  const fixed=[Math.floor(epoch/1000),String(forecast.referenceClose),
   String(forecast.referenceClose*1.01),String(forecast.referenceClose*0.999),
   String(forecast.referenceClose*1.005),
   String(forecast.referenceClose*1.005),'150',130];
- later.splice(-1,0,fixed); // chronological slot 09:30, 09:35 currently uncommitted.
+ later[later.length-2]=fixed; // exact settled 09:30 candle; 09:35 remains uncommitted.
  const qualified=payload(later);
  assert.equal(qualified.result.XXBTZUSD.at(-2)[0]*1000,epoch);
- clock=epoch+F+20000;
+ clock=epoch+F+120000; // Delayed scheduler: outcome scored, new forecast slot skipped.
  const c=await cryptoShadowCycle({ledger:restart,fetchOhlc:async()=>qualified,
   clock:()=>clock});
  assert.equal(c.correct,1);
