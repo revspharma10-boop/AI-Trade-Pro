@@ -123,6 +123,36 @@ assert.equal(safeRecommendationCard({...paper,last:{...paper.last,entry:0}},'opt
 assert.equal(safeRecommendationCard({...paper,last:{...paper.last,stopLoss:61}},'options',time).state,'WAIT');
 assert.equal(safeRecommendationCard({tab:'sensex',state:'WAIT',paperOnly:true,
  orderSubmissionAllowed:false,realOrderPlaced:false},'sensex').state,'WAIT');
+// Directional research has its own read-only presentation; never paper BUY.
+const early={kind:'PROVISIONAL_DIRECTION',strategy:'OPENING_RANGE_15M',
+ direction:'BULLISH',observedAt:new Date(time).toISOString(),
+ source:'UPSTOX_READ_ONLY',recordedDurably:false,optionPlanQualified:false,
+ paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false};
+const forecastFeed={tab:'nifty',state:'WAIT',stage:'OPENING_RANGE',
+ paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false,
+ lastCheckedAt:new Date(time).toISOString(),provisionalDirection:early};
+const hypothesis=safeRecommendationCard(forecastFeed,'nifty',time);
+assert.equal(hypothesis.tag,'WAIT');
+assert.equal(hypothesis.entry,'—');
+assert.equal(hypothesis.target,'—');
+assert.equal(hypothesis.stopLoss,'—');
+assert.equal(hypothesis.provisionalDirection?.label,'BULLISH');
+assert.match(hypothesis.provisionalDirection?.observedAt??'',/IST/);
+assert.equal(safeRecommendationCard({...forecastFeed,provisionalDirection:{
+ ...early,direction:'BEARISH'}},'nifty',time).provisionalDirection?.label,'BEARISH');
+for(const bad of [
+ {...early,direction:'CE'}, {...early,entry:100}, {...early,orderSubmissionAllowed:true},
+ {...early,observedAt:new Date(time-6*60000).toISOString()}
+])assert.equal(safeRecommendationCard({...forecastFeed,provisionalDirection:bad},
+ 'nifty',time).provisionalDirection,null);
+assert.equal(safeRecommendationCard(forecastFeed,'sensex',time).provisionalDirection,null,
+ 'One tab must not display a different market hypothesis');
+assert.equal(safeRecommendationCard({...forecastFeed,
+ lastCheckedAt:new Date(time-7*60000).toISOString()},'nifty',time).provisionalDirection,null);
+assert.equal(safeRecommendationCard(forecastFeed,'nifty',time+5*60000)
+ .provisionalDirection,null,'Old five-minute preview must expire');
+assert.equal(safeRecommendationCard({...forecastFeed,realOrderPlaced:true},
+ 'nifty',time).provisionalDirection,null);
 const entry=readFileSync(new URL('./intradayRecommendationsUI.js',import.meta.url),'utf8');
 assert.match(entry,/VITE_ANDROID_APP!=='true'/,
  'Only legacy native Android builds should get extra status-bar spacing');
@@ -153,6 +183,10 @@ assert.match(nav,/if\(!document\.hidden\)void refresh\(true\)/,
  'A hidden browser must not recursively launch a stale tab refresh');
 assert.match(nav,/Browser received/,
  'Browser polling status must not imply fresh broker analysis');
+assert.match(nav,/directional\.hidden=!view\.provisionalDirection/,
+ 'Only independently qualified provisional direction is shown to the user');
+assert.match(nav,/Not a CE\/PE entry/,
+ 'Directional research must explicitly disclaim an option entry');
 assert.match(nav,/backendChecked\.textContent=view\.backendStatus/,
  'Server research freshness must be displayed separately from browser polling');
 assert.match(nav,/Paused while browser is hidden/,
