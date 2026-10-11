@@ -185,3 +185,44 @@ Keep the high-level features while staying under free limits:
   user's device when viable; paid proprietary LLMs are excluded.
 
 No subscription or service upgrade is permitted without further approval.
+
+
+## Next activity — pre-activation integrity and readiness (2026-10-11)
+
+The standalone free Worker was strengthened **without deployment**:
+
+- `runCron` evaluates outstanding forecast horizons separately from whether
+  a new directional slot may open. In particular, a frozen 15:10 forecast
+  with a horizon ending at 15:15 can be evaluated at 15:16 **even though
+  new forecast creation has stopped**.
+- Final settlement may run up to five minutes after the independently
+  verified session close. Exchange holidays, unsupported dates, missing
+  official source metadata and unavailable market data fail closed.
+- `/v1/public/latest` returns `freshness=CURRENT|EXPIRED|NO_FORECAST`
+  with the UTC forecast and horizon timestamps. A stored result after
+  its horizon is **historical**, never a new live CALL/PUT prompt.
+- Upstox V3 response bodies must identify `status=success`.
+  Null/non-numeric raw candle fields are not converted into fabricated
+  numbers. Synthetic tests confirm stale quotes, mismatched instruments,
+  holidays and missing source data remain ABSTAIN.
+- Database-level CHECK constraints and immutable SQLite triggers prevent
+  inserted real-order flags, nonverified directional prices, tampered
+  forecast direction, edited outcomes and repeat settlement records.
+  The CI executes the actual schema in disposable in-memory SQLite,
+  not just a mock D1 client.
+- The published Upstox V3 quote `timestamp` is described by the provider
+  as the **response-generation time**, not an independently proven last-trade
+  execution time. Broker-specific quote freshness and permissions remain
+  **a hard activation gate**, particularly for index instruments.
+
+Important limitations remain: the broker token and NSE/BSE instrument keys
+have **not** been connected to the free Worker, an independently verified
+trading-day calendar has **not** been populated, and a Cloudflare Free account
+has **not** been connected. Existing Render and GitHub Pages applications
+do not import this Worker, and live automatic monitoring is **not running**.
+
+The next externally dependent task is user-authorized setup of the free
+Cloudflare Workers + D1 services, followed by smoke tests of actual provider
+response formats and costs/quotas. No premium account, paid Workers tier or
+market-data subscription may be activated without additional approval.
+
