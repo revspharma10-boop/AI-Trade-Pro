@@ -122,6 +122,8 @@ export function presentRecommendation({tab,last=null,result=null,asOf=Date.now()
   preview.strategy==='OPENING_RANGE_15M'&&
   ['BULLISH','BEARISH'].includes(preview.direction)&&
   preview.source==='UPSTOX_READ_ONLY'&&
+  !['contract','strike','expiry','entry','stopLoss','target','lots','approvedLots'].some(k=>
+    Object.hasOwn(preview,k))&&
   preview.recordedDurably===false&&
   preview.paperOnly===true&&preview.optionPlanQualified===false&&
   preview.orderSubmissionAllowed===false&&preview.realOrderPlaced===false&&
