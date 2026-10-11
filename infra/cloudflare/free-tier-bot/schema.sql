@@ -32,15 +32,15 @@ CREATE TABLE IF NOT EXISTS forecasts (
  evidence_hash TEXT,
  data_quality TEXT NOT NULL CHECK (data_quality IN ('VERIFIED','MISSING')),
  reason_code TEXT NOT NULL,
+ paper_only INTEGER NOT NULL DEFAULT 1 CHECK (paper_only=1),
+ order_submission_allowed INTEGER NOT NULL DEFAULT 0 CHECK (order_submission_allowed=0),
+ real_order_placed INTEGER NOT NULL DEFAULT 0 CHECK (real_order_placed=0),
  CHECK (direction='ABSTAIN' OR (
   data_quality='VERIFIED' AND underlying_instrument_key IS NOT NULL
   AND reference_price IS NOT NULL AND reference_price>0 AND source_quote_utc IS NOT NULL
   AND evidence_hash IS NOT NULL)),
  CHECK (data_quality!='MISSING' OR (
   reference_price IS NULL AND underlying_instrument_key IS NULL)),
- paper_only INTEGER NOT NULL DEFAULT 1 CHECK (paper_only=1),
- order_submission_allowed INTEGER NOT NULL DEFAULT 0 CHECK (order_submission_allowed=0),
- real_order_placed INTEGER NOT NULL DEFAULT 0 CHECK (real_order_placed=0),
  UNIQUE (market,strategy_version,candle_end_utc)
 );
 CREATE INDEX IF NOT EXISTS idx_forecast_market_candle ON
@@ -57,13 +57,13 @@ CREATE TABLE IF NOT EXISTS outcomes (
  change_bps REAL,
  outcome TEXT NOT NULL CHECK (outcome IN
   ('CORRECT','INCORRECT','INCONCLUSIVE','UNEVALUABLE')),
+ paper_only INTEGER NOT NULL DEFAULT 1 CHECK (paper_only=1),
+ order_submission_allowed INTEGER NOT NULL DEFAULT 0 CHECK (order_submission_allowed=0),
+ real_order_placed INTEGER NOT NULL DEFAULT 0 CHECK (real_order_placed=0),
  CHECK ((outcome='UNEVALUABLE' AND observed_close IS NULL
   AND change_bps IS NULL) OR
   (outcome!='UNEVALUABLE' AND observed_close IS NOT NULL
-  AND observed_close>0 AND change_bps IS NOT NULL)),
- paper_only INTEGER NOT NULL DEFAULT 1 CHECK (paper_only=1),
- order_submission_allowed INTEGER NOT NULL DEFAULT 0 CHECK (order_submission_allowed=0),
- real_order_placed INTEGER NOT NULL DEFAULT 0 CHECK (real_order_placed=0)
+  AND observed_close>0 AND change_bps IS NOT NULL))
 );
 CREATE INDEX IF NOT EXISTS idx_outcome_forecast ON outcomes(forecast_id);
 
