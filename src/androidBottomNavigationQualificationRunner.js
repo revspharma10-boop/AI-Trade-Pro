@@ -178,7 +178,7 @@ const cryptoPayload={tab:'crypto',state:'WAIT',
   slippageVerified:false,marginVerified:false}};
 const cryptoCard=safeRecommendationCard(cryptoPayload,'crypto',cryptoAt);
 assert.equal(cryptoCard.tag,'WAIT');
-assert.equal(cryptoCard.contract,'BTC/INR · LAST TRADED PRICE');
+assert.equal(cryptoCard.contract,'BTC/INR · MARKET PRICE');
 assert.equal(cryptoCard.provisionalDirection?.label,'BULLISH');
 assert.equal(cryptoCard.cryptoPrice,null,'USD completed candle must not become INR price');
 assert.equal(cryptoCard.entry,'—');
@@ -211,24 +211,32 @@ assert.equal(safeRecommendationCard({...cryptoPayload,
 assert.equal(safeRecommendationCard(cryptoPayload,'crypto',cryptoAt+300000).provisionalDirection,null);
 assert.equal(safeRecommendationCard({...cryptoPayload,provisionalDirection:{
  ...cryptoEarly,entry:101}},'crypto',cryptoAt).provisionalDirection,null);
+const nav=readFileSync(new URL('./androidBottomNavigation.js',import.meta.url),'utf8');
 const liveNow=Date.parse('2026-10-11T09:30:20.000Z');
 const inrData={tab:'crypto',symbol:'BTC/INR',currency:'INR',
  provider:'COINDCX_PUBLIC_SPOT',quoteType:'SPOT_LAST_TRADE',
- state:'LIVE_LAST_TRADE',lastTradeInr:9312345.67,
- lastTradeAtUtc:new Date(liveNow-15000).toISOString(),
+ state:'LIVE_PRICE',priceInr:9312345.67,
+ priceAtUtc:new Date(liveNow-15000).toISOString(),
  checkedAtUtc:new Date(liveNow-2000).toISOString(),
  paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false,
  productionRealTradingEnabled:false};
 const inrPrice=safeBtcInrLivePrice(inrData,liveNow);
 assert.equal(inrPrice.live,true);
 assert.equal(inrPrice.price,'₹93,12,345.67');
+const indicativePrice=safeBtcInrLivePrice({
+ ...inrData,provider:'COINGECKO_PUBLIC_INR',
+ quoteType:'INDICATIVE_MARKET_PRICE'
+},liveNow);
+assert.equal(indicativePrice.live,true);
+assert.match(indicativePrice.status,/indicative/i);
+assert.match(indicativePrice.detail,/CoinGecko/);
 assert.match(inrPrice.detail,/CoinDCX/);
 assert.match(inrPrice.detail,/IST/);
 for(const bad of [
  {...inrData,currency:'USD'}, {...inrData,symbol:'BTC/USD'},
- {...inrData,lastTradeInr:0},{...inrData,lastTradeInr:'9312345.67'},
- {...inrData,lastTradeAtUtc:new Date(liveNow-95000).toISOString()},
- {...inrData,lastTradeAtUtc:new Date(liveNow+16000).toISOString()},
+ {...inrData,priceInr:0},{...inrData,priceInr:'9312345.67'},
+ {...inrData,priceAtUtc:new Date(liveNow-95000).toISOString()},
+ {...inrData,priceAtUtc:new Date(liveNow+16000).toISOString()},
  {...inrData,checkedAtUtc:new Date(liveNow-95000).toISOString()},
  {...inrData,provider:'NOT_COINDCX'}, {...inrData,orderSubmissionAllowed:true},
  {...inrData,realOrderPlaced:true},{...inrData,paperOnly:false}
@@ -245,7 +253,7 @@ assert.match(nav,/inrQuote\.hidden=!cryptoTab/,
  'BTC rupee quote must only appear in BTC tab');
 assert.doesNotMatch(nav,/\$'\+cryptoSpot\.lastCompletedClose/,
  'A USD Kraken candle must never become a displayed BTC INR price');
-const nav=readFileSync(new URL('./androidBottomNavigation.js',import.meta.url),'utf8');
+
 const entry=readFileSync(new URL('./intradayRecommendationsUI.js',import.meta.url),'utf8');
 assert.match(entry,/VITE_ANDROID_APP!=='true'/,
  'Only legacy native Android builds should get extra status-bar spacing');
