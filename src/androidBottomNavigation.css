@@ -239,3 +239,26 @@ body.android-minimal-shell .android-simple-footer{
 body.android-minimal-shell .android-simple-footer p{
  max-width:100%;flex-basis:100%;
 }
+
+/* Provisional index direction is visually separate from any option paper BUY.
+   It never contains premiums, contracts, trade-entry levels or order actions. */
+body.android-minimal-shell .android-simple-direction{
+ margin-top:17px;padding:15px 14px;border-radius:13px;
+ border:1px solid #d7e5ec;background:#f7fafc;
+ display:flex;flex-direction:column;align-items:flex-start;gap:8px;
+}
+body.android-minimal-shell .android-simple-direction[hidden]{display:none}
+body.android-minimal-shell .android-simple-direction-title{
+ color:#57737e;font-size:10px;font-weight:850;letter-spacing:.075em;
+}
+body.android-minimal-shell .android-simple-direction-value{
+ font-size:20px;font-weight:850;line-height:1.2;
+}
+body.android-minimal-shell .android-simple-direction-value.is-bullish{color:#078874}
+body.android-minimal-shell .android-simple-direction-value.is-bearish{color:#b34c59}
+body.android-minimal-shell .android-simple-direction-time{
+ color:#617d87;font-size:11px;
+}
+body.android-minimal-shell .android-simple-direction-note{
+ color:#617d87;font-size:11px;line-height:1.5;margin:0;
+}
