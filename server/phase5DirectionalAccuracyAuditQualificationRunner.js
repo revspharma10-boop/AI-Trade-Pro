@@ -86,12 +86,12 @@ assert.equal(evaluateDirectionalHistory({}).status,'NO_RECORDED_FORECASTS');
 const separated=chronologicalAccuracyHoldout({...input,
  trainEndUtc:utc(advance(1)+60000),validationEndUtc:utc(advance(3)+60000)});
 assert.equal(separated.status,'OFFLINE_CHRONOLOGICAL_HOLDOUT_ONLY');
-assert.equal(separated.censoredOverlapCount,0);
+assert.equal(separated.censoredOverlapCount,2,'Overlapping forecast horizons are embargoed');
 assert.equal(separated.train.total.eligibleDecisions,1);
-assert.equal(separated.validation.total.eligibleDecisions,2);
-assert.equal(separated.test.total.eligibleDecisions,3);
+assert.equal(separated.validation.total.eligibleDecisions,1);
+assert.equal(separated.test.total.eligibleDecisions,2);
 assert.equal(separated.train.total.correct,1);
-assert.equal(separated.test.total.pending,1);
+assert.equal(separated.test.total.unevaluable,1);
 assert.equal(separated.autoPromotionAllowed,false);
 const delayed=chronologicalAccuracyHoldout({...input,
  trainEndUtc:utc(advance(1)+10000),validationEndUtc:utc(advance(3)+60000)});
