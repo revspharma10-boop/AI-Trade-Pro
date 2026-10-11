@@ -17,18 +17,14 @@ const rows=[
 ];
 const payload=(data=rows,key='XXBTZUSD')=>({error:[],result:{[key]:data,last:0}});
 const result=interpretKrakenCryptoOhlc(payload(),observed);
-assert.equal(result.status,'PROVISIONAL_DIRECTION');
-assert.equal(result.direction,'BULLISH');
-assert.equal(result.completedClose,105,'Never use the 950 uncommitted close');
-assert.equal(result.signalCloseAt,new Date(observed-20000).toISOString());
-assert.equal(result.source,'KRAKEN_PUBLIC_SPOT');
-assert.equal(result.quoteCurrency,'USD');
-assert.equal(result.dataQuality,'COMPLETED_5M_OHLCV');
+assert.equal(result.status,'WAIT');
+assert.equal(result.reason,'CRYPTO_TECHNICAL_HISTORY_INSUFFICIENT',
+ 'Four candles must not qualify as a high-confluence technical signal');
 const down=payload([
  row(0,100,101,99,100,85),row(1,100,102,99,101,95),
  row(2,101,102,100,101,75),row(3,101,101.5,95,96,95),
  row(4,96,97,90,92)]);
-assert.equal(interpretKrakenCryptoOhlc(down,observed).direction,'BEARISH');
+assert.equal(interpretKrakenCryptoOhlc(down,observed).status,'WAIT');
 assert.equal(interpretKrakenCryptoOhlc(payload(),observed-15000).status,'WAIT',
  'Do not predict until the previous five-minute candle has completed and grace elapsed');
 for(const corrupted of [
@@ -45,15 +41,61 @@ for(const corrupted of [
  const test=interpretKrakenCryptoOhlc(corrupted,observed);
  assert.equal(test.status,'WAIT','Invalid, duplicated or mismatched Kraken data must fail closed');
 }
+// Synthetic 30h series: upward and downward contexts without future bars.
+const epoch=observed-20000;
+const longBars=Array.from({length:360},(_,i)=>{
+ const p=j=>10000+j*0.9+7*Math.sin(j*.4)+3*Math.sin(j*1.3)+(j===359?16:0);
+ const close=p(i),open=i===0?close-1:p(i-1);
+ const high=Math.max(open,close)+2,low=Math.min(open,close)-2;
+ return [Math.floor((epoch-(360-i)*300000)/1000),
+  String(open),String(high),String(low),String(close),String(close),
+  String(i===359?200:100),120];
+});
+const runningFuture=[Math.floor(epoch/1000),'10500','999999','1',
+ '950000','10100','999','999'];
+const highQuality=payload([...longBars,runningFuture]);
+const strong=interpretKrakenCryptoOhlc(highQuality,observed);
+assert.equal(strong.status,'PROVISIONAL_DIRECTION');
+assert.equal(strong.direction,'BULLISH');
+assert.equal(strong.strategyVersion,'btc-mtf-confluence-v1');
+assert.equal(strong.technical?.checks.length,8);
+assert.ok(strong.technical.checks.every(c=>c.pass));
+assert.equal(strong.completedClose,Number(Number(longBars[359][4]).toFixed(2)),
+ 'The uncommitted current candle cannot change the last completed price');
+assert.equal(strong.signalCloseAt,new Date(epoch).toISOString());
+assert.equal(strong.source,'KRAKEN_PUBLIC_SPOT');
+assert.equal(strong.dataQuality,'COMPLETED_5M_OHLCV');
+assert.equal(strong.paperLevels.type,'ILLUSTRATIVE_UNEXECUTABLE_ATR_LEVELS');
+assert.equal(strong.paperLevels.approvedQuantity,0);
+assert.equal(strong.paperLevels.bidAskVerified,false);
+const shortBars=longBars.map((v,i)=>[
+ v[0],String(22000-Number(v[1])),String(22000-Number(v[3])),
+ String(22000-Number(v[2])),String(22000-Number(v[4])),
+ String(22000-Number(v[4])),v[6],v[7]
+]);
+const bearish=interpretKrakenCryptoOhlc(payload([...shortBars,runningFuture]),observed);
+assert.equal(bearish.status,'PROVISIONAL_DIRECTION');
+assert.equal(bearish.direction,'BEARISH');
+assert.ok(bearish.paperLevels.target3<bearish.paperLevels.target1);
+for(const broken of [
+ payload([...longBars.slice(0,300),longBars[299],...longBars.slice(301),runningFuture]),
+ payload([...longBars.slice(1),runningFuture]),
+ payload([...longBars.slice(0,-1),
+  [...longBars.at(-1).slice(0,6),'0',0],runningFuture]),
+ payload([...longBars.slice(0,-1),
+  [...longBars.at(-1).slice(0,6),'10',0],runningFuture])
+]){
+ assert.equal(interpretKrakenCryptoOhlc(broken,observed).status,'WAIT');
+}
 let calls=0;
 const feed=createCryptoPaperResearchFeed({fetchOhlc:async()=>{
- calls++;return payload();
+ calls++;return highQuality;
 }});
 const a=await feed.getLatest(observed);
 assert.equal(a.tab,'crypto');
 assert.equal(a.state,'WAIT','Provisional spot hypothesis never becomes a trade');
 assert.equal(a.provisionalDirection?.direction,'BULLISH');
-assert.equal(a.provisionalDirection?.strategy,'CRYPTO_ROLLING_RANGE_15M');
+assert.equal(a.provisionalDirection?.strategy,'btc-mtf-confluence-v1');
 assert.equal(a.provisionalDirection?.source,'KRAKEN_PUBLIC_SPOT');
 assert.equal(a.provisionalDirection?.paperOnly,true);
 assert.equal(a.provisionalDirection?.recordedDurably,false);
@@ -62,7 +104,12 @@ assert.equal(a.approvedLots,0);
 assert.equal(a.last,null);
 assert.equal(a.verifiedContract,null);
 assert.equal(a.spot.currency,'USD');
-assert.equal(a.spot.lastCompletedClose,105);
+assert.equal(a.spot.lastCompletedClose,strong.completedClose);
+assert.equal(a.technical?.strategyVersion,'btc-mtf-confluence-v1');
+assert.equal(a.technical?.checks?.filter(x=>x.pass).length,8);
+assert.equal(a.paperLevels?.currency,'USD');
+assert.equal(a.paperLevels?.executed,false);
+assert.equal(a.paperLevels?.approvedQuantity,0);
 const second=await feed.getLatest(observed+4*60000);
 assert.deepEqual(second,a,'Five-minute hypothesis must remain frozen');
 assert.equal(calls,1,'Frozen hypothesis must not poll Kraken repeatedly');
@@ -84,4 +131,4 @@ assert.doesNotMatch(source,/\/private\/|AddOrder|UPSTOX_CLIENT_SECRET|\/order\/p
 const server=readFileSync(new URL('./upstoxOAuthCallbackServer.js',import.meta.url),'utf8');
 assert.match(server,/\/api\/crypto-research\/latest/);
 assert.match(server,/cryptoResearch\.getLatest\(\)/);
-console.log('CRYPTO PAPER RESEARCH QUALIFICATION PASSED: 24/7 BTC/USD completed candles, source identity, 5-minute frozen directional-only hypothesis and no real orders.');
+console.log('BTC TECHNICAL CONFLUENCE QUALIFICATION PASSED: 360 complete bars, 5m/1h EMA + RSI + MACD + ATR + VWAP + volume + range, strict illustrative levels, no orders.');

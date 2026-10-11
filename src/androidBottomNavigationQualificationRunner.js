@@ -154,7 +154,7 @@ assert.equal(safeRecommendationCard(forecastFeed,'nifty',time+5*60000)
 assert.equal(safeRecommendationCard({...forecastFeed,realOrderPlaced:true},
  'nifty',time).provisionalDirection,null);
 const cryptoAt=Date.parse('2026-10-11T09:30:20Z');
-const cryptoEarly={kind:'PROVISIONAL_DIRECTION',strategy:'CRYPTO_ROLLING_RANGE_15M',
+const cryptoEarly={kind:'PROVISIONAL_DIRECTION',strategy:'btc-mtf-confluence-v1',
  direction:'BULLISH',source:'KRAKEN_PUBLIC_SPOT',
  observedAt:new Date(cryptoAt).toISOString(),
  lastCompletedAt:'2026-10-11T09:30:00.000Z',
@@ -165,7 +165,17 @@ const cryptoPayload={tab:'crypto',state:'WAIT',
  lastCheckedAt:new Date(cryptoAt).toISOString(),
  provisionalDirection:cryptoEarly,
  spot:{market:'BTC/USD',currency:'USD',source:'KRAKEN_PUBLIC_SPOT',
-  completedAt:cryptoEarly.lastCompletedAt,lastCompletedClose:105}};
+  completedAt:cryptoEarly.lastCompletedAt,lastCompletedClose:105},
+ technical:{status:'HIGH_CONFLUENCE_DIRECTION',direction:'BULLISH',
+  strength:'HIGH_CONFLUENCE_UNVALIDATED',strategyVersion:'btc-mtf-confluence-v1',
+  orderSubmissionAllowed:false,realOrderPlaced:false,optionPlanQualified:false,
+  checks:Array.from({length:8},(_,i)=>({code:'CHECK_'+i,pass:true})),
+  metrics:{ema21:102,ema50:100,hourEma9:101,hourEma21:99,
+   rsi14:65,atr14:2,volumeMultiple:1.8}},
+ paperLevels:{type:'ILLUSTRATIVE_UNEXECUTABLE_ATR_LEVELS',currency:'USD',
+  referenceClose:105,invalidation:100,target1:110,target2:115,target3:120,
+  executed:false,approvedQuantity:0,feesVerified:false,bidAskVerified:false,
+  slippageVerified:false,marginVerified:false}};
 const cryptoCard=safeRecommendationCard(cryptoPayload,'crypto',cryptoAt);
 assert.equal(cryptoCard.tag,'WAIT');
 assert.equal(cryptoCard.contract,'BTC/USD · SPOT RESEARCH');
@@ -175,9 +185,18 @@ assert.equal(cryptoCard.entry,'—');
 assert.equal(cryptoCard.stopLoss,'—');
 assert.equal(cryptoCard.target,'—');
 assert.equal(cryptoCard.status,'No crypto trade executed');
+assert.match(cryptoCard.cryptoTechnical.heading,/UNVALIDATED/);
+assert.equal(cryptoCard.cryptoTechnical.targets[2],120);
+assert.equal(cryptoCard.cryptoTechnical.invalidation,100);
+assert.equal(safeRecommendationCard({...cryptoPayload,paperLevels:{
+ ...cryptoPayload.paperLevels,marginVerified:true}},'crypto',cryptoAt).cryptoTechnical,null);
+assert.equal(safeRecommendationCard({...cryptoPayload,technical:{
+ ...cryptoPayload.technical,checks:cryptoPayload.technical.checks.map((c,i)=>
+  i===0?{...c,pass:false}:c)}},'crypto',cryptoAt).provisionalDirection,null);
 assert.equal(safeRecommendationCard({...cryptoPayload,
  provisionalDirection:{...cryptoEarly,direction:'BEARISH'}},
- 'crypto',cryptoAt).provisionalDirection?.label,'BEARISH');
+ 'crypto',cryptoAt).provisionalDirection,null,
+ 'Direction inconsistent with technical confluence must be suppressed');
 assert.equal(safeRecommendationCard(cryptoPayload,'nifty',cryptoAt).provisionalDirection,null);
 assert.equal(safeRecommendationCard({...cryptoPayload,
  orderSubmissionAllowed:true},'crypto',cryptoAt).provisionalDirection,null);
@@ -224,6 +243,8 @@ assert.match(nav,/if\(!document\.hidden\)void refresh\(true\)/,
  'A hidden browser must not recursively launch a stale tab refresh');
 assert.match(nav,/Browser received/,
  'Browser polling status must not imply fresh broker analysis');
+assert.match(nav,/confluence\.hidden=!view\.cryptoTechnical/,
+ 'Do not show crypto paper levels when the UI confluence gate fails');
 assert.match(nav,/directional\.hidden=!view\.provisionalDirection/,
  'Only independently qualified provisional direction is shown to the user');
 assert.match(nav,/Not an entry or option order/,

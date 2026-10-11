@@ -6,7 +6,7 @@ The supported everyday interface is the web app:
 
 It uses the same clean, touch-friendly UI formerly packaged in the private
 Android APK. The browser is enough — no install, APK, app store, or Android
-build is required. On mobile the four tabs stay at the bottom; on desktop
+build is required. On mobile the five tabs stay at the bottom; on desktop
 the layout and tabs stay centered in a phone-width column.
 
 ## What each tab displays
@@ -16,6 +16,7 @@ the layout and tabs stay centered in a phone-width column.
 - **Options Trade:** Currently INFY option research (not an open-ended symbol search).
 - **Commodity:** MCX GOLD; research remains WAIT unless independent MCX safety
   checks have been fulfilled.
+- **Crypto:** BTC/USD, Kraken public spot research. Shows only qualified five-minute/high-timeframe directional hypotheses, and always keeps real trading disabled.
 
 The card shows the verified contract, entry premium, target, stop loss, date,
 paper status, and stage-specific **WHY WAIT?** blockers. When a setup is not
@@ -166,3 +167,51 @@ requirements are outside this read-only research experiment.
 
 The qualification uses synthetic BTC/USD market examples. **No historical
 or live forward crypto prediction accuracy has been established.**
+
+
+## BTC high-confluence research (experimental, Phase 3)
+
+The initial 4-candle BTC direction is replaced with a more selective
+research screen, based on **at least 360 consecutive completed 5-minute
+Kraken BTC/USD spot candles** (30 hours, and at least 21 complete hourly
+candles assembled *only* from completed five-minute candles).
+
+Every gate is required; otherwise the Crypto tab shows WAIT:
+1. Completed 5-minute closing breakout beyond the preceding 12 bars
+   (one-hour range), including an ATR-scaled buffer.
+2. Current completed 5-minute candle volume at least 1.2× the preceding
+   20-bar average and non-zero trade count.
+3. 5-minute EMA21 above/below EMA50 aligned with the breakout direction.
+4. Reconstructed *completed* one-hour EMA9 above/below EMA21.
+5. Wilder RSI14 bullish 54–75 / bearish 25–46; avoid the most extended
+   overbought/oversold candles.
+6. MACD12/26 with EMA9 signal-line histogram aligned to direction.
+7. BTC 24-hour **OHLC typical-price, volume-weighted approximation**
+   aligned to direction, **not genuine trade-by-trade VWAP**.
+8. ATR14 between 0.03% and 2.0% of price and no overextension of more
+   than 4 ATR from EMA21.
+
+A qualifying outcome is **HIGH CONFLUENCE · UNVALIDATED**, not a proven
+higher-accuracy market model. All thresholds are predeclared but still
+await walk-forward research and independent real-market outcomes.
+Volatility, RSI and volume thresholds are uncalibrated research assumptions
+and may be too strict or insufficient across market regimes.
+
+The interface may display the USD **last completed candle close**,
+illustrative ATR-derived invalidation and T1/T2/T3 levels in a dedicated
+directional research card. They are *not* executable quotes, a spread-verified
+entry, stop or exit, position size, or observed paper fill. No USD/INR
+conversion, brokerage cost, taxes, fee, slippage or verified Kraken order-book
+liquidity is incorporated, so ₹50,000/₹500 lot sizing is not performed for
+BTC. Spot bearish direction does not assume short-selling availability.
+Paper-only restrictions and real-order disablement remain unchanged.
+
+Kraken confirms that the most recent OHLC record is uncommitted, and the
+endpoint supplies at most 720 recent entries:
+https://docs.kraken.com/api-reference/market-data/get-ohlc-data
+
+Provider outage, incomplete intervals, price anomalies, weak breakout,
+inconsistent higher timeframe or indicator disagreement all result in WAIT.
+No model confidence percentage or prediction accuracy is fabricated.
+The system remains on-demand/visible-browser research on free Render,
+not a separately scheduled 24/7 trading bot.

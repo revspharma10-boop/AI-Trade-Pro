@@ -101,16 +101,48 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(cryptoSpot.completedAt)&&
   Number.isFinite(Date.parse(cryptoSpot.completedAt));
  const cryptoDirection=selectedTab==='crypto'&&cryptoSpotValid&&
-  early?.strategy==='CRYPTO_ROLLING_RANGE_15M'&&
+  early?.strategy==='btc-mtf-confluence-v1'&&
   early?.source==='KRAKEN_PUBLIC_SPOT'&&
   early?.lastCompletedAt===cryptoSpot.completedAt&&
   Number.isFinite(Date.parse(early.lastCompletedAt))&&
   Date.parse(early.lastCompletedAt)<=asOf&&
   asOf-Date.parse(early.lastCompletedAt)<300000;
+ const cryptoResearch=matches&&selectedTab==='crypto'?data.technical:null;
+ const levels=matches&&selectedTab==='crypto'?data.paperLevels:null;
+ const positiveUsd=n=>typeof n==='number'&&Number.isFinite(n)&&n>0;
+ const strongCrypto=cryptoDirection&&
+  cryptoResearch?.status==='HIGH_CONFLUENCE_DIRECTION'&&
+  cryptoResearch?.strategyVersion==='btc-mtf-confluence-v1'&&
+  cryptoResearch?.direction===early?.direction&&
+  cryptoResearch?.strength==='HIGH_CONFLUENCE_UNVALIDATED'&&
+  cryptoResearch?.orderSubmissionAllowed===false&&
+  cryptoResearch?.realOrderPlaced===false&&
+  cryptoResearch?.optionPlanQualified===false&&
+  Array.isArray(cryptoResearch.checks)&&cryptoResearch.checks.length===8&&
+  cryptoResearch.checks.every(c=>c&&c.pass===true)&&
+  levels?.type==='ILLUSTRATIVE_UNEXECUTABLE_ATR_LEVELS'&&
+  levels.currency==='USD'&&levels.executed===false&&
+  levels.approvedQuantity===0&&levels.feesVerified===false&&
+  levels.bidAskVerified===false&&levels.slippageVerified===false&&
+  levels.marginVerified===false&&
+  [levels.referenceClose,levels.invalidation,levels.target1,
+   levels.target2,levels.target3].every(positiveUsd)&&
+  Math.abs(levels.referenceClose-cryptoSpot.lastCompletedClose)<0.011&&
+  (early.direction==='BULLISH'?
+   levels.invalidation<levels.referenceClose&&
+   levels.referenceClose<levels.target1&&levels.target1<levels.target2&&
+   levels.target2<levels.target3:
+   levels.invalidation>levels.referenceClose&&
+   levels.referenceClose>levels.target1&&levels.target1>levels.target2&&
+   levels.target2>levels.target3)&&
+  [cryptoResearch.metrics?.ema21,cryptoResearch.metrics?.ema50,
+   cryptoResearch.metrics?.hourEma9,cryptoResearch.metrics?.hourEma21,
+   cryptoResearch.metrics?.rsi14,cryptoResearch.metrics?.atr14,
+   cryptoResearch.metrics?.volumeMultiple].every(n=>typeof n==='number'&&Number.isFinite(n));
  const indexDirection=['nifty','sensex'].includes(selectedTab)&&
   early?.strategy==='OPENING_RANGE_15M'&&early?.source==='UPSTOX_READ_ONLY';
  const earlySafe=backendFresh&&checkedClockValid&&!previous&&!active&&
-  (indexDirection||cryptoDirection)&&
+  (indexDirection||strongCrypto)&&
   early?.kind==='PROVISIONAL_DIRECTION'&&
   ['BULLISH','BEARISH'].includes(early.direction)&&
   early.recordedDurably===false&&
@@ -134,10 +166,20 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
    label:early.direction,observedAt:new Date(earlyTime).toLocaleTimeString('en-IN',{
     timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' IST'
   }:null,
-  cryptoPrice:earlySafe&&cryptoDirection?
+  cryptoPrice:earlySafe&&strongCrypto?
    '$'+cryptoSpot.lastCompletedClose.toLocaleString('en-US',{
     minimumFractionDigits:2,maximumFractionDigits:2
    })+' · last completed 5m close (USD)':null,
+  cryptoTechnical:earlySafe&&strongCrypto?{
+   heading:'HIGH CONFLUENCE · UNVALIDATED',
+   trend5m:'EMA21 '+cryptoResearch.metrics.ema21+' / EMA50 '+cryptoResearch.metrics.ema50,
+   trend1h:'1h EMA9 '+cryptoResearch.metrics.hourEma9+' / EMA21 '+cryptoResearch.metrics.hourEma21,
+   momentum:'RSI14 '+cryptoResearch.metrics.rsi14+' · MACD agreement',
+   volatility:'ATR14 $'+cryptoResearch.metrics.atr14+
+    ' · Volume '+cryptoResearch.metrics.volumeMultiple+'×',
+   reference:levels.referenceClose,invalidation:levels.invalidation,
+   targets:[levels.target1,levels.target2,levels.target3]
+  }:null,
   tag:active?'PAPER BUY':previous?'PAST PAPER IDEA':'WAIT',
   contract:selectedTab==='crypto'?'BTC/USD · SPOT RESEARCH':
    (active||previous)?last.contract:hasCandidate?
@@ -229,6 +271,15 @@ export function mountAndroidBottomNavigation(){
   directionalLabel,directionalTime,directionalPrice,
   make('p','android-simple-direction-note',
    'Unvalidated market hypothesis • Not an entry or option order • No recorded outcome'));
+ const confluence=make('section','android-simple-direction');
+ confluence.hidden=true;
+ confluence.setAttribute('aria-label','Crypto technical confluence and non-executable research levels');
+ const technicalTitle=make('strong','android-simple-direction-title');
+ const technicalMetrics=make('p','android-simple-direction-note');
+ const technicalLevels=make('p','android-simple-direction-note');
+ const technicalDisclaimer=make('p','android-simple-direction-note',
+  'USD candle illustrations ONLY. No executable entry, SL, targets, fees, slippage, position sizing, FX or verified profitability.');
+ confluence.append(technicalTitle,technicalMetrics,technicalLevels,technicalDisclaimer);
  const diagnostics=make('section','android-simple-diagnostics');
  diagnostics.setAttribute('aria-label','Why the paper recommendation is waiting');
  diagnostics.hidden=true;
@@ -237,7 +288,7 @@ export function mountAndroidBottomNavigation(){
  const diagnosticList=make('ul','android-simple-diagnostic-list');
  const diagnosticMore=make('p','android-simple-diagnostic-more');
  diagnostics.append(diagnosticHeading,diagnosticStage,diagnosticList,diagnosticMore);
- card.append(market,chips,facts,details,explanation,directional,diagnostics);
+ card.append(market,chips,facts,details,explanation,directional,confluence,diagnostics);
 
  const foot=make('footer','android-simple-footer');
  const refreshed=make('p','','Read-only updates every 30 seconds while visible');
@@ -296,6 +347,20 @@ export function mountAndroidBottomNavigation(){
   directionalTime.textContent=view.provisionalDirection?.observedAt??'';
   directionalPrice.hidden=!view.cryptoPrice;
   directionalPrice.textContent=view.cryptoPrice??'';
+  confluence.hidden=!view.cryptoTechnical;
+  technicalTitle.textContent=view.cryptoTechnical?.heading??'';
+  technicalMetrics.textContent=view.cryptoTechnical?[
+   view.cryptoTechnical.trend5m,view.cryptoTechnical.trend1h,
+   view.cryptoTechnical.momentum,view.cryptoTechnical.volatility
+  ].join(' • '):'';
+  const usd=n=>'$'+Number(n).toLocaleString('en-US',{
+   minimumFractionDigits:2,maximumFractionDigits:2});
+  technicalLevels.textContent=view.cryptoTechnical?
+   'Reference '+usd(view.cryptoTechnical.reference)+
+   ' · Invalidation '+usd(view.cryptoTechnical.invalidation)+
+   ' · Illustrative T1 '+usd(view.cryptoTechnical.targets[0])+
+   ' · T2 '+usd(view.cryptoTechnical.targets[1])+
+   ' · T3 '+usd(view.cryptoTechnical.targets[2]):'';
   diagnostics.hidden=view.state!=='WAIT'||view.failedChecks.length===0;
   diagnosticStage.textContent=view.diagnosticStage??'RESEARCH DATA';
   diagnosticList.replaceChildren();

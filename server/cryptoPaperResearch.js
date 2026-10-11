@@ -1,3 +1,5 @@
+import {evaluateBtcTechnicalConfluence,BTC_CONFLUENCE_VERSION}
+ from './cryptoTechnicalConfluence.js';
 // Free 24/7 Kraken BTC/USD spot candle research, always PAPER ONLY.
 // No broker account, private endpoints, ticker timestamp fabrication, order APIs,
 // predicted accuracy claims, executable crypto positions or synthetic pricing.
@@ -15,7 +17,15 @@ const clearWait=(asOf,code)=>({
   CRYPTO_FEED_INVALID:'Kraken 5-minute candles are invalid or out of sequence',
   CRYPTO_COMPLETED_CANDLES_REQUIRED:'Four consecutive completed five-minute candles required',
   CRYPTO_DECISION_NOT_READY:'Next completed candle is not ready for analysis',
-  CRYPTO_NO_CLEAR_BREAKOUT:'No completed bullish or bearish BTC/USD breakout'
+  CRYPTO_NO_CLEAR_BREAKOUT:'No completed bullish or bearish BTC/USD breakout',
+  CRYPTO_TECHNICAL_HISTORY_INSUFFICIENT:'30 hours of consecutive BTC five-minute candles required',
+  CRYPTO_TECHNICAL_HISTORY_INVALID:'Recent BTC candles have gaps or unverified values',
+  CRYPTO_HOURLY_HISTORY_INSUFFICIENT:'Confirmed hourly EMA context is unavailable',
+  CRYPTO_VOLUME_HISTORY_UNAVAILABLE:'BTC volume history is insufficient',
+  CRYPTO_INDICATOR_INPUT_INVALID:'Technical inputs are invalid',
+  CRYPTO_NO_CONFIRMED_HOURLY_RANGE_BREAKOUT:'No confirmed breakout over the prior one-hour range',
+  CRYPTO_TECHNICAL_CONFLUENCE_NOT_MET:'Volume, EMA, RSI, MACD, VWAP or ATR filters did not all agree',
+  CRYPTO_ILLUSTRATIVE_LEVELS_INVALID:'Research-only ATR levels cannot be validated'
  }[code]??'Unverified crypto market data'}],blockerCount:1,
  lastCheckedAt:iso(asOf),provisionalDirection:null,
  last:null,verifiedContract:null,spot:null,
@@ -61,32 +71,23 @@ export function interpretKrakenCryptoOhlc(payload,asOf=Date.now()){
  const running=candles.at(-1);
  if(running.time!==epoch)
   return {status:'WAIT',reason:'CRYPTO_COMPLETED_CANDLES_REQUIRED'};
- const bars=candles.slice(-5,-1);
- if(bars.length!==4||bars.some((v,i)=>v.time!==epoch-(4-i)*FIVE))
-  return {status:'WAIT',reason:'CRYPTO_COMPLETED_CANDLES_REQUIRED'};
- const rangeBars=bars.slice(0,3),signal=bars[3];
- const top=Math.max(...rangeBars.map(x=>x.high));
- const bottom=Math.min(...rangeBars.map(x=>x.low));
- const width=top-bottom;
- if(!positive(width)||width<rangeBars[0].open*0.00015||
-    width>rangeBars[0].open*0.035)
-  return {status:'WAIT',reason:'CRYPTO_NO_CLEAR_BREAKOUT'};
- const buffer=Math.max(width*0.05,signal.close*0.0002);
- const baseVolume=rangeBars.map(x=>x.volume).sort((a,b)=>a-b)[1];
- const validActivity=signal.trades>0&&signal.volume>0&&
-  baseVolume>0&&signal.volume>=baseVolume*0.35;
- const bullish=validActivity&&signal.close>top+buffer&&
-  signal.close>signal.open;
- const bearish=validActivity&&signal.close<bottom-buffer&&
-  signal.close<signal.open;
- return {status:bullish||bearish?'PROVISIONAL_DIRECTION':'WAIT',
-  reason:bullish?'COMPLETED_BTC_UPSIDE_BREAKOUT':
-   bearish?'COMPLETED_BTC_DOWNSIDE_BREAKOUT':'CRYPTO_NO_CLEAR_BREAKOUT',
-  direction:bullish?'BULLISH':bearish?'BEARISH':'WAIT',
-  completedClose:signal.close,
-  signalCloseAt:iso(epoch),signalCandleOpenAt:iso(signal.time),
-  rangeHigh:top,rangeLow:bottom,source:'KRAKEN_PUBLIC_SPOT',
-  dataQuality:'COMPLETED_5M_OHLCV',quoteCurrency:'USD'};
+ // No reference to the final Kraken frame: it is uncommitted and MUST
+ // never affect either indicator values or illustrative research levels.
+ const technical=evaluateBtcTechnicalConfluence({
+  candles:candles.slice(0,-1),asOf:now
+ });
+ if(technical.status!=='HIGH_CONFLUENCE_DIRECTION')
+  return {status:'WAIT',reason:technical.reason,technical};
+ return {status:'PROVISIONAL_DIRECTION',
+  reason:technical.reason,direction:technical.direction,
+  completedClose:technical.metrics.lastCompletedClose,
+  signalCloseAt:technical.metrics.completedCandleEnd,
+  signalCandleOpenAt:technical.metrics.completedCandleTime,
+  source:'KRAKEN_PUBLIC_SPOT',
+  dataQuality:'COMPLETED_5M_OHLCV',quoteCurrency:'USD',
+  strategyVersion:BTC_CONFLUENCE_VERSION,technical,
+  paperLevels:technical.paperLevels};
+
 }
 export function createCryptoPaperResearchFeed({fetchOhlc,clock=()=>Date.now()}={}){
  if(typeof fetchOhlc!=='function'||typeof clock!=='function')
@@ -112,16 +113,18 @@ export function createCryptoPaperResearchFeed({fetchOhlc,clock=()=>Date.now()}={
     spot:{market:'BTC/USD',currency:'USD',
      lastCompletedClose:observation.completedClose,
      completedAt:observation.signalCloseAt,source:'KRAKEN_PUBLIC_SPOT'},
+    technical:observation.technical,
+    paperLevels:observation.paperLevels,
     provisionalDirection:{
      kind:'PROVISIONAL_DIRECTION',
-     strategy:'CRYPTO_ROLLING_RANGE_15M',
+     strategy:BTC_CONFLUENCE_VERSION,
      direction:observation.direction,
      observedAt:iso(now),lastCompletedAt:observation.signalCloseAt,
      source:'KRAKEN_PUBLIC_SPOT',recordedDurably:false,
      optionPlanQualified:false,paperOnly:true,
      orderSubmissionAllowed:false,realOrderPlaced:false
     },
-    message:'Provisional completed-candle BTC/USD direction — not a trade',
+    message:'HIGH technical confluence: 5m + 1h trend, RSI, MACD, ATR, volume, VWAP • paper research only',
     ...CRYPTO_SAFETY
    }:clearWait(now,observation.reason);
    cached={slot,checkedAt:now,response:result};
