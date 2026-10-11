@@ -230,6 +230,17 @@ const indicativePrice=safeBtcInrLivePrice({
 assert.equal(indicativePrice.live,true);
 assert.match(indicativePrice.status,/indicative/i);
 assert.match(indicativePrice.detail,/CoinGecko/);
+const paprikaPrice=safeBtcInrLivePrice({
+ ...inrData,provider:'COINPAPRIKA_PUBLIC_INR',
+ quoteType:'INDICATIVE_MARKET_PRICE'
+},liveNow);
+assert.equal(paprikaPrice.live,true);
+assert.equal(paprikaPrice.price,'₹93,12,345.67');
+assert.match(paprikaPrice.detail,/CoinPaprika/);
+assert.equal(safeBtcInrLivePrice({...inrData,provider:'COINPAPRIKA_PUBLIC_INR',
+ quoteType:'SPOT_LAST_TRADE'},liveNow).live,false,
+ 'CoinPaprika aggregate quote must never be misrepresented as a spot trade');
+
 assert.match(inrPrice.detail,/CoinDCX/);
 assert.match(inrPrice.detail,/IST/);
 for(const bad of [
