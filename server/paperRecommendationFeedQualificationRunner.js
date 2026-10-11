@@ -110,6 +110,10 @@ const mock={
 const feed=createPaperRecommendationFeed(mock);
 const [a,b]=await Promise.all([feed.getLatest('nifty',asOf),feed.getLatest('nifty',asOf)]);
 assert.equal(searches,1,'concurrent requests share one backend call');
+assert.equal((await feed.getLatest('nifty',asOf+30000)).state,'WAIT');
+assert.equal(searches,1,'30-second polling uses cached data instead of repeated upstream calls');
+assert.equal((await feed.getLatest('nifty',asOf+47000)).state,'WAIT');
+assert.equal(searches,2,'retry after cache TTL');
 // When closed, no broker instrument/quote request should even start.
 for(const date of ['2026-10-11','2026-10-20','2027-01-04']){
  const priorSearches=searches;
@@ -132,10 +136,7 @@ assert.match(a.message,/login has expired/);
 assert.equal(a.blockerCount,1);
 assert.equal(a.verifiedContract,null);
 
-assert.equal((await feed.getLatest('nifty',asOf+30000)).state,'WAIT');
-assert.equal(searches,1,'30-second polling uses cached data instead of repeated upstream calls');
-assert.equal((await feed.getLatest('nifty',asOf+47000)).state,'WAIT');
-assert.equal(searches,2,'retry after cache TTL');
+
 const regularDay=await feed.getLatest('sensex',atIST('2026-10-12'));
 assert.equal(regularDay.stage,'UPSTOX_DATA',
  'Planned weekday may proceed to broker preflight, not fabricate a prediction');
