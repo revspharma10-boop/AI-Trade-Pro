@@ -1,7 +1,7 @@
 // Server-side, on-demand Upstox research feed for the minimal personal Android screen.
 // GET requests only retrieve market evidence; the only upstream POST is Upstox's
 // margin ESTIMATE API, never an order API. No simulated fills or executions.
-import {marketClockState} from '../src/services/intradayMarketClock.js';
+import {marketClockState,publishedEquitySession2026} from '../src/services/intradayMarketClock.js';
 import {analyzeIntradayCandles} from '../src/services/intradayTechnicalEngine.js';
 import {deriveAutoOptionDirection,chooseAutoOptionContract,calculateAutoOptionPaperPlan}
  from '../src/services/autoOptionResearchEngine.js';
@@ -105,6 +105,14 @@ export function createPaperRecommendationFeed({
     fallback:more.fallback}),...(more.extra??{})
   });
   if(!session.open)return rejected('MARKET_SESSION',['MARKET_SESSION_CLOSED']);
+  // A weekday within market hours is not automatically a trading session.
+  // Only the published 2026 regular equity schedule can pass this preflight.
+  // Valid option quotes, contract metadata and paper risk gates still apply.
+  if(market.kind!=='MCX'){
+   const schedule=publishedEquitySession2026({segment:market.segment,asOf});
+   if(!schedule.regularSessionPlanned)
+    return rejected('MARKET_SESSION',[schedule.reason]);
+  }
   let contract=null,plan=null;
   if(market.kind==='MCX'){
    const [f,c,p]=await Promise.all([
