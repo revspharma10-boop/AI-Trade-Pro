@@ -9,7 +9,7 @@ import {BTC_CONFLUENCE_VERSION} from './cryptoTechnicalConfluence.js';
 
 export const CRYPTO_JOURNAL_BRANCH='crypto-shadow-history';
 const FIVE=300000,GRACE=12000,MAX_CAPTURE_LAG=90000;
-const SETTLEMENT_RETRY_MS=60*60*1000,MAX_UNEVALUABLE_MS=60*60*60*1000;
+const MAX_UNEVALUABLE_MS=60*60*60*1000;
 const SAFE=Object.freeze({paperOnly:true,realOrderPlaced:false,
  orderSubmissionAllowed:false,productionRealTradingEnabled:false});
 const hash=x=>createHash('sha256').update(x).digest('hex');
@@ -274,14 +274,18 @@ export async function cryptoShadowCycle({ledger,fetchOhlc,clock=()=>Date.now()}=
     technicalState:signal?'HIGH_CONFLUENCE_UNVALIDATED':'ABSTAIN',
     reasonCode:signal?'ALL_EIGHT_TECHNICAL_CHECKS_PASSED':errorCode(observed.reason),
     ...SAFE};
-   // If Kraken OHLC is missing expected previous candle, record skip rather than
-   // invent a valid abstention.
-   if(!last||last.time!==slot-FIVE){
+   // Bad or incomplete technical input is not a market ABSTAIN. Track
+   // these as SKIP so incomplete provider histories cannot inflate coverage.
+   const insufficient=['CRYPTO_TECHNICAL_HISTORY_INSUFFICIENT',
+    'CRYPTO_TECHNICAL_HISTORY_INVALID','CRYPTO_HOURLY_HISTORY_INSUFFICIENT',
+    'CRYPTO_VOLUME_HISTORY_UNAVAILABLE','CRYPTO_INDICATOR_INPUT_INVALID',
+    'CRYPTO_FEED_INVALID','CRYPTO_COMPLETED_CANDLES_REQUIRED'].includes(observed.reason);
+   if(!last||last.time!==slot-FIVE||insufficient){
     await ledger.append({schemaVersion:1,kind:'SKIP',
      id:hash('btc-skip|'+BTC_CONFLUENCE_VERSION+'|'+nowSlot),
      symbol:'BTC/USD',strategyVersion:BTC_CONFLUENCE_VERSION,
      slotUtc:nowSlot,capturedAtUtc:iso(now),
-     reasonCode:'CRYPTO_COMPLETED_CANDLES_REQUIRED',...SAFE});
+     reasonCode:insufficient?errorCode(observed.reason):'CRYPTO_COMPLETED_CANDLES_REQUIRED',...SAFE});
     forecastState='SKIPPED';
    }else{
     await ledger.append(f);forecastState=signal?f.direction:'ABSTAIN';
