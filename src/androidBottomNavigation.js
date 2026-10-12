@@ -258,7 +258,7 @@ export function safeIndexLivePrice(data,tab,asOf=Date.now()){
  if(at>asOf+10000||asOf-at>90000)return unavailable;
  return {live:true,price:data.price.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}),
   status:'Fresh index level',detail:'Upstox read-only • '+new Date(at).toLocaleTimeString('en-IN',{
-   timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' IST • refresh ~30s'};
+   timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' IST • refresh ~10s'};
 }
 export function mountAndroidBottomNavigation(){
  const root=document.querySelector('#intraday-recommendation-app');
@@ -416,7 +416,7 @@ export function mountAndroidBottomNavigation(){
   const tab=current;
   if(document.hidden||!['nifty','sensex'].includes(tab)||version!==sequence)return;
   if(indexPendingVersion===version)return;
-  if(!force&&Date.now()-indexLastPoll<25000)return;
+  if(!force&&Date.now()-indexLastPoll<9500)return;
   indexPendingVersion=version;indexLastPoll=Date.now();
   try{
    const response=await fetch(API+'/api/index-price/latest?tab='+encodeURIComponent(tab),{
@@ -570,9 +570,13 @@ export function mountAndroidBottomNavigation(){
  }
  setInterval(()=>{
   if(current==='crypto')void refreshBtcInrPrice(sequence);
-  if(['nifty','sensex'].includes(current))void refreshIndexPrice(sequence);
   void refresh();
  },30000);
+ // Index price is independent of the 30-second research cadence.
+ // One in-flight request at a time; the 9.5s guard prevents bursts.
+ setInterval(()=>{
+  if(['nifty','sensex'].includes(current))void refreshIndexPrice(sequence);
+ },10000);
  document.addEventListener('visibilitychange',()=>{
   if(!document.hidden){
    if(current==='crypto')void refreshBtcInrPrice(sequence,true);
