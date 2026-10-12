@@ -5,6 +5,8 @@ on:
     paths:
       - 'src/**'
       - 'server/paperRecommendationFeed.js'
+      - 'server/earlyPaperOptionResearch.js'
+      - 'server/earlyPaperOptionQualificationRunner.js'
       - 'server/paperResearchBot.js'
       - 'server/paperResearchBotQualificationRunner.js'
       - 'server/cryptoPaperResearch.js'
@@ -45,6 +47,7 @@ jobs:
           node src/webRecommendationUIQualificationRunner.js
           node src/androidBottomNavigationQualificationRunner.js
           node server/paperRecommendationFeedQualificationRunner.js
+          node server/earlyPaperOptionQualificationRunner.js
           node server/paperResearchBotQualificationRunner.js
           node --check server/cryptoTechnicalConfluence.js
           node server/cryptoPaperResearchQualificationRunner.js
