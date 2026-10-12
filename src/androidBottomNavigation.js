@@ -345,7 +345,10 @@ export function mountAndroidBottomNavigation(){
  const manualRefresh=make('button','android-simple-manual-refresh','Refresh now');
  manualRefresh.type='button';
  manualRefresh.setAttribute('aria-label','Refresh current market research now');
- manualRefresh.addEventListener('click',()=>{void refresh(true);});
+ manualRefresh.addEventListener('click',()=>{
+  if(current==='crypto')void refreshBtcInrPrice(sequence,true);
+  void refresh(true);
+ });
  const connect=make('a','','Connect Upstox');
  connect.href=API+'/auth/upstox/start';
  connect.target='_blank';connect.rel='noopener noreferrer';
@@ -359,6 +362,9 @@ export function mountAndroidBottomNavigation(){
  const buttons=new Map();
  let current='nifty',sequence=0,loading=false,lastPoll=0;
  let pendingTabRefresh=false;
+ // BTC/INR price refresh must never be blocked by a slow Kraken or Upstox
+ // research request. Keep an independent cadence and in-flight version gate.
+ let btcInrPendingVersion=null,btcInrLastPoll=0;
  for(const tab of ANDROID_TABS){
   const button=make('button','android-simple-tab');
   button.type='button';button.dataset.tab=tab.id;
@@ -382,15 +388,25 @@ export function mountAndroidBottomNavigation(){
   inrSource.textContent=price.detail;
   inrQuote.dataset.verified=price.live?'true':'false';
  }
- async function refreshBtcInrPrice(version){
+ async function refreshBtcInrPrice(version,force=false){
+  if(document.hidden||current!=='crypto'||version!==sequence)return;
+  if(btcInrPendingVersion===version)return;
+  if(!force&&Date.now()-btcInrLastPoll<25000)return;
+  // Free Render may need a cold start before processing the market request.
+  // A delayed previous-tab response may never replace the active BTC quote.
+  btcInrPendingVersion=version;
+  btcInrLastPoll=Date.now();
   try{
    const r=await fetch(API+'/api/crypto-price/inr/latest',{
     method:'GET',headers:{Accept:'application/json'},cache:'no-store',
-    signal:AbortSignal.timeout(15000)
+    signal:AbortSignal.timeout(27000)
    });
    if(!r.ok)throw Error('BTC_INR_UNAVAILABLE');
    displayBtcInrPrice(await r.json(),version);
   }catch(_){displayBtcInrPrice(null,version);}
+  finally{
+   if(btcInrPendingVersion===version)btcInrPendingVersion=null;
+  }
  }
  function display(data){
   const view=safeRecommendationCard(data,current);
@@ -441,9 +457,8 @@ export function mountAndroidBottomNavigation(){
   if(!force&&Date.now()-lastPoll<25000)return;
   const tab=current,version=sequence;
   loading=true;lastPoll=Date.now();
-  // Fetch INR price independently so slow Kraken technical research cannot
-  // delay the visible last-traded rupee value.
-  if(tab==='crypto')void refreshBtcInrPrice(version);
+  // BTC/INR price has its own independent timer; research loading
+  // must not suppress a scheduled rupee quote refresh.
   manualRefresh.disabled=true;
   try{
    const endpoint=tab==='crypto'?'/api/crypto-research/latest':
@@ -499,12 +514,18 @@ export function mountAndroidBottomNavigation(){
   }
   display({tab:tab.id,state:'WAIT',message:'Checking latest verified paper recommendation…',
    paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false});
+  if(cryptoTab)void refreshBtcInrPrice(sequence,true);
   void refresh(true);
  }
- setInterval(()=>{void refresh();},30000);
+ setInterval(()=>{
+  if(current==='crypto')void refreshBtcInrPrice(sequence);
+  void refresh();
+ },30000);
  document.addEventListener('visibilitychange',()=>{
-  if(!document.hidden)void refresh(true);
-  else refreshed.textContent='Paused while browser is hidden · PAPER ONLY';
+  if(!document.hidden){
+   if(current==='crypto')void refreshBtcInrPrice(sequence,true);
+   void refresh(true);
+  }else refreshed.textContent='Paused while browser is hidden · PAPER ONLY';
  });
  activate('nifty');
  return true;
