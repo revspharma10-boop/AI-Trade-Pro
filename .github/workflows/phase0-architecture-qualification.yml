@@ -10,6 +10,8 @@ on:
       - 'src/services/openingRangeResearch.js'
       - 'src/services/autoOptionResearchEngine.js'
       - 'src/services/intradayTechnicalEngine.js'
+      - 'src/services/intradayNotesEvidence.js'
+      - 'src/intradayNotesEvidenceQualificationRunner.js'
       - '.github/workflows/phase0-architecture-qualification.yml'
   workflow_dispatch:
 permissions:
@@ -32,6 +34,8 @@ jobs:
           node --check server/paperRecommendationFeed.js
       - name: Reproduce early-bias-to-WAIT gap and enforce risk locks
         run: node src/phase0ArchitectureAuditQualificationRunner.js
+      - name: Qualify supplemental completed-candle evidence
+        run: node src/intradayNotesEvidenceQualificationRunner.js
       - name: Re-run existing paper recommendation qualification
         run: |
           node server/paperRecommendationFeedQualificationRunner.js
