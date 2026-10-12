@@ -6,6 +6,7 @@ import {analyzeIntradayCandles} from '../src/services/intradayTechnicalEngine.js
 import {deriveAutoOptionDirection,chooseAutoOptionContract,calculateAutoOptionPaperPlan}
  from '../src/services/autoOptionResearchEngine.js';
 import {deriveOpeningRangeBias} from '../src/services/openingRangeResearch.js';
+import {qualifyEarlyIndexConfluence,qualifyEarlyPremiumPlan} from './earlyPaperOptionResearch.js';
 import {extractUpstoxLiveQuoteEvidence} from '../src/services/intradayRiskEngine.js';
 import {describePaperRejection} from './recommendationWaitDiagnostics.js';
 import {chooseMcxOptionUnderlying,deriveMcxOptionDirection,
@@ -151,7 +152,7 @@ export function presentRecommendation({tab,last=null,result=null,asOf=Date.now()
 }
 export function createPaperRecommendationFeed({
  searchIndex,searchEquity,searchDerivatives,getContracts,
- getCandles,getQuote,getMargin
+ getCandles,getQuote,getMargin,getGreeks=async()=>null
 }={}){
  if([searchIndex,searchEquity,searchDerivatives,getContracts,
   getCandles,getQuote,getMargin].some(fn=>typeof fn!=='function'))
@@ -239,12 +240,62 @@ export function createPaperRecommendationFeed({
     const early=deriveOpeningRangeBias({candles,quote,session,asOf});
     const provisionalDirection=qualifyProvisionalDirection({
      early,quote,underlyingKey:key,asOf});
+    const confluence=qualifyEarlyIndexConfluence({candles,quote,opening:early,session,asOf});
+    if(confluence.valid){
+     // A confirmed index breakout is only the first gate. Never treat it
+     // as proof that buying its option premium is a qualified paper idea.
+     const contracts=await getContracts(key);
+     const selected=chooseAutoOptionContract({contracts,underlyingKey:key,
+      spot:quote.lastPrice,direction:confluence.direction,asOf});
+     contract=selected.contract;
+     if(!contract)return rejected('EARLY_OPTION_WATCH',selected.reasons??[
+      'NO_VERIFIED_FUTURE_EXPIRY_OPTION_CONTRACT'],{
+       extra:provisionalDirection?{provisionalDirection}:{}});
+     const [optionCandlesResult,optionRawResult,optionGreeksResult]=await Promise.allSettled([
+      getCandles(contract.instrumentKey,'5m'),
+      getQuote(contract.instrumentKey),
+      getGreeks(contract.instrumentKey)
+     ]);
+     const optionBars=optionCandlesResult.status==='fulfilled'?
+      (optionCandlesResult.value?.candles??optionCandlesResult.value??[]):[];
+     const optionQuote=extractUpstoxLiveQuoteEvidence(
+      optionRawResult.status==='fulfilled'?optionRawResult.value:null,
+      contract.instrumentKey,asOf);
+     const greeks=optionGreeksResult.status==='fulfilled'?optionGreeksResult.value:null;
+     const args={contract,underlyingKey:key,direction:confluence.direction,
+      rawCandles:optionBars,optionQuote,greeks,asOf};
+     plan=qualifyEarlyPremiumPlan(args);
+     let marginLookupFailed=false;
+     if(plan.status==='MARGIN_REQUIRED'){
+      try{
+       const margin=await getMargin({instrumentKey:contract.instrumentKey,side:'BUY',
+        quantity:contract.lotSize,price:plan.entry});
+       plan=qualifyEarlyPremiumPlan({...args,marginQuote:margin});
+      }catch(_error){marginLookupFailed=true;}
+     }
+     if(plan.status==='UNVALIDATED_PAPER_LEVELS'){
+      const candidate=qualifyPaperRecommendation(plan,contract,asOf);
+      if(candidate)return {state:'PAPER_SETUP',stage:'EARLY_OPTION_WATCH',
+       message:'Experimental early paper setup • Not executed or backtested',
+       qualified:{...candidate,label:'EXPERIMENTAL PAPER WATCH',
+        strategyVersion:confluence.strategyVersion,strategyValidated:false,
+        modelBacktested:false,optionPremiumGreeksVerified:true,
+        feeReserveEstimated:true,feesAndGapsIncluded:false}};
+     }
+     return rejected('EARLY_OPTION_WATCH',[
+      ...(plan.reasons??[]),
+      ...(optionCandlesResult.status==='rejected'?['FRESH_LIQUID_OPTION_PREMIUM_CANDLES_REQUIRED']:[]),
+      ...(optionRawResult.status==='rejected'?['FRESH_OPTION_BID_ASK_LAST_TRADE_REQUIRED']:[]),
+      ...(optionGreeksResult.status==='rejected'?['BROKER_OPTION_GREEKS_IV_REQUIRED']:[]),
+      ...(marginLookupFailed?['BROKER_MARGIN_ESTIMATE_UNAVAILABLE']:[])
+     ],{contract,fallback:'EARLY_PAPER_SETUP_NOT_QUALIFIED',
+      extra:provisionalDirection?{provisionalDirection}:{}});
+    }
     return rejected('OPENING_RANGE',
-     provisionalDirection?['OPENING_RANGE_BIAS_ONLY']:
-      ['OPENING_RANGE_NOT_CONFIRMED',...((technical.reasons??[]).slice(0,1))],
+     provisionalDirection?['OPENING_RANGE_BIAS_ONLY',...(confluence.reasons??[])]:
+      ['OPENING_RANGE_NOT_CONFIRMED',...(confluence.reasons??[])],
      {fallback:'OPENING_RANGE_NOT_CONFIRMED',
       extra:provisionalDirection?{provisionalDirection}:{}});
-
    }
    return rejected('UNDERLYING_TECHNICAL',
     direction.reasons?.length?direction.reasons:['NO_CLEAR_TECHNICAL_DIRECTION'],

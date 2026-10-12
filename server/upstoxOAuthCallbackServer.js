@@ -442,7 +442,7 @@ async function readOnlyFullMarketQuote(instrumentKey){
 }
 async function readOnlyOptionGreeks(instrumentKey){
   const key=String(instrumentKey||'').trim();
-  if(!/^(NSE_FO|MCX_FO)\|[A-Za-z0-9_]+$/.test(key))throw new Error('INVALID_INSTRUMENT_KEY');
+  if(!/^(NSE_FO|BSE_FO|MCX_FO)\|[A-Za-z0-9_]+$/.test(key))throw new Error('INVALID_INSTRUMENT_KEY');
   const url=new URL('https://api.upstox.com/v3/market-quote/option-greek');
   url.searchParams.set('instrument_key',key);
   const response=await fetch(url,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+activeToken()}});
@@ -491,6 +491,7 @@ const latestPaperRecommendations=createPaperRecommendationFeed({
  getContracts:readOnlyNseOptionContracts,
  getCandles:async(key,interval)=>({candles:await readOnlyIntradayCandles(key,interval)}),
  getQuote:readOnlyFullMarketQuote,
+ getGreeks:readOnlyOptionGreeks,
  getMargin:readOnlyMarginEstimate
 });
 
