@@ -42,8 +42,12 @@ assert.match(css,/repeat\(5,minmax\(0,1fr\)\)/,
 assert.match(ui,/\/api\/paper-recommendations\/latest\?tab=/,
  'Only server-qualified paper recommendations belong in the browser UI');
 assert.match(ui,/document\.hidden/,'Refresh only while browser page is visible');
-assert.match(ui,/setInterval\(\(\)=>\{void refresh\(\);\},30000\)/,
- 'Refresh interval should remain 30 seconds while visible');
+assert.match(ui,/setInterval\(\(\)=>\{/,
+ 'Refresh timer should stay active while visible');
+assert.match(ui,/if\(current==='crypto'\)void refreshBtcInrPrice\(sequence\)/,
+ 'BTC INR numeric price refresh must be independent of technical research polling');
+assert.match(ui,/\},30000\);/,
+ 'Visible BTC INR and technical data should use 30-second polling');
 assert.match(css,/web-recommendation-shell/,'Browser responsive style must be present');
 assert.match(css,/@media\(min-width:720px\)/,'Desktop nav must be width constrained');
 assert.match(html,/viewport-fit=cover/,'Browser viewport must support mobile safe areas');
@@ -103,8 +107,12 @@ assert.equal(safeRecommendationCard({...qualified,realOrderPlaced:true},
  'nifty',now).tag,'WAIT');
 assert.match(ui,/android-simple-manual-refresh/,
  'Web research must offer a clearly labeled manual refresh');
-assert.match(ui,/manualRefresh\.addEventListener\('click',\(\)=>\{void refresh\(true\);\}\)/,
- 'Manual refresh must request read-only research, never submit a broker order');
+assert.match(ui,/manualRefresh\.addEventListener\('click',\(\)=>\{/,
+ 'Manual refresh must remain a read-only browser request');
+assert.match(ui,/if\(current==='crypto'\)void refreshBtcInrPrice\(sequence,true\)/,
+ 'Manual refresh must immediately request BTC INR without waiting for Kraken research');
+assert.match(ui,/void refresh\(true\);/,
+ 'Manual refresh must preserve the original read-only research request');
 assert.match(ui,/manualRefresh\.disabled=true/,
  'Disable repeated clicks while broker request is in flight');
 assert.match(ui,/manualRefresh\.disabled=false/,
