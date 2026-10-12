@@ -12,8 +12,13 @@ if(!root||process.argv.length!==3){
  try{
   const ledger=await createCryptoFileJournal(root).open();
   const result=await cryptoShadowCycle({ledger,fetchOhlc:fetchKrakenBtcUsdOhlc});
-  const audit=cryptoHistorySummary(ledger.list());
-  console.log(JSON.stringify({result,audit}));
+  const events=ledger.list();
+  const audit=cryptoHistorySummary(events);
+  const decision=events.find(e=>e.slotUtc===result.slotUtc&&
+   (e.kind==='FORECAST'||e.kind==='SKIP'));
+  // Controlled reason code only: never print raw provider payloads/errors.
+  console.log(JSON.stringify({result:{...result,
+   decisionReasonCode:decision?.reasonCode??null},audit}));
   // Does NOT claim live data validation or prediction accuracy if provider
   // missing: rejected feed produces SKIP, never forged completed candles.
  }catch(e){
