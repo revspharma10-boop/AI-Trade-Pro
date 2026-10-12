@@ -6,6 +6,7 @@ import { gunzipSync } from 'node:zlib';
 import { exchangeUpstoxAuthorizationCode } from '../src/upstox/upstoxOAuth.js';
 import {readOnlyCorsHeaders} from './readOnlyCorsPolicy.js';
 import {createPaperRecommendationFeed,RECOMMENDATION_MARKETS} from './paperRecommendationFeed.js';
+import {createPaperResearchBot} from './paperResearchBot.js';
 import {createCryptoPaperResearchFeed,fetchKrakenBtcUsdOhlc} from './cryptoPaperResearch.js';
 import {createBtcInrLivePriceFeed,fetchPublicCoinDcxBtcInrTicker,
  fetchPublicCoinGeckoBtcInr,fetchPublicCoinPaprikaBtcInr}
@@ -493,6 +494,7 @@ const latestPaperRecommendations=createPaperRecommendationFeed({
  getMargin:readOnlyMarginEstimate
 });
 
+const automaticPaperResearch=createPaperResearchBot({feed:latestPaperRecommendations});
 const cryptoResearch=createCryptoPaperResearchFeed({fetchOhlc:fetchKrakenBtcUsdOhlc});
 const btcInrLivePrice=createBtcInrLivePriceFeed({
  fetchTicker:fetchPublicCoinDcxBtcInrTicker,
@@ -536,6 +538,9 @@ const server = http.createServer(async (req, res) => {
         paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false,
         productionRealTradingEnabled:false});
       }
+    }
+    if (url.pathname === '/api/paper-bot/status' && req.method === 'GET') {
+      return json(res,200,automaticPaperResearch.getStatus());
     }
     if (url.pathname === '/api/paper-recommendations/latest' && req.method === 'GET') {
       const tab=url.searchParams.get('tab');
@@ -735,6 +740,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
+  automaticPaperResearch.start();
   console.log(`AI Trade Pro OAuth callback listening on port ${PORT}`);
   console.log('PAPER_ONLY=true');
   console.log('REAL_ORDER_PLACED=false');
