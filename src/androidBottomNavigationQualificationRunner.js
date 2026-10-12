@@ -258,8 +258,18 @@ for(const bad of [
 }
 assert.match(nav,/\/api\/crypto-price\/inr\/latest/,
  'The browser must request direct INR market data');
-assert.match(nav,/if\(tab==='crypto'\)void refreshBtcInrPrice\(version\)/,
- 'Crypto price fetch must run without waiting for longer Kraken technical research');
+assert.match(nav,/if\(current==='crypto'\)void refreshBtcInrPrice\(sequence\)/,
+ 'BTC INR has its own 30-second refresh cadence independent of technical research');
+assert.match(nav,/if\(cryptoTab\)void refreshBtcInrPrice\(sequence,true\)/,
+ 'BTC INR should fetch immediately when opening the BTC tab');
+assert.match(nav,/AbortSignal\.timeout\(27000\)/,
+ 'Allow Render cold-start delay without a short false market-unavailable timeout');
+assert.match(nav,/btcInrPendingVersion===version/,
+ 'Duplicate BTC INR polling must be suppressed within the same tab version');
+assert.match(nav,/version!==sequence/,
+ 'Stale responses from a prior tab must never override a current BTC price');
+assert.doesNotMatch(nav,/if\(tab==='crypto'\)void refreshBtcInrPrice\(version\)/,
+ 'INR price must not remain coupled to a potentially slow research request');
 assert.match(nav,/inrQuote\.hidden=!cryptoTab/,
  'BTC rupee quote must only appear in BTC tab');
 assert.doesNotMatch(nav,/\$'\+cryptoSpot\.lastCompletedClose/,

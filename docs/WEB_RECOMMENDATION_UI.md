@@ -289,3 +289,32 @@ unavailable explanation; never show a stale quote as live. This is
 near-real-time polling, **not exchange streaming**, and can still fail during
 provider restrictions, connectivity outages or Render Free cold starts.
 No paid services, FX conversion, trade orders or graphs.
+
+
+## 12 October 2026 — BTC/INR numeric-refresh hardening
+
+A direct production diagnostic confirmed that the deployed
+`GET /api/crypto-price/inr/latest` returned HTTP 200, `LIVE_PRICE`,
+a **CoinDCX direct BTC/INR spot last trade only two seconds old**. The
+request took about **13 seconds**, consistent with a Render Free
+warm-up delay. CoinGecko's last INR update was 21 seconds old; the
+CoinPaprika observation was 205 seconds old and was therefore correctly
+ineligible as a fresh backup. This is a single dated observation,
+not a claim about continuous market-feed availability.
+
+The browser now maintains an **independent BTC/INR poll** approximately
+every 30 seconds while visible, as well as an immediate quote fetch on
+entering the BTC tab, returning from a hidden page, and manually
+refreshing. A slow/read-only Kraken technical research call cannot
+starve the primary displayed rupee value.
+
+The read-only INR request allows a 27-second timeout (instead of
+15 seconds) for occasional Render Free cold starts. It rejects
+outdated-tab results and duplicate in-flight polls. The existing
+backend **exchange timestamp freshness** and frontend source-identity
+and timestamp gates remain mandatory. If a source cannot be verified,
+show `₹ —`, not an old trade mislabeled as current.
+
+This is *near-real-time polling*, never a guaranteed exchange
+stream. No chart, options trade, BTC position, paid service, INR
+exchange execution price or USD-converted target is introduced.
