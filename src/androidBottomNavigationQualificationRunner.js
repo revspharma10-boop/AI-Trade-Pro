@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {ANDROID_TABS,androidTabById,safeRecommendationCard,safeBtcInrLivePrice} from './androidBottomNavigation.js';
+import {ANDROID_TABS,androidTabById,safeRecommendationCard,safeBtcInrLivePrice,safeIndexLivePrice} from './androidBottomNavigation.js';
 import {readFileSync} from 'node:fs';
 
 assert.deepEqual(ANDROID_TABS.map(t=>t.label),['Nifty','Sensex','Options Trade','Commodity','BTC']);
@@ -321,3 +321,10 @@ assert.match(nav,/document\.addEventListener\('visibilitychange'/);
 assert.doesNotMatch(nav,/getUpstoxIntradayCandles|deriveAutoOptionDirection|calculateAutoOptionPaperPlan/,
  'Sensitive engine calculations should be server-side, not in the APK interface');
 console.log('ANDROID MINIMAL UI QUALIFICATION PASSED: five tabs, original recommendations, genuine paper prices, fail-closed, backend-only analysis');
+
+const idxNow=Date.parse('2026-10-12T04:00:00Z');
+const idx={tab:'nifty',state:'LIVE_PRICE',provider:'UPSTOX_READ_ONLY',price:25012.5,sourceAtUtc:new Date(idxNow-1000).toISOString(),paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false,productionRealTradingEnabled:false};
+assert.equal(safeIndexLivePrice(idx,'nifty',idxNow).live,true);
+assert.equal(safeIndexLivePrice(idx,'sensex',idxNow).live,false);
+assert.equal(safeIndexLivePrice({...idx,sourceAtUtc:new Date(idxNow-120000).toISOString()},'nifty',idxNow).live,false);
+assert.equal(safeIndexLivePrice({...idx,orderSubmissionAllowed:true},'nifty',idxNow).live,false);

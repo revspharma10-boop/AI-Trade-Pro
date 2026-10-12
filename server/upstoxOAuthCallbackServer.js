@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {verifiedIndexQuote} from './indexLiveQuote.js';
 import crypto from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { exchangeUpstoxAuthorizationCode } from '../src/upstox/upstoxOAuth.js';
@@ -500,6 +501,15 @@ const btcInrLivePrice=createBtcInrLivePriceFeed({
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'https://oauth.invalid');
+    if (url.pathname === '/api/index-price/latest' && req.method === 'GET') {
+      const tab=url.searchParams.get('tab');
+      if(!['nifty','sensex'].includes(tab))return json(res,400,{error:'UNSUPPORTED_INDEX_TAB'});
+      try{
+        const instrument=await searchNseIndexInstrument(tab==='nifty'?'NIFTY':'SENSEX');
+        const quote=await readOnlyFullMarketQuote(instrument.instrumentKey);
+        return json(res,200,verifiedIndexQuote({tab,instrument,quote}));
+      }catch(_e){return json(res,200,verifiedIndexQuote({tab}));}
+    }
     if (url.pathname === '/api/crypto-price/inr/latest' && req.method === 'GET') {
       // Spot last-traded BTC/INR price, not a bid, ask, conversion or order.
       // No client-supplied symbol or signed/private CoinDCX endpoint.

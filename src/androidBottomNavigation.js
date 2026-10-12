@@ -245,6 +245,21 @@ export function safeBtcInrLivePrice(data,asOf=Date.now()){
     timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'
    })+' IST • refresh ~30s while visible'};
 }
+export function safeIndexLivePrice(data,tab,asOf=Date.now()){
+ const unavailable={live:false,price:'—',status:'Index data unavailable',detail:'Awaiting a fresh Upstox quote'};
+ if(!['nifty','sensex'].includes(tab)||data?.tab!==tab||data?.state!=='LIVE_PRICE'||
+  data.provider!=='UPSTOX_READ_ONLY'||data.paperOnly!==true||
+  data.orderSubmissionAllowed!==false||data.realOrderPlaced!==false||
+  data.productionRealTradingEnabled!==false||
+  typeof data.price!=='number'||!Number.isFinite(data.price)||data.price<1000||data.price>200000||
+  typeof data.sourceAtUtc!=='string'||!Number.isFinite(Date.parse(data.sourceAtUtc))||
+  !Number.isFinite(asOf))return unavailable;
+ const at=Date.parse(data.sourceAtUtc);
+ if(at>asOf+10000||asOf-at>90000)return unavailable;
+ return {live:true,price:data.price.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}),
+  status:'Fresh index level',detail:'Upstox read-only • '+new Date(at).toLocaleTimeString('en-IN',{
+   timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' IST • refresh ~30s'};
+}
 export function mountAndroidBottomNavigation(){
  const root=document.querySelector('#intraday-recommendation-app');
  if(!root)return false;
@@ -284,6 +299,13 @@ export function mountAndroidBottomNavigation(){
  inrQuote.append(inrLabel,inrAmount,inrStatus,inrSource,
   make('p','android-simple-inr-note',
    'Last trade or indicative reference • not an executable buy/sell quote.'));
+ const indexQuote=make('section','android-simple-inr-quote');
+ indexQuote.hidden=true;
+ const indexLabel=make('span','android-simple-inr-kicker','NIFTY 50 · INDEX LEVEL');
+ const indexAmount=make('strong','android-simple-inr-amount','—');
+ const indexStatus=make('span','android-simple-inr-status','Index data unavailable');
+ const indexSource=make('span','android-simple-inr-source','Awaiting fresh Upstox quote');
+ indexQuote.append(indexLabel,indexAmount,indexStatus,indexSource);
  const chips=make('div','android-simple-chips');
  const action=make('span','android-simple-action is-wait','WAIT');
  const contract=make('strong','android-simple-contract','NO VERIFIED OPTION CONTRACT');
@@ -336,7 +358,7 @@ export function mountAndroidBottomNavigation(){
  const diagnosticList=make('ul','android-simple-diagnostic-list');
  const diagnosticMore=make('p','android-simple-diagnostic-more');
  diagnostics.append(diagnosticHeading,diagnosticStage,diagnosticList,diagnosticMore);
- card.append(market,inrQuote,chips,facts,details,explanation,directional,confluence,diagnostics);
+ card.append(market,inrQuote,indexQuote,chips,facts,details,explanation,directional,confluence,diagnostics);
 
  const foot=make('footer','android-simple-footer');
  const refreshed=make('p','','Read-only updates every 30 seconds while visible');
@@ -347,6 +369,7 @@ export function mountAndroidBottomNavigation(){
  manualRefresh.setAttribute('aria-label','Refresh current market research now');
  manualRefresh.addEventListener('click',()=>{
   if(current==='crypto')void refreshBtcInrPrice(sequence,true);
+  if(['nifty','sensex'].includes(current))void refreshIndexPrice(sequence,true);
   void refresh(true);
  });
  const connect=make('a','','Connect Upstox');
@@ -365,6 +388,7 @@ export function mountAndroidBottomNavigation(){
  // BTC/INR price refresh must never be blocked by a slow Kraken or Upstox
  // research request. Keep an independent cadence and in-flight version gate.
  let btcInrPendingVersion=null,btcInrLastPoll=0;
+ let indexPendingVersion=null,indexLastPoll=0;
  for(const tab of ANDROID_TABS){
   const button=make('button','android-simple-tab');
   button.type='button';button.dataset.tab=tab.id;
@@ -380,6 +404,29 @@ export function mountAndroidBottomNavigation(){
   buttons.set(tab.id,button);nav.append(button);
  }
  document.body.append(nav);
+ function displayIndexPrice(data,tab,version){
+  if(version!==sequence||current!==tab||document.hidden)return;
+  const result=safeIndexLivePrice(data,tab);
+  indexAmount.textContent=result.price;
+  indexStatus.textContent=result.status;
+  indexSource.textContent=result.detail;
+  indexQuote.dataset.verified=result.live?'true':'false';
+ }
+ async function refreshIndexPrice(version,force=false){
+  const tab=current;
+  if(document.hidden||!['nifty','sensex'].includes(tab)||version!==sequence)return;
+  if(indexPendingVersion===version)return;
+  if(!force&&Date.now()-indexLastPoll<25000)return;
+  indexPendingVersion=version;indexLastPoll=Date.now();
+  try{
+   const response=await fetch(API+'/api/index-price/latest?tab='+encodeURIComponent(tab),{
+    method:'GET',headers:{Accept:'application/json'},cache:'no-store',
+    signal:AbortSignal.timeout(27000)});
+   if(!response.ok)throw Error('INDEX_QUOTE_UNAVAILABLE');
+   displayIndexPrice(await response.json(),tab,version);
+  }catch(_){displayIndexPrice(null,tab,version);}
+  finally{if(indexPendingVersion===version)indexPendingVersion=null;}
+ }
  function displayBtcInrPrice(data,version){
   if(version!==sequence||current!=='crypto'||document.hidden)return;
   const price=safeBtcInrLivePrice(data);
@@ -496,6 +543,9 @@ export function mountAndroidBottomNavigation(){
   marketName.textContent=tab.heading;marketCaption.textContent=tab.caption;
   const cryptoTab=tab.id==='crypto';
   inrQuote.hidden=!cryptoTab;
+  indexQuote.hidden=!['nifty','sensex'].includes(tab.id);
+  indexLabel.textContent=tab.id==='sensex'?'SENSEX · INDEX LEVEL':'NIFTY 50 · INDEX LEVEL';
+  displayIndexPrice(null,tab.id,sequence);
   displayBtcInrPrice(null,sequence);
   heading.querySelector('.android-simple-kicker').textContent=cryptoTab?
    '24/7 CRYPTO DIRECTION':'LAST RECOMMENDATION';
@@ -515,10 +565,12 @@ export function mountAndroidBottomNavigation(){
   display({tab:tab.id,state:'WAIT',message:'Checking latest verified paper recommendation…',
    paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false});
   if(cryptoTab)void refreshBtcInrPrice(sequence,true);
+  if(['nifty','sensex'].includes(tab.id))void refreshIndexPrice(sequence,true);
   void refresh(true);
  }
  setInterval(()=>{
   if(current==='crypto')void refreshBtcInrPrice(sequence);
+  if(['nifty','sensex'].includes(current))void refreshIndexPrice(sequence);
   void refresh();
  },30000);
  document.addEventListener('visibilitychange',()=>{
