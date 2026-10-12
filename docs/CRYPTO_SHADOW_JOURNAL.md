@@ -69,6 +69,12 @@ from genuine future timestamped observations.
 
 ## Operational limitations and required acceptance evidence
 
+- Production audit on 12 Oct 2026 found **zero evaluated forecasts** and
+  repeated missed scheduled observations. This does not measure strategy
+  accuracy. Diagnostic-only SKIP codes now distinguish decision-window
+  misses, provider timeouts, provider rate limits, malformed provider payloads
+  and generic provider failures. Only controlled codes are persisted;
+  raw exceptions, headers and provider responses are never written.
 - The GitHub schedule is **not an SLA** and may be delayed, silently dropped,
   or disabled after long repository inactivity. This will create missed
   decision slots. A published forecast *never* gets generated after the
