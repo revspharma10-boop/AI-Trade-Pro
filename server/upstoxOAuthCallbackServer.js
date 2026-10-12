@@ -1,5 +1,6 @@
 import http from 'node:http';
 import {verifiedIndexQuote} from './indexLiveQuote.js';
+import {indexSupportResistance} from './indexSupportResistance.js';
 import crypto from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { exchangeUpstoxAuthorizationCode } from '../src/upstox/upstoxOAuth.js';
@@ -501,6 +502,17 @@ const btcInrLivePrice=createBtcInrLivePriceFeed({
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'https://oauth.invalid');
+    if (url.pathname === '/api/index-levels/latest' && req.method === 'GET') {
+      const tab=url.searchParams.get('tab');
+      if(!['nifty','sensex'].includes(tab))return json(res,400,{error:'UNSUPPORTED_INDEX_TAB'});
+      try{
+        const instrument=await searchNseIndexInstrument(tab==='nifty'?'NIFTY':'SENSEX');
+        const today=new Date(Date.now()+IST_OFFSET_MS).toISOString().slice(0,10);
+        const from=new Date(Date.now()-12*DAY_MS+IST_OFFSET_MS).toISOString().slice(0,10);
+        const candles=await readOnlyHistoricalDaily(instrument.instrumentKey,from,today);
+        return json(res,200,indexSupportResistance({tab,candles}));
+      }catch(_e){return json(res,200,indexSupportResistance({tab}));}
+    }
     if (url.pathname === '/api/index-price/latest' && req.method === 'GET') {
       const tab=url.searchParams.get('tab');
       if(!['nifty','sensex'].includes(tab))return json(res,400,{error:'UNSUPPORTED_INDEX_TAB'});
