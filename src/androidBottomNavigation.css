@@ -306,3 +306,68 @@ body.android-minimal-shell .android-simple-inr-quote[data-verified="false"]{
 body.android-minimal-shell .android-simple-inr-quote[data-verified="false"] .android-simple-inr-amount{
  color:#5b6f75;
 }
+
+
+/* Desktop Windows/browser layout: retain existing visual language, reduce whitespace.
+   No change to market-data, recommendation, or paper-order safety logic. */
+@media (min-width: 900px){
+ body.android-minimal-shell.web-recommendation-shell .android-simple-app{
+  width:min(100% - 48px,1180px);max-width:1180px;
+  padding:18px 12px 90px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-heading{
+  margin:15px 0 12px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-heading h1{
+  font-size:25px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-heading p{
+  margin-top:4px;font-size:12px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-card{
+  border-radius:16px;padding:17px 20px 14px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-market{
+  padding-bottom:9px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-chips{
+  margin:12px 0 15px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-facts{
+  grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-fact strong{
+  font-size:20px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-details{
+  grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;
+  margin-top:15px;padding-top:12px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-message{
+  margin-top:12px;padding-top:10px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-footer{
+  margin:12px 2px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-nav{
+  position:fixed;top:auto;bottom:10px;max-width:760px;
+  width:calc(100% - 48px);padding:5px 8px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-tab{
+  flex-direction:row;justify-content:center;min-height:44px;gap:8px;padding:7px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-diagnostics{
+  margin-top:10px;padding:10px 12px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-direction{
+  margin-top:10px;padding:10px 12px;
+ }
+}
+@media (min-width: 720px) and (max-width:899px){
+ body.android-minimal-shell.web-recommendation-shell .android-simple-app{
+  width:min(100% - 32px,760px);padding-top:20px;
+ }
+ body.android-minimal-shell.web-recommendation-shell .android-simple-heading{
+  margin:20px 0 14px;
+ }
+}
