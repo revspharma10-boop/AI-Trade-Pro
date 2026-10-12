@@ -40,8 +40,8 @@ const optionBars=closeOption.map((c,i)=>{
  const open=i?closeOption[i-1]:7,high=Math.max(open,c)+.22,low=Math.min(open,c)-.22;
  return {datetime:stamp(40+i*5),open,high,low,close:c,volume:1500};
 });
-const optionQuote={valid:true,instrumentKey:contract.instrumentKey,bid:8.85,ask:9,
- lastPrice:8.9,spreadPercent:1.5,timestamp:at-1000,lastTradeTime:at-1000,
+const optionQuote={valid:true,instrumentKey:contract.instrumentKey,bid:8.9,ask:9,
+ lastPrice:8.9,spreadPercent:1.12,timestamp:at-1000,lastTradeTime:at-1000,
  openInterest:45000,tradedVolume:9000};
 const greeks={delta:.56,gamma:.02,theta:-1,vega:1.3,iv:.18};
 const args={contract,underlyingKey:key,direction:'CE',rawCandles:optionBars,
