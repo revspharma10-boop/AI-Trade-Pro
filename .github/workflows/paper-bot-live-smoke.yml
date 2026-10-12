@@ -1,0 +1,65 @@
+name: Live Paper Bot Smoke Check
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/paperResearchBot.js'
+      - 'server/upstoxOAuthCallbackServer.js'
+      - '.github/workflows/paper-bot-live-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check-live-paper-bot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check deployed paper bot is safe and report read-only NIFTY status
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const base='https://ai-trade-pro-oauth.onrender.com';
+          async function get(path){
+            const response=await fetch(base+path,{signal:AbortSignal.timeout(45000)});
+            if(!response.ok)throw Error(path+' HTTP '+response.status);
+            return response.json();
+          }
+          let status;
+          for(let attempt=0;attempt<8;attempt++){
+            try{
+              status=await get('/api/paper-bot/status');
+              break;
+            }catch(e){
+              if(attempt===7)throw e;
+              await new Promise(resolve=>setTimeout(resolve,15000));
+            }
+          }
+          assert.equal(status.state,'RUNNING_WHILE_SERVER_AWAKE');
+          assert.equal(status.paperOnly,true);
+          assert.equal(status.orderSubmissionAllowed,false);
+          assert.equal(status.realOrderPlaced,false);
+          assert.equal(status.productionRealTradingEnabled,false);
+          assert.equal(status.approvedLots,0);
+          console.log('BOT_RUNTIME',JSON.stringify({
+            state:status.state,cycles:status.completedCycles,
+            lastAttemptAt:status.lastAttemptAt,nextReason:status.nextReason,
+            durable:status.recordedDurably
+          }));
+          for(const tab of ['nifty','sensex']){
+            const r=await get('/api/paper-recommendations/latest?tab='+tab);
+            assert.equal(r.paperOnly,true);
+            assert.equal(r.orderSubmissionAllowed,false);
+            assert.equal(r.realOrderPlaced,false);
+            assert.equal(r.productionRealTradingEnabled,false);
+            assert.ok(['WAIT','PAPER_SETUP','PAST_PAPER_IDEA'].includes(r.state));
+            console.log('PAPER_RESEARCH',JSON.stringify({
+              tab,state:r.state,stage:r.stage,
+              blockers:r.blockers?.map(b=>b.code).slice(0,5),
+              checkedAt:r.lastCheckedAt,
+              contractVerified:Boolean(r.verifiedContract)
+            }));
+          }
+          NODE
