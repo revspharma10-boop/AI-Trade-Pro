@@ -108,8 +108,10 @@ const serverSource=readFileSync(new URL('../server/upstoxOAuthCallbackServer.js'
 assert.match(feedSource,/const lastByTab=new Map\(\),cache=new Map\(\),pending=new Map\(\)/,
  'Baseline: last recommendation/cache are in-process memory, not durable storage');
 assert.match(feedSource,/if\(!session\.open\)return rejected/);
-assert.match(uiSource,/setInterval\(\(\)=>\{void refresh\(\);\},30000\)/,
- 'Baseline: frontend initiates 30-second polling');
+assert.match(uiSource,/setInterval\(\(\)=>\{\s*if\(current==='crypto'\)void refreshBtcInrPrice\(sequence\);\s*void refresh\(\);\s*\},30000\)/,
+ 'Baseline: frontend initiates 30-second research polling');
+assert.match(uiSource,/setInterval\(\(\)=>\{\s*if\(\['nifty','sensex'\]\.includes\(current\)\)void refreshIndexPrice\(sequence\);\s*\},10000\)/,
+ 'Baseline: index spot quote refresh uses independent 10-second cadence');
 assert.match(uiSource,/if\(document\.hidden\)return;/,
  'Baseline: hidden browser page does not initiate polling');
 assert.match(uiSource,/if\(loading\)\{/,

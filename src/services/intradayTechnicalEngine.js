@@ -1,4 +1,5 @@
 // Deterministic research indicators. Not a qualified trading strategy.
+import {intradayNotesEvidence} from './intradayNotesEvidence.js';
 // Uses completed same-day NSE candles only. Missing OHLCV is never imputed.
 const round=(n,d=3)=>Number(n.toFixed(d));
 const avg=xs=>xs.reduce((s,x)=>s+x,0)/xs.length;
@@ -102,7 +103,8 @@ export function analyzeIntradayCandles(raw=[],{asOf=Date.now(),intervalMinutes=5
     lastCompletedAt:last.datetime,intervalMinutes,close:round(lastClose),ema9:round(ema9),ema21:round(ema21),
     rsi14:round(rsi14),macdHistogram:round(macdValues.histogram,5),vwap:vwap===null?null:round(vwap),
     atr14:round(atr14),medianVolume20:round(medianVolume20),lastVolumeRatio:lastVolumeRatio===null?null:round(lastVolumeRatio),
-    averageTurnover20:round(averageTurnover20),liquidityResearchPass,bias
+    averageTurnover20:round(averageTurnover20),liquidityResearchPass,bias,
+    additionalEvidence:intradayNotesEvidence(completed)
   };
   return {valid:true,reasons:[],snapshot,completedBars:completed.length,session:state,
     evidence:['Completed '+intervalMinutes+'m candles: '+completed.length,'Close '+snapshot.close+'; VWAP '+snapshot.vwap,
