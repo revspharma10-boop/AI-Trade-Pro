@@ -114,6 +114,30 @@ try{
  assert.equal(fail.forecastState,'SKIPPED');
  assert.equal(fail.outcomesEvaluated,0);
  assert.equal(unavailable.list()[0].reasonCode,'CRYPTO_PROVIDER_DATA_UNAVAILABLE');
+ // Diagnostic-only classification: neither errors nor malformed data can
+ // produce a forecast, fabricated price, or an order.
+ const timeout=await createCryptoFileJournal(join(tmp,'timeout')).open();
+ const timeoutResult=await cryptoShadowCycle({ledger:timeout,
+  fetchOhlc:async()=>{const e=Error('SECRET_NEVER_LOG_THIS');
+   e.name='TimeoutError';throw e;},clock:()=>epoch+20000});
+ assert.equal(timeoutResult.forecastState,'SKIPPED');
+ assert.equal(timeout.list()[0].reasonCode,'CRYPTO_PROVIDER_TIMEOUT');
+ const rateLimited=await createCryptoFileJournal(join(tmp,'rate-limit')).open();
+ await cryptoShadowCycle({ledger:rateLimited,
+  fetchOhlc:async()=>{throw Error('CRYPTO_PROVIDER_RATE_LIMIT');},
+  clock:()=>epoch+20000});
+ assert.equal(rateLimited.list()[0].reasonCode,'CRYPTO_PROVIDER_RATE_LIMIT');
+ const malformed=await createCryptoFileJournal(join(tmp,'malformed')).open();
+ await cryptoShadowCycle({ledger:malformed,fetchOhlc:async()=>({error:[],result:{}}),
+  clock:()=>epoch+20000});
+ assert.equal(malformed.list()[0].reasonCode,'CRYPTO_PROVIDER_PAYLOAD_INVALID');
+ for(const journal of [timeout,rateLimited,malformed]){
+  assert.equal(journal.list().length,1);
+  assert.equal(journal.list()[0].kind,'SKIP');
+  assert.equal(journal.list()[0].paperOnly,true);
+  assert.equal(journal.list()[0].orderSubmissionAllowed,false);
+  assert.equal(journal.list()[0].realOrderPlaced,false);
+ }
  // WAIT from insufficient but syntactically valid provider data => remains
  // unqualified; only an actual eight-gate pass can be directional.
  const noSetup=await createCryptoFileJournal(join(tmp,'abstain')).open();

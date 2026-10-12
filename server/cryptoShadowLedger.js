@@ -203,13 +203,22 @@ function checkedKrakenRows(payload,now){
  return bars.slice(0,-1);
 }
 const errorCode=reason=>reasonCode(reason)?reason:'CRYPTO_PROVIDER_DATA_UNAVAILABLE';
+// Persist only controlled error codes, never raw provider errors or headers.
+function providerFailureCode(error){
+ if(error?.name==='TimeoutError'||error?.name==='AbortError')
+  return 'CRYPTO_PROVIDER_TIMEOUT';
+ if(error?.message==='CRYPTO_PROVIDER_RATE_LIMIT')
+  return 'CRYPTO_PROVIDER_RATE_LIMIT';
+ return 'CRYPTO_PROVIDER_DATA_UNAVAILABLE';
+}
 export async function cryptoShadowCycle({ledger,fetchOhlc,clock=()=>Date.now()}={}){
  if(!ledger||typeof ledger.list!=='function'||typeof ledger.append!=='function'||
    typeof fetchOhlc!=='function'||typeof clock!=='function')
   throw Error('CRYPTO_SHADOW_DEPENDENCIES_REQUIRED');
  // Capture wall clock AFTER the request; network delay is part of the cutoff.
- let payload=null;
- try{payload=await fetchOhlc();}catch(_){}
+ let payload=null,providerFailure=null;
+ try{payload=await fetchOhlc();}
+ catch(e){providerFailure=providerFailureCode(e);}
  const now=Number(clock()),slot=Math.floor(now/FIVE)*FIVE;
  if(!Number.isFinite(now)||!Number.isSafeInteger(now))throw Error('CRYPTO_SHADOW_CLOCK_INVALID');
  const all=ledger.list();
@@ -249,7 +258,8 @@ export async function cryptoShadowCycle({ledger,fetchOhlc,clock=()=>Date.now()}=
   if(now-slot<GRACE||now-slot>MAX_CAPTURE_LAG||!verifiedBars){
    const reason=now-slot<GRACE?'CRYPTO_DECISION_NOT_READY':
     now-slot>MAX_CAPTURE_LAG?'CRYPTO_DECISION_WINDOW_MISSED':
-    'CRYPTO_PROVIDER_DATA_UNAVAILABLE';
+    providerFailure??(payload===null?
+     'CRYPTO_PROVIDER_DATA_UNAVAILABLE':'CRYPTO_PROVIDER_PAYLOAD_INVALID');
    // Only write skips during same slot, never backfill missed prior slots.
    await ledger.append({schemaVersion:1,kind:'SKIP',
     id:hash('btc-skip|'+BTC_CONFLUENCE_VERSION+'|'+nowSlot),symbol:'BTC/USD',
