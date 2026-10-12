@@ -31,6 +31,7 @@ const STAGE_LABELS=Object.freeze({
  UNDERLYING:'UNDERLYING INSTRUMENT',
  UPSTOX_DATA:'BROKER MARKET DATA',
  OPENING_RANGE:'OPENING RANGE',
+ EARLY_OPTION_WATCH:'EARLY OPTION PAPER WATCH',
  UNDERLYING_TECHNICAL:'FIVE-MINUTE TECHNICAL SIGNAL',
  OPTION_CONTRACT:'OPTION CONTRACT',
  OPTION_PREMIUM_AND_RISK:'OPTION PREMIUM AND RISK',
@@ -56,6 +57,9 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   last.executionStatus==='NOT EXECUTED'&&last.approvedLots===0&&last.paperOnly===true&&
   last.orderSubmissionAllowed!==true&&last.realOrderPlaced!==true;
  const hasLast=matches&&pricesValid;
+ const earlyUnvalidated=hasLast&&last.strategyVersion==='orb-ema9-rsi14-early-v1'&&
+  last.strategyValidated===false&&last.modelBacktested===false&&
+  last.optionPremiumGreeksVerified===true&&last.feeReserveEstimated===true;
  const lastObserved=hasLast?Date.parse(last.capturedAt):NaN;
  const lastTimestampValid=Number.isFinite(lastObserved)&&
   Number.isFinite(asOf)&&lastObserved<=asOf+10000;
@@ -179,7 +183,7 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
    reference:levels.referenceClose,invalidation:levels.invalidation,
    targets:[levels.target1,levels.target2,levels.target3]
   }:null,
-  tag:active?'PAPER BUY':previous?'PAST PAPER IDEA':'WAIT',
+  tag:active?(earlyUnvalidated?'EARLY PAPER WATCH':'PAPER BUY'):previous?'PAST PAPER IDEA':'WAIT',
   contract:selectedTab==='crypto'?'BTC/INR · MARKET PRICE':
    (active||previous)?last.contract:hasCandidate?
    candidate.tradingSymbol:stage&&NOT_CHECKED_STAGES.has(stage)?
@@ -188,7 +192,7 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   target:(active||previous)?money(last.target):'—',
   stopLoss:(active||previous)?money(last.stopLoss):'—',
   date:(active||previous)?date(last.date):'—',
-  status:active?'Paper idea · Not executed':
+  status:active?(earlyUnvalidated?'Experimental · Not backtested or executed':'Paper idea · Not executed'):
    previous?'Previous idea · Not executed':selectedTab==='crypto'?
     'No crypto trade executed':hasCandidate?
     'Contract verified · Setup WAIT':'No paper trade executed',
@@ -483,7 +487,7 @@ export function mountAndroidBottomNavigation(){
  function display(data){
   const view=safeRecommendationCard(data,current);
   action.textContent=view.tag;
-  action.className='android-simple-action '+(view.state==='PAPER_SETUP'?'is-buy':
+  action.className='android-simple-action '+(view.state==='PAPER_SETUP'&&view.tag!=='EARLY PAPER WATCH'?'is-buy':
    view.state==='PAST_PAPER_IDEA'?'is-past':'is-wait');
   contract.textContent=view.contract;
   buy.textContent=view.entry;
