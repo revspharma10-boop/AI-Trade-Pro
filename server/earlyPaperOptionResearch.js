@@ -149,7 +149,7 @@ export function qualifyEarlyPremiumPlan({contract,underlyingKey,direction,rawCan
   finite(marginQuote.price)&&Math.abs(marginQuote.price-entry)<1e-6&&
   positive(required)&&finite(marginQuote.asOf)&&marginQuote.asOf<=now+10000&&
   now-marginQuote.asOf<180000;
- if(!verified)return {...base,reasons:['BROKER_MARGIN_QUOTE_REQUIRED']};
+ if(!verified)return {...base,status:'MARGIN_REQUIRED',entry,stopLoss:stop,target1:t1,target2:t2,target3:t3,riskPerLot:perLotRisk,reasons:['BROKER_MARGIN_QUOTE_REQUIRED']};
  const lots=Math.min(Math.floor(500/perLotRisk),Math.floor(capital/premiumCost),
     Math.floor(capital/Math.max(premiumCost,required)));
  if(lots<1)return {...base,reasons:['EARLY_AFFORDABLE_PAPER_LOTS_ZERO']};
