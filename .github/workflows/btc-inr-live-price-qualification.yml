@@ -7,6 +7,7 @@ on:
       - 'server/btcInrLivePriceQualificationRunner.js'
       - 'server/btcInrLiveProbe.js'
       - 'server/btcInrProductionDiagnostic.js'
+      - 'server/btcInrProductionAudit.js'
       - '.github/workflows/btc-inr-live-price-qualification.yml'
       - 'src/androidBottomNavigation.js'
       - '.github/workflows/web-recommendation-qualification.yml'
@@ -26,6 +27,8 @@ jobs:
         run: |
           node --check server/btcInrLivePrice.js
           node --check server/btcInrLiveProbe.js
+          node --check server/btcInrProductionAudit.js
+          node --check server/btcInrProductionDiagnostic.js
           node server/btcInrLivePriceQualificationRunner.js
           node src/androidBottomNavigationQualificationRunner.js
           node src/webRecommendationUIQualificationRunner.js
