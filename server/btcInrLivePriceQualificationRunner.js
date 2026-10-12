@@ -4,6 +4,7 @@ import {parseCoinDcxBtcInrTicker,parseCoinGeckoBtcInrPrice,
  parseCoinPaprikaBtcInrPrice,createBtcInrLivePriceFeed,
  BTC_INR_SOURCE,BTC_INR_INDICATIVE_SOURCE,BTC_INR_PAPRIKA_SOURCE}
  from './btcInrLivePrice.js';
+import {auditDeployedBtcInrQuote} from './btcInrProductionAudit.js';
 const now=Date.parse('2026-10-11T10:05:00Z');
 const base={market:'BTCINR',last_price:'9212345.67',
  bid:'9212000.00',ask:'9212700.00',
@@ -32,6 +33,36 @@ assert.equal(checked.paperOnly,true);
 assert.equal(checked.orderSubmissionAllowed,false);
 assert.equal(checked.realOrderPlaced,false);
 assert.equal(checked.productionRealTradingEnabled,false);
+// Read-only *production diagnostic* must not mistake HTTP 200 or an unsafe,
+// wrong-currency, stale, future or nonnumeric quote for live market evidence.
+const deployedAudit=auditDeployedBtcInrQuote(checked,now);
+assert.equal(deployedAudit.verified,true);
+assert.equal(deployedAudit.priceInr,9212345.67);
+assert.equal(deployedAudit.provider,'COINDCX_PUBLIC_SPOT');
+assert.equal(deployedAudit.priceAgeSeconds,19);
+for(const bad of [
+ {...checked,state:'UNAVAILABLE'}, {...checked,symbol:'BTC/USD'},
+ {...checked,currency:'USD'}, {...checked,priceInr:null},
+ {...checked,priceInr:Infinity}, {...checked,orderSubmissionAllowed:true},
+ {...checked,paperOnly:false},{...checked,realOrderPlaced:true},
+ {...checked,productionRealTradingEnabled:true},
+ {...checked,priceAtUtc:new Date(now-91000).toISOString()},
+ {...checked,priceAtUtc:new Date(now+16000).toISOString()},
+ {...checked,checkedAtUtc:new Date(now-91000).toISOString()},
+ {...checked,provider:'KRAKEN_PUBLIC_SPOT'},
+ {...checked,quoteType:'INDICATIVE_MARKET_PRICE'},
+ {...checked,priceAtUtc:'2026-10-11TXX:05:00.000Z'}
+]){
+ const result=auditDeployedBtcInrQuote(bad,now);
+ assert.equal(result.verified,false);
+ assert.equal(result.priceInr,null);
+}
+assert.equal(auditDeployedBtcInrQuote(
+ parseCoinGeckoBtcInrPrice(gecko,now),now).verified,true);
+assert.equal(auditDeployedBtcInrQuote(
+ parseCoinPaprikaBtcInrPrice({id:'btc-bitcoin',symbol:'BTC',
+ last_updated:new Date(now-13000).toISOString(),
+ quotes:{INR:{price:9219999.1}}},now),now).verified,true);
 const paprikas={id:'btc-bitcoin',symbol:'BTC',
  last_updated:new Date(now-13000).toISOString(),
  quotes:{INR:{price:9219999.1}}};
