@@ -82,6 +82,7 @@ assert.equal(openingRangeProgress({candles:rising,asOf:ist('09:20:12')}).complet
 assert.equal(openingRangeProgress({candles:rising,asOf:ist('09:25:12')}).completed,2);
 assert.equal(openingRangeProgress({candles:rising,asOf:ist('09:30:12')}).completed,3);
 assert.equal(openingRangeProgress({candles:rising,asOf:ist('09:30:12')}).status,'OPENING_RANGE_CANDLES_READY');
+assert.equal(openingRangeProgress({candles:[...rising,rising[0]],asOf:ist('09:30:12')}).status,'OPENING_RANGE_DUPLICATE_CANDLE', 'Duplicate opening bars must never show READY');
 assert.equal(openingRangeProgress({candles:[],asOf:ist('09:30:20')}).status,'OPENING_RANGE_DATA_MISSING');
 assert.equal(openingRangeProgress({candles:rising,asOf:ist('09:30:20')}).orderSubmissionAllowed,false);
 assert.equal(OPENING_RANGE_SAFETY.realOrderPlaced,false);
