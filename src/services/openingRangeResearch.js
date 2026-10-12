@@ -21,9 +21,12 @@ export function openingRangeProgress({candles=[],asOf=Date.now()}={}){
   c.high>=c.low&&c.open>=c.low&&c.open<=c.high&&c.close>=c.low&&c.close<=c.high);
  const distinct=new Set(relevant.map(c=>minIST(c.at)));
  const completed=distinct.size;
+ // Duplicate opening timestamps are ambiguous and must not show READY.
+ const duplicateOpeningBars=distinct.size!==relevant.length;
  return {...defaults,completed,rangeFinished:minute>=570,
   status:minute<555?'AWAITING_MARKET_OPEN':
     minute<570?'COLLECTING_OPENING_RANGE':
+    duplicateOpeningBars?'OPENING_RANGE_DUPLICATE_CANDLE':
     completed===3?'OPENING_RANGE_CANDLES_READY':'OPENING_RANGE_DATA_MISSING'};
 }
 export function deriveOpeningRangeBias({candles=[],quote=null,session=null,asOf=Date.now()}={}){
