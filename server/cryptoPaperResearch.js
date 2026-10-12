@@ -140,6 +140,7 @@ export async function fetchKrakenBtcUsdOhlc(){
   method:'GET',headers:{Accept:'application/json'},
   signal:AbortSignal.timeout(10000)
  });
+ if(response.status===429)throw Error('CRYPTO_PROVIDER_RATE_LIMIT');
  if(!response.ok)throw Error('CRYPTO_FEED_UNAVAILABLE');
  return response.json();
 }
