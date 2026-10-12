@@ -306,6 +306,11 @@ export function mountAndroidBottomNavigation(){
  const indexStatus=make('span','android-simple-inr-status','Index data unavailable');
  const indexSource=make('span','android-simple-inr-source','Awaiting fresh Upstox quote');
  indexQuote.append(indexLabel,indexAmount,indexStatus,indexSource);
+ const srPanel=make('section','android-simple-inr-quote');
+ const srHeading=make('strong','','Support / Resistance · Previous Session');
+ const srValues=make('div','android-simple-facts','Levels unavailable');
+ const srSource=make('span','android-simple-inr-source','Awaiting verified daily candles');
+ srPanel.append(srHeading,srValues,srSource);srPanel.hidden=true;
  const chips=make('div','android-simple-chips');
  const action=make('span','android-simple-action is-wait','WAIT');
  const contract=make('strong','android-simple-contract','NO VERIFIED OPTION CONTRACT');
@@ -358,7 +363,7 @@ export function mountAndroidBottomNavigation(){
  const diagnosticList=make('ul','android-simple-diagnostic-list');
  const diagnosticMore=make('p','android-simple-diagnostic-more');
  diagnostics.append(diagnosticHeading,diagnosticStage,diagnosticList,diagnosticMore);
- card.append(market,inrQuote,indexQuote,chips,facts,details,explanation,directional,confluence,diagnostics);
+ card.append(market,inrQuote,indexQuote,srPanel,chips,facts,details,explanation,directional,confluence,diagnostics);
 
  const foot=make('footer','android-simple-footer');
  const refreshed=make('p','','Read-only updates every 30 seconds while visible');
@@ -411,6 +416,26 @@ export function mountAndroidBottomNavigation(){
   indexStatus.textContent=result.status;
   indexSource.textContent=result.detail;
   indexQuote.dataset.verified=result.live?'true':'false';
+ }
+ async function refreshIndexLevels(version){
+  const tab=current;
+  if(document.hidden||!['nifty','sensex'].includes(tab)||version!==sequence)return;
+  try{
+   const response=await fetch(API+'/api/index-levels/latest?tab='+encodeURIComponent(tab),{
+    method:'GET',headers:{Accept:'application/json'},cache:'no-store',signal:AbortSignal.timeout(27000)});
+   if(!response.ok)throw Error('LEVELS_UNAVAILABLE');
+   const data=await response.json();
+   if(version!==sequence||current!==tab)return;
+   const l=data?.levels;
+   const keys=['r3','r2','r1','pivot','s1','s2','s3','previousHigh','previousLow'];
+   if(data?.state!=='READY'||data.paperOnly!==true||data.orderSubmissionAllowed!==false||
+      !l||!keys.every(k=>typeof l[k]==='number'&&Number.isFinite(l[k])&&l[k]>0))
+    throw Error('UNVERIFIED_LEVELS');
+   srValues.textContent=keys.map(k=>k.toUpperCase()+': '+l[k].toLocaleString('en-IN',{maximumFractionDigits:2})).join('  ·  ');
+   srSource.textContent='Classic pivots · session '+data.sessionDate+' · reference only, not trade signals';
+  }catch(_){
+   if(version===sequence&&current===tab){srValues.textContent='WAIT · Verified levels unavailable';srSource.textContent='No estimated levels shown';}
+  }
  }
  async function refreshIndexPrice(version,force=false){
   const tab=current;
@@ -544,6 +569,8 @@ export function mountAndroidBottomNavigation(){
   const cryptoTab=tab.id==='crypto';
   inrQuote.hidden=!cryptoTab;
   indexQuote.hidden=!['nifty','sensex'].includes(tab.id);
+  srPanel.hidden=!['nifty','sensex'].includes(tab.id);
+  srValues.textContent='Loading verified levels…';srSource.textContent='Previous completed session · classic pivots';
   indexLabel.textContent=tab.id==='sensex'?'SENSEX · INDEX LEVEL':'NIFTY 50 · INDEX LEVEL';
   displayIndexPrice(null,tab.id,sequence);
   displayBtcInrPrice(null,sequence);
@@ -565,7 +592,9 @@ export function mountAndroidBottomNavigation(){
   display({tab:tab.id,state:'WAIT',message:'Checking latest verified paper recommendation…',
    paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false});
   if(cryptoTab)void refreshBtcInrPrice(sequence,true);
-  if(['nifty','sensex'].includes(tab.id))void refreshIndexPrice(sequence,true);
+  if(['nifty','sensex'].includes(tab.id)){
+   void refreshIndexPrice(sequence,true);void refreshIndexLevels(sequence);
+  }
   void refresh(true);
  }
  setInterval(()=>{
