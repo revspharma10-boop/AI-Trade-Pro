@@ -118,7 +118,7 @@ export function presentRecommendation({tab,last=null,result=null,asOf=Date.now()
  // Distinct provisional directions depend on their own valid read-only
  // observation and do not inherit any price/order fields from paper setup.
  const directionValid=state==='WAIT'&&['nifty','sensex'].includes(tab)&&
-  result?.stage==='OPENING_RANGE'&&
+  ['OPENING_RANGE','EARLY_OPTION_WATCH'].includes(result?.stage)&&
   preview?.kind==='PROVISIONAL_DIRECTION'&&
   preview.strategy==='OPENING_RANGE_15M'&&
   ['BULLISH','BEARISH'].includes(preview.direction)&&

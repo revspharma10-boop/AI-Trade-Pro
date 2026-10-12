@@ -223,6 +223,21 @@ const safePreview=presentRecommendation({tab:'nifty',result:{
  state:'WAIT',stage:'OPENING_RANGE',checkedAt:new Date(earlyAt).toISOString(),
  provisionalDirection:forged},asOf:earlyAt});
 assert.equal(safePreview.provisionalDirection?.direction,'BEARISH');
+
+const earlyWatchPreview=presentRecommendation({tab:'nifty',result:{
+ state:'WAIT',stage:'EARLY_OPTION_WATCH',checkedAt:new Date(earlyAt).toISOString(),
+ provisionalDirection:forged},asOf:earlyAt});
+assert.equal(earlyWatchPreview.state,'WAIT');
+assert.equal(earlyWatchPreview.provisionalDirection?.direction,'BEARISH',
+ 'Early option quote/greeks/risk WAIT must not hide the verified index watch');
+assert.equal(earlyWatchPreview.orderSubmissionAllowed,false);
+assert.equal(earlyWatchPreview.last,null);
+const unsafeEarlyWatch=presentRecommendation({tab:'nifty',result:{
+ state:'WAIT',stage:'EARLY_OPTION_WATCH',checkedAt:new Date(earlyAt).toISOString(),
+ provisionalDirection:{...forged,entry:120}},asOf:earlyAt});
+assert.equal(unsafeEarlyWatch.provisionalDirection,null,
+ 'Trade price fields in direction-only preview must fail closed');
+
 for(const unsafe of [
  {...forged,orderSubmissionAllowed:true},
  {...forged,entry:99},
