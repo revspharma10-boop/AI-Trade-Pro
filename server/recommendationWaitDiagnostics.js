@@ -40,6 +40,8 @@ const LABELS=Object.freeze({
  ONE_MINUTE_CANDLES_UNAVAILABLE:'One-minute read-only broker candles are unavailable',
  INVALID_ONE_MINUTE_CANDLE:'A broker one-minute candle failed OHLCV validation',
  DUPLICATE_ONE_MINUTE_CANDLE:'Duplicate broker one-minute candles are not accepted',
+ GAPPED_ONE_MINUTE_INDEX_CANDLES:'The one-minute index candle sequence contains a gap and cannot qualify a signal',
+ GAPPED_RECENT_EARLY_CANDLES:'The completed option premium candle window contains missing intervals',
  FIFTEEN_OPENING_ONE_MINUTE_CANDLES_REQUIRED:'Complete, gap-free 09:15–09:30 one-minute index candles are required',
  TWO_COMPLETED_POST_OPENING_MINUTE_CANDLES_REQUIRED:'Two consecutive post-09:30 completed one-minute index candles are required',
  ONE_MINUTE_COMPLETED_CANDLE_STALE:'The latest completed one-minute index candle is stale',

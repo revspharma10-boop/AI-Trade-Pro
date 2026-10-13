@@ -55,11 +55,26 @@ jobs:
             assert.equal(r.realOrderPlaced,false);
             assert.equal(r.productionRealTradingEnabled,false);
             assert.ok(['WAIT','PAPER_SETUP','PAST_PAPER_IDEA'].includes(r.state));
+            const idea=r.state==='PAPER_SETUP'&&r.last?.paperOnly===true&&
+              r.last?.executionStatus==='NOT EXECUTED'?{
+                contract:r.last.contract,optionType:r.last.optionType,
+                expiry:r.last.expiry,strike:r.last.strike,
+                entry:r.last.entry,stopLoss:r.last.stopLoss,
+                target1:r.last.target,capturedAt:r.last.capturedAt,
+                strategyVersion:r.last.strategyVersion??'35_BAR_RESEARCH',
+                validated:r.last.strategyValidated===true
+              }:null;
+            if(r.state==='PAPER_SETUP'){
+              assert.ok(idea,'Only a current non-executed paper idea may be logged');
+              assert.equal(r.last.approvedLots,0);
+            }
             console.log('PAPER_RESEARCH',JSON.stringify({
               tab,state:r.state,stage:r.stage,
-              blockers:r.blockers?.map(b=>b.code).slice(0,5),
+              blockers:r.blockers?.map(b=>b.code).slice(0,8),
               checkedAt:r.lastCheckedAt,
-              contractVerified:Boolean(r.verifiedContract)
+              provisionalDirection:r.provisionalDirection?.direction??null,
+              verifiedContract:r.verifiedContract?.tradingSymbol??null,
+              currentPaperIdea:idea
             }));
           }
           NODE

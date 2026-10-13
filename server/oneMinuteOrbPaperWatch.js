@@ -31,6 +31,8 @@ export function qualifyOneMinuteOrbWatch({candles=[],quote=null,session=null,asO
  bars.sort((a,b)=>a.time-b.time);
  if(bars.some((c,i)=>i&&c.time===bars[i-1].time))
   return blocked('DUPLICATE_ONE_MINUTE_CANDLE');
+ if(bars.some((c,i)=>i&&c.time-bars[i-1].time!==60000))
+  return blocked('GAPPED_ONE_MINUTE_INDEX_CANDLES');
  const opening=bars.filter(c=>c.minute>=555&&c.minute<570);
  if(opening.length!==15||opening.some((c,i)=>c.minute!==555+i))
   issues.push('FIFTEEN_OPENING_ONE_MINUTE_CANDLES_REQUIRED');
