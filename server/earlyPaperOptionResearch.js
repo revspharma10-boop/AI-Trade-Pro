@@ -10,17 +10,17 @@ const round=n=>Number(n.toFixed(3));
 const floorTick=(n,t)=>Math.floor(n/t+1e-8)*t;
 const ceilTick=(n,t)=>Math.ceil(n/t-1e-8)*t;
 const no=(...reasons)=>({valid:false,reasons:[...new Set(reasons)],paperOnly:true,orderSubmissionAllowed:false});
-function completedCandles(raw,asOf,min){
- if(!Array.isArray(raw)||!finite(asOf))return {bars:[],reasons:['CANDLE_DATA_UNAVAILABLE']};
+function completedCandles(raw,asOf,min,intervalMinutes=5){
+ if(![1,5].includes(intervalMinutes)||!Array.isArray(raw)||!finite(asOf))return {bars:[],reasons:['CANDLE_DATA_UNAVAILABLE']};
  const bars=[],reasons=[];
  for(const c of raw){
   const at=Date.parse(c?.datetime??'');
   if(!finite(at)||![c?.open,c?.high,c?.low,c?.close,c?.volume].every(finite)||
      c.low<=0||c.volume<0||c.high<c.low||c.open<c.low||c.open>c.high||
      c.close<c.low||c.close>c.high)return {bars:[],reasons:['INVALID_EARLY_OHLCV']};
-  if(istDate(at)!==istDate(asOf)||at+312000>asOf)continue;
+  if(istDate(at)!==istDate(asOf)||at+intervalMinutes*60000+12000>asOf)continue;
   const minute=istMinute(at);
-  if(minute<555||minute>=930||minute%5!==0)
+  if(minute<555||minute>=930||minute%intervalMinutes!==0)
    return {bars:[],reasons:['INVALID_EARLY_CANDLE_SESSION']};
   bars.push({...c,at});
  }
@@ -28,9 +28,9 @@ function completedCandles(raw,asOf,min){
  if(bars.some((x,i)=>i&&x.at===bars[i-1].at))
   reasons.push('DUPLICATE_EARLY_CANDLE');
  if(bars.length<min)reasons.push('INSUFFICIENT_EARLY_CANDLES');
- if(bars.length&&asOf-(bars.at(-1).at+300000)>420000)
+ if(bars.length&&asOf-(bars.at(-1).at+intervalMinutes*60000)>(intervalMinutes===1?90000:420000))
   reasons.push('STALE_EARLY_CANDLES');
- if(bars.length>=2&&bars.at(-1).at-bars.at(-2).at!==300000)
+ if(bars.length>=2&&bars.at(-1).at-bars.at(-2).at!==intervalMinutes*60000)
   reasons.push('GAPPED_LATEST_EARLY_CANDLES');
  return {bars,reasons};
 }
@@ -95,8 +95,8 @@ export function qualifyEarlyIndexConfluence({candles=[],quote=null,opening=null,
  };
 }
 export function qualifyEarlyPremiumPlan({contract,underlyingKey,direction,rawCandles=[],optionQuote=null,
- greeks=null,marginQuote=null,asOf=Date.now(),capital=50000,riskBudget=500}={}){
- const now=Number(new Date(asOf)),read=completedCandles(rawCandles,now,8),bars=read.bars,
+ greeks=null,marginQuote=null,asOf=Date.now(),capital=50000,riskBudget=500,intervalMinutes=5}={}){
+ const now=Number(new Date(asOf)),read=completedCandles(rawCandles,now,8,intervalMinutes),bars=read.bars,
  issues=[...read.reasons],tick=tickPrice(contract);
  const base={status:'WAIT',reasons:[],paperOnly:true,orderSubmissionAllowed:false,
   realOrderPlaced:false,productionRealTradingEnabled:false,approvedLots:0,
