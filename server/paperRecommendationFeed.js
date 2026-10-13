@@ -253,7 +253,8 @@ export function createPaperRecommendationFeed({
       (oneMinuteRead[0].value?.candles??oneMinuteRead[0].value??[]):[];
      const fast=qualifyOneMinuteOrbWatch({
       candles:oneMinuteRaw,quote,session,asOf});
-     oneMinuteReasons=fast.valid?[]:fast.reasons;
+     oneMinuteReasons=oneMinuteRead[0].status==='rejected'?
+      ['ONE_MINUTE_CANDLES_UNAVAILABLE']:fast.valid?[]:fast.reasons;
      if(fast.valid){
       const fastPreview=Object.freeze({
        kind:'PROVISIONAL_DIRECTION',strategy:'ONE_MINUTE_ORB_EMA9_RSI14',
@@ -359,8 +360,8 @@ export function createPaperRecommendationFeed({
       extra:provisionalDirection?{provisionalDirection}:{}});
     }
     return rejected('OPENING_RANGE',
-     provisionalDirection?['OPENING_RANGE_BIAS_ONLY',...(confluence.reasons??[]),...oneMinuteReasons]:
-      ['OPENING_RANGE_NOT_CONFIRMED',...(confluence.reasons??[]),...oneMinuteReasons],
+     provisionalDirection?['OPENING_RANGE_BIAS_ONLY',...oneMinuteReasons,...(confluence.reasons??[])]:
+      ['OPENING_RANGE_NOT_CONFIRMED',...oneMinuteReasons,...(confluence.reasons??[])],
      {fallback:'OPENING_RANGE_NOT_CONFIRMED',
       extra:provisionalDirection?{provisionalDirection}:{}});
    }
