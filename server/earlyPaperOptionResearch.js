@@ -32,6 +32,9 @@ function completedCandles(raw,asOf,min,intervalMinutes=5){
   reasons.push('STALE_EARLY_CANDLES');
  if(bars.length>=2&&bars.at(-1).at-bars.at(-2).at!==intervalMinutes*60000)
   reasons.push('GAPPED_LATEST_EARLY_CANDLES');
+ const recent=bars.slice(-min);
+ if(recent.some((c,i)=>i&&c.at-recent[i-1].at!==intervalMinutes*60000))
+  reasons.push('GAPPED_RECENT_EARLY_CANDLES');
  return {bars,reasons};
 }
 const ema=(v,n)=>{
