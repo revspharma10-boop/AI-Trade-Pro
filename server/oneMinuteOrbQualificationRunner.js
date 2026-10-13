@@ -26,6 +26,7 @@ const negatives=[
  {candles:minuteCandles.slice(0,16)},
  {candles:[...minuteCandles,...minuteCandles.slice(-1)]},
  {candles:minuteCandles.filter((_,i)=>i!==5)},
+ {candles:minuteCandles.filter((_,i)=>i!==15)},
  {quote:{...indexQuote,timestamp:asOf-90000}},
  {quote:{...indexQuote,lastPrice:103}},
  {candles:minuteCandles.map(c=>({...c,close:100.05,open:100.05,high:100.15,low:99.95}))}
