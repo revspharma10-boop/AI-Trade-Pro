@@ -7,6 +7,8 @@ on:
       - 'server/paperRecommendationFeed.js'
       - 'server/earlyPaperOptionResearch.js'
       - 'server/earlyPaperOptionQualificationRunner.js'
+      - 'server/oneMinuteOrbPaperWatch.js'
+      - 'server/oneMinuteOrbQualificationRunner.js'
       - 'server/paperResearchBot.js'
       - 'server/paperResearchBotQualificationRunner.js'
       - 'server/cryptoPaperResearch.js'
@@ -48,6 +50,7 @@ jobs:
           node src/androidBottomNavigationQualificationRunner.js
           node server/paperRecommendationFeedQualificationRunner.js
           node server/earlyPaperOptionQualificationRunner.js
+          node server/oneMinuteOrbQualificationRunner.js
           node server/paperResearchBotQualificationRunner.js
           node --check server/cryptoTechnicalConfluence.js
           node server/cryptoPaperResearchQualificationRunner.js
