@@ -123,4 +123,24 @@ assert.equal(rejected.stage,'ONE_MINUTE_OPTION_WATCH');
 assert.equal(rejected.last,null);
 assert.equal(rejected.orderSubmissionAllowed,false);
 assert.equal(rejected.provisionalDirection?.strategy,'ONE_MINUTE_ORB_EMA9_RSI14');
+const missingMinuteSource=createPaperRecommendationFeed({
+ searchIndex:async()=>({instrumentKey:key,tradingSymbol:'NIFTY'}),
+ searchEquity:async()=>{throw Error('NOT_USED');},
+ searchDerivatives:async()=>({contracts:[]}),
+ getContracts:async()=>{throw Error('NO_CONTRACT_LOOKUP_WITHOUT_VALID_1M_DATA');},
+ getCandles:async(instrument,interval)=>{
+  if(instrument===key&&interval==='1m')throw Error('UPSTOX_INTRADAY_REQUEST_FAILED');
+  return {candles:fiveCandles};
+ },
+ getQuote:async()=>indexQuote,
+ getGreeks:async()=>null,
+ getMargin:async()=>{throw Error('NO_MARGIN_WITHOUT_CONTRACT');}
+});
+const absent=await missingMinuteSource.getLatest('nifty',asOf);
+assert.equal(absent.state,'WAIT');
+assert.equal(absent.stage,'OPENING_RANGE');
+assert.ok(absent.blockers.some(x=>x.code==='ONE_MINUTE_CANDLES_UNAVAILABLE'),
+ 'Missing one-minute provider feed must be disclosed ahead of generic 5m indicators');
+assert.equal(absent.orderSubmissionAllowed,false);
+assert.equal(absent.realOrderPlaced,false);
 console.log('1M ORB EARLY PAPER WATCH QUALIFICATION PASS: no-lookahead, 15+2 candles, EMA9/RSI14, real bid-ask, Greeks, affordability, no order routes');
