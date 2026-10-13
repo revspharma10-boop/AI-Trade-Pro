@@ -413,9 +413,15 @@ export function createPaperRecommendationFeed({
   const slot=fiveMinuteSlot(now),previous=cache.get(tab);
   // Freeze each successfully captured early hypothesis for its five-minute
   // window. This is process-local, NOT a durable forecast ledger.
+  // Frozen, risk-qualified paper ideas remain unchanged for their 5-minute
+  // slot. An unqualified directional preview is NOT an entry; during the
+  // early 1m watch it may be rechecked after the short cache TTL.
+  const local=new Date(now+330*60000),localMinute=local.getUTCHours()*60+local.getUTCMinutes();
+  const fastPreviewRefresh=['nifty','sensex'].includes(tab)&&
+   localMinute>=572&&localMinute<630;
   if(previous?.slot===slot&&
      (previous.result.state==='PAPER_SETUP'||
-      previous.result.provisionalDirection||
+      (!fastPreviewRefresh&&previous.result.provisionalDirection)||
       now-previous.checkedAt<45000)){
    return presentRecommendation({tab,last:lastByTab.get(tab)??null,result:previous.result,asOf:now});
   }

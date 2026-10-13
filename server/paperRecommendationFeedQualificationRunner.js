@@ -201,6 +201,11 @@ const frozen=await directionFeed.getLatest('nifty',earlyAt+61000);
 assert.equal(frozen.provisionalDirection?.observedAt,first.provisionalDirection.observedAt,
  'Early directional snapshot freezes in its five-minute window');
 assert.equal(brokerReads,1,'Frozen five-minute window does not requery broker');
+const refreshedEarly=await directionFeed.getLatest('nifty',earlyAt+2*60000+5000);
+assert.equal(refreshedEarly.state,'WAIT');
+assert.equal(brokerReads,2,
+ 'Early 1m research must refresh provisional snapshots after TTL within the 5m slot');
+
 const staleEarly=await directionFeed.getLatest('nifty',earlyAt+6*60000);
 assert.equal(staleEarly.provisionalDirection,null,
  'Stale quote cannot be replayed as a new five-minute forecast');
