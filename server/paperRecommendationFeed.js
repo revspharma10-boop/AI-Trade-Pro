@@ -7,6 +7,7 @@ import {deriveAutoOptionDirection,chooseAutoOptionContract,calculateAutoOptionPa
  from '../src/services/autoOptionResearchEngine.js';
 import {deriveOpeningRangeBias} from '../src/services/openingRangeResearch.js';
 import {qualifyEarlyIndexConfluence,qualifyEarlyPremiumPlan} from './earlyPaperOptionResearch.js';
+import {qualifyOneMinuteOrbWatch} from './oneMinuteOrbPaperWatch.js';
 import {extractUpstoxLiveQuoteEvidence} from '../src/services/intradayRiskEngine.js';
 import {describePaperRejection} from './recommendationWaitDiagnostics.js';
 import {chooseMcxOptionUnderlying,deriveMcxOptionDirection,
@@ -118,9 +119,9 @@ export function presentRecommendation({tab,last=null,result=null,asOf=Date.now()
  // Distinct provisional directions depend on their own valid read-only
  // observation and do not inherit any price/order fields from paper setup.
  const directionValid=state==='WAIT'&&['nifty','sensex'].includes(tab)&&
-  ['OPENING_RANGE','EARLY_OPTION_WATCH'].includes(result?.stage)&&
+  ['OPENING_RANGE','EARLY_OPTION_WATCH','ONE_MINUTE_OPTION_WATCH'].includes(result?.stage)&&
   preview?.kind==='PROVISIONAL_DIRECTION'&&
-  preview.strategy==='OPENING_RANGE_15M'&&
+  ['OPENING_RANGE_15M','ONE_MINUTE_ORB_EMA9_RSI14'].includes(preview.strategy)&&
   ['BULLISH','BEARISH'].includes(preview.direction)&&
   preview.source==='UPSTOX_READ_ONLY'&&
   !['contract','strike','expiry','entry','stopLoss','target','lots','approvedLots'].some(k=>
@@ -240,6 +241,72 @@ export function createPaperRecommendationFeed({
     const early=deriveOpeningRangeBias({candles,quote,session,asOf});
     const provisionalDirection=qualifyProvisionalDirection({
      early,quote,underlyingKey:key,asOf});
+    // Before 10:30 IST, the 35-bar and 15-bar 5m models cannot qualify.
+    // Independently verify all 15 opening 1m candles and two later *completed*
+    // 1m breakout candles rather than manufacturing a 5m confirmation.
+    const nowIST=new Date(asOf+330*60000);
+    const minuteIST=nowIST.getUTCHours()*60+nowIST.getUTCMinutes();
+    let oneMinuteReasons=[];
+    if(technical.completedBars<15&&minuteIST>=572&&minuteIST<915){
+     const oneMinuteRead=await Promise.allSettled([getCandles(key,'1m')]);
+     const oneMinuteRaw=oneMinuteRead[0].status==='fulfilled'?
+      (oneMinuteRead[0].value?.candles??oneMinuteRead[0].value??[]):[];
+     const fast=qualifyOneMinuteOrbWatch({
+      candles:oneMinuteRaw,quote,session,asOf});
+     oneMinuteReasons=fast.valid?[]:fast.reasons;
+     if(fast.valid){
+      const fastPreview=Object.freeze({
+       kind:'PROVISIONAL_DIRECTION',strategy:'ONE_MINUTE_ORB_EMA9_RSI14',
+       direction:fast.direction==='CE'?'BULLISH':'BEARISH',
+       observedAt:asIso(asOf),lastCompletedAt:fast.latestCompletedAt,
+       source:'UPSTOX_READ_ONLY',recordedDurably:false,optionPlanQualified:false,
+       paperOnly:true,orderSubmissionAllowed:false,realOrderPlaced:false});
+      const contracts=await getContracts(key);
+      const selected=chooseAutoOptionContract({contracts,underlyingKey:key,
+       spot:quote.lastPrice,direction:fast.direction,asOf});
+      contract=selected.contract;
+      if(!contract)return rejected('ONE_MINUTE_OPTION_WATCH',selected.reasons?.length?
+       selected.reasons:['NO_VERIFIED_FUTURE_EXPIRY_OPTION_CONTRACT'],
+       {extra:{provisionalDirection:fastPreview}});
+      const [premiumBars,rawPremium,rawGreeks]=await Promise.allSettled([
+       getCandles(contract.instrumentKey,'1m'),getQuote(contract.instrumentKey),
+       getGreeks(contract.instrumentKey)]);
+      const optionCandles=premiumBars.status==='fulfilled'?
+       (premiumBars.value?.candles??premiumBars.value??[]):[];
+      const optionQuote=extractUpstoxLiveQuoteEvidence(
+       rawPremium.status==='fulfilled'?rawPremium.value:null,
+       contract.instrumentKey,asOf);
+      const greeks=rawGreeks.status==='fulfilled'?rawGreeks.value:null;
+      const args={contract,underlyingKey:key,direction:fast.direction,
+       rawCandles:optionCandles,optionQuote,greeks,asOf,intervalMinutes:1};
+      plan=qualifyEarlyPremiumPlan(args);
+      let marginFailed=false;
+      if(plan.status==='MARGIN_REQUIRED'){
+       try{
+        const margin=await getMargin({instrumentKey:contract.instrumentKey,
+         side:'BUY',quantity:contract.lotSize,price:plan.entry});
+        plan=qualifyEarlyPremiumPlan({...args,marginQuote:margin});
+       }catch(_error){marginFailed=true;}
+      }
+      if(plan.status==='UNVALIDATED_PAPER_LEVELS'){
+       const candidate=qualifyPaperRecommendation(plan,contract,asOf);
+       if(candidate)return {state:'PAPER_SETUP',stage:'ONE_MINUTE_OPTION_WATCH',
+        message:'EXPERIMENTAL 1m paper watch • Not executed or backtested',
+        qualified:{...candidate,label:'EXPERIMENTAL 1M PAPER WATCH',
+         strategyVersion:fast.strategyVersion,strategyValidated:false,
+         modelBacktested:false,optionPremiumGreeksVerified:true,
+         feeReserveEstimated:true,feesAndGapsIncluded:false}};
+      }
+      return rejected('ONE_MINUTE_OPTION_WATCH',[
+       ...(plan.reasons??[]),
+       ...(premiumBars.status==='rejected'?['ONE_MINUTE_OPTION_CANDLES_UNAVAILABLE']:[]),
+       ...(rawPremium.status==='rejected'?['FRESH_EARLY_OPTION_BID_ASK_REQUIRED']:[]),
+       ...(rawGreeks.status==='rejected'?['BROKER_OPTION_GREEKS_IV_REQUIRED']:[]),
+       ...(marginFailed?['BROKER_MARGIN_ESTIMATE_UNAVAILABLE']:[])
+      ],{contract,fallback:'EARLY_PAPER_SETUP_NOT_QUALIFIED',
+       extra:{provisionalDirection:fastPreview}});
+     }
+    }
     const confluence=qualifyEarlyIndexConfluence({candles,quote,opening:early,session,asOf});
     if(confluence.valid){
      // A confirmed index breakout is only the first gate. Never treat it
@@ -292,8 +359,8 @@ export function createPaperRecommendationFeed({
       extra:provisionalDirection?{provisionalDirection}:{}});
     }
     return rejected('OPENING_RANGE',
-     provisionalDirection?['OPENING_RANGE_BIAS_ONLY',...(confluence.reasons??[])]:
-      ['OPENING_RANGE_NOT_CONFIRMED',...(confluence.reasons??[])],
+     provisionalDirection?['OPENING_RANGE_BIAS_ONLY',...(confluence.reasons??[]),...oneMinuteReasons]:
+      ['OPENING_RANGE_NOT_CONFIRMED',...(confluence.reasons??[]),...oneMinuteReasons],
      {fallback:'OPENING_RANGE_NOT_CONFIRMED',
       extra:provisionalDirection?{provisionalDirection}:{}});
    }
