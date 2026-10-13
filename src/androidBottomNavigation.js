@@ -32,6 +32,7 @@ const STAGE_LABELS=Object.freeze({
  UPSTOX_DATA:'BROKER MARKET DATA',
  OPENING_RANGE:'OPENING RANGE',
  EARLY_OPTION_WATCH:'EARLY OPTION PAPER WATCH',
+ ONE_MINUTE_OPTION_WATCH:'1-MINUTE EXPERIMENTAL PAPER WATCH',
  UNDERLYING_TECHNICAL:'FIVE-MINUTE TECHNICAL SIGNAL',
  OPTION_CONTRACT:'OPTION CONTRACT',
  OPTION_PREMIUM_AND_RISK:'OPTION PREMIUM AND RISK',
@@ -57,7 +58,7 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
   last.executionStatus==='NOT EXECUTED'&&last.approvedLots===0&&last.paperOnly===true&&
   last.orderSubmissionAllowed!==true&&last.realOrderPlaced!==true;
  const hasLast=matches&&pricesValid;
- const earlyUnvalidated=hasLast&&last.strategyVersion==='orb-ema9-rsi14-early-v1'&&
+ const earlyUnvalidated=hasLast&&['orb-ema9-rsi14-early-v1','orb-1m-ema9-rsi14-v1'].includes(last.strategyVersion)&&
   last.strategyValidated===false&&last.modelBacktested===false&&
   last.optionPremiumGreeksVerified===true&&last.feeReserveEstimated===true;
  const lastObserved=hasLast?Date.parse(last.capturedAt):NaN;
@@ -144,7 +145,8 @@ export function safeRecommendationCard(data,selectedTab,asOf=Date.now()){
    cryptoResearch.metrics?.rsi14,cryptoResearch.metrics?.atr14,
    cryptoResearch.metrics?.volumeMultiple].every(n=>typeof n==='number'&&Number.isFinite(n));
  const indexDirection=['nifty','sensex'].includes(selectedTab)&&
-  early?.strategy==='OPENING_RANGE_15M'&&early?.source==='UPSTOX_READ_ONLY';
+  ['OPENING_RANGE_15M','ONE_MINUTE_ORB_EMA9_RSI14'].includes(early?.strategy)&&
+  early?.source==='UPSTOX_READ_ONLY';
  const earlySafe=backendFresh&&checkedClockValid&&!previous&&!active&&
   (indexDirection||strongCrypto)&&
   early?.kind==='PROVISIONAL_DIRECTION'&&
