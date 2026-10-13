@@ -16,9 +16,15 @@ function eligible(asOf){
   return {ready:false,reason:schedule.regularSessionPlanned?session.reason:schedule.reason};
  const ist=new Date(asOf+OFFSET),mins=ist.getUTCHours()*60+ist.getUTCMinutes();
  if(mins<570||mins>=915)return {ready:false,reason:'OUTSIDE_BOT_RESEARCH_WINDOW'};
- const slot=Math.floor((asOf-GRACE)/FIVE),age=asOf-(slot*FIVE+GRACE);
- if(age<0||age>90000)return {ready:false,reason:'NEXT_COMPLETED_CANDLE_WINDOW'};
- return {ready:true,slot};
+ // The one-minute ORB model needs a fresh completed candle after 09:30.
+ // Keep 5-minute cadence outside its early research window; check at most
+ // once per 1-minute slot from 09:32 to 10:29 IST while this host is awake.
+ const early=mins>=572&&mins<630;
+ const step=early?60000:FIVE;
+ const slot=Math.floor((asOf-GRACE)/step),age=asOf-(slot*step+GRACE);
+ if(age<0||age>(early?45000:90000))
+  return {ready:false,reason:'NEXT_COMPLETED_CANDLE_WINDOW'};
+ return {ready:true,slot:(early?'1m:':'5m:')+slot};
 }
 export function createPaperResearchBot({feed,now=()=>Date.now(),tabs=['nifty','sensex'],
  intervalMs=30000,setIntervalFn=setInterval,clearIntervalFn=clearInterval}={}){
@@ -29,7 +35,7 @@ export function createPaperResearchBot({feed,now=()=>Date.now(),tabs=['nifty','s
  let nextReason='AWAITING_COMPLETED_CANDLE',results={};
  const getStatus=()=>({
   state:timer?'RUNNING_WHILE_SERVER_AWAKE':'NOT_STARTED',
-  cadence:'ONE_ATTEMPT_PER_VERIFIED_5_MINUTE_SLOT',
+  cadence:'1M_COMPLETED_CANDLE_SLOTS_0932_1029__5M_OTHERWISE',
   lastAttemptAt,lastCompletedAt,completedCycles:cycles,
   latest:{...results},nextReason,
   processLocal:true,recordedDurably:false,
