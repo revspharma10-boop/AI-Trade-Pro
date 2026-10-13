@@ -63,6 +63,7 @@ for(const c of [
  {greeks:null},{marginQuote:{...margin,verified:false}},
  {contract:{...contract,lotSize:10000}},
  {rawCandles:optionCandles.slice(1)},
+ {rawCandles:[{...optionCandles[0],datetime:stamp(9)},optionCandles[0],...optionCandles.slice(2)]},
  {rawCandles:[...optionCandles,...optionCandles.slice(-1)]}
 ]){
  const p=qualifyEarlyPremiumPlan({...args,marginQuote:margin,...c});
