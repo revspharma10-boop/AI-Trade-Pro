@@ -1,0 +1,37 @@
+name: Hybrid Agentic H0 Safety Qualification
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/hybridAgenticPaperResearch.js'
+      - 'server/hybridAgenticPaperResearchQualification.test.js'
+      - 'docs/AI_TRADE_PRO_3_HYBRID_AGENTIC_H0.md'
+      - '.github/workflows/hybrid-agentic-h0-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualify-hybrid-paper-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Check isolated hybrid agent module syntax
+        run: |
+          node --check server/hybridAgenticPaperResearch.js
+          node --check server/hybridAgenticPaperResearchQualification.test.js
+      - name: Qualify synthetic agreement/abstention/fail-closed behavior
+        run: node --test server/hybridAgenticPaperResearchQualification.test.js
+      - name: Prohibit deployed server/browser import of experimental module
+        run: |
+          ! grep -q 'hybridAgenticPaperResearch' server/upstoxOAuthCallbackServer.js
+          ! grep -q 'hybridAgenticPaperResearch' src/main.js
+          ! grep -q 'hybridAgenticPaperResearch' src/androidBottomNavigation.js
+      - name: Install existing dependencies and build unchanged web application
+        run: |
+          npm ci
+          npm run build
