@@ -1,0 +1,3 @@
+# Algo Trader 4-digit PIN update
+
+The paper-trading dashboard now supports a four-digit PIN in Change PIN and Forgot PIN/Password flows. Existing long passwords remain valid until changed. A separate 32+ character recovery key must be configured to reset a lost password/PIN. Weak/common PINs are refused. Sign-in uses persistent per-account lockouts (3 failed attempts per 15 minutes; 12 per 24 hours) plus IP throttling. The 42 offline tests pass.\n\n**Safety:** a four-digit PIN is less secure than a long password. This dashboard is paper-only, never connect real broker access. Render Free's SQLite files disappear at restarts; use Neon for persistence. The Render preview must have private credentials set in its Environment screen; never commit secrets.
