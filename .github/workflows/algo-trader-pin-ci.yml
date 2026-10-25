@@ -1,0 +1,29 @@
+name: Algo Trader Paper PIN CI
+on:
+  push:
+    branches:
+      - feature/neon-durable-storage-v1
+    paths:
+      - algo-trader-dashboard-free.zip
+      - .github/workflows/algo-trader-pin-ci.yml
+  workflow_dispatch:
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Extract paper dashboard
+        run: python -m zipfile -e algo-trader-dashboard-free.zip .
+      - name: Install dependencies
+        run: pip install -r algo-trader-dashboard-free/requirements.txt
+      - name: Run 42 offline paper dashboard tests
+        working-directory: algo-trader-dashboard-free
+        run: python -m unittest discover -s tests -v
+      - name: Compile source
+        run: python -m compileall -q algo-trader-dashboard-free
