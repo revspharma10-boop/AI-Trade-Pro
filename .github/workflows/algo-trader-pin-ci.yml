@@ -22,7 +22,7 @@ jobs:
         run: python -m zipfile -e algo-trader-dashboard-free.zip .
       - name: Install dependencies
         run: pip install -r algo-trader-dashboard-free/requirements.txt
-      - name: Run 42 offline paper dashboard tests
+      - name: Run 46 offline paper dashboard tests
         working-directory: algo-trader-dashboard-free
         run: python -m unittest discover -s tests -v
       - name: Compile source
