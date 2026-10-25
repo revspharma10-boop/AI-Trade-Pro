@@ -9,3 +9,5 @@ PATCH_ZLIB_B64 = "eNrtW3tT3Di2/z+fQvFsje3BbaAJmUyDSQj0bNgbHhc6O7VFpXrVtrpbg9v2WG
 root = pathlib.Path(__file__).resolve().parent / "algo-trader-dashboard-free"
 patch = zlib.decompress(base64.b64decode(PATCH_ZLIB_B64))
 subprocess.run(["patch", "--batch", "--forward", "-p1"], cwd=root, input=patch, check=True)
+
+# Workflow dependency retry: include the HTTP test client.
